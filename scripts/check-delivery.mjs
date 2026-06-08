@@ -64,12 +64,14 @@ const requiredFiles = [
   'scripts/check-browser-extension-demo-interaction.mjs',
   'scripts/check-browser-extension-package.mjs',
   'scripts/check-release-gates.mjs',
+  'scripts/record-ai-validation-evidence.mjs',
   'scripts/check-ai-validation-evidence.mjs',
   'scripts/sync-ai-validation-table.mjs',
   'scripts/delivery-status.mjs',
   'scripts/check-workbench-status.mjs',
   'scripts/package-browser-extension.mjs',
-  'scripts/write-delivery-summary.mjs'
+  'scripts/write-delivery-summary.mjs',
+  'scripts/fixtures/ai-validation-diagnostic.json'
 ];
 
 for (const file of requiredFiles) {
@@ -145,8 +147,13 @@ for (const marker of ['本地可演示', '外部可试用', '公开可发布', '
 }
 
 const aiValidation = read('docs/browser-extension-ai-validation-cn.md');
-for (const marker of ['ChatGPT', 'Claude', 'Gemini', 'Perplexity', '复制诊断', '通过标准', 'anchorFound', 'placement', 'memoryWidgetVisible']) {
+for (const marker of ['ChatGPT', 'Claude', 'Gemini', 'Perplexity', '复制诊断', '通过标准', 'npm run record:ai-validation-evidence', 'anchorFound', 'placement', 'memoryWidgetVisible']) {
   assert(aiValidation.includes(marker), `AI validation doc missing marker: ${marker}`);
+}
+
+const evidenceReadme = read('docs/validation/browser-extension-ai-sites/README.md');
+for (const marker of ['npm run record:ai-validation-evidence', '--clipboard', '--file diagnostics.json', '--pass']) {
+  assert(evidenceReadme.includes(marker), `AI validation evidence README missing marker: ${marker}`);
 }
 
 const demoPage = read('src/viewer/demo/browser-extension.html');
@@ -192,6 +199,7 @@ run(process.execPath, ['scripts/check-browser-extension.mjs']);
 run(process.execPath, ['scripts/check-browser-extension-review-draft.mjs']);
 run(process.execPath, ['scripts/check-browser-extension-fixtures.mjs']);
 run(process.execPath, ['scripts/check-browser-extension-demo-interaction.mjs']);
+run(process.execPath, ['scripts/record-ai-validation-evidence.mjs', '--file', 'scripts/fixtures/ai-validation-diagnostic.json', '--out', 'artifacts/example-ai-validation-evidence.json', '--force']);
 run(process.execPath, ['scripts/package-browser-extension.mjs']);
 run(process.execPath, ['scripts/check-browser-extension-package.mjs']);
 run(process.execPath, ['scripts/check-ai-validation-evidence.mjs']);

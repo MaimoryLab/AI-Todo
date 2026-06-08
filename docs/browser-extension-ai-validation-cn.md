@@ -12,10 +12,18 @@
 6. 打开插件同步侧栏，检查“AI 页面状态”。
 7. 检查输入框附近是否出现“记忆建议”提示。
 8. 尝试插入一条记忆到输入框。
-9. 点击“复制诊断”，把 JSON 保存到 `docs/validation/browser-extension-ai-sites/`，文件名建议 `YYYY-MM-DD-provider.json`。
+9. 点击“复制诊断”，把 JSON 保存到 `docs/validation/browser-extension-ai-sites/`。可以手动保存为 `YYYY-MM-DD-provider.json`，也可以使用 `npm run record:ai-validation-evidence` 自动命名和补齐模板。
 10. 记录截图、日期、浏览器版本和结果。
 11. 运行 `npm run check:ai-validation-evidence` 生成证据汇总。
 12. 运行 `npm run sync:ai-validation-table`，把证据同步回本页验收表。
+
+复制侧栏诊断后，可以直接从剪贴板保存证据：
+
+```bash
+npm run record:ai-validation-evidence -- --clipboard --browser "Chrome 版本号" --notes "无隐私信息的备注"
+```
+
+如果已经人工确认插入记忆成功、诊断复制成功、原站输入仍正常，再加 `--pass`。不要在没有真实操作的情况下使用 `--pass`。
 
 ## 通过标准
 
@@ -48,11 +56,12 @@
 汇总命令：
 
 ```bash
+npm run record:ai-validation-evidence -- --file diagnostics.json
 npm run check:ai-validation-evidence
 npm run sync:ai-validation-table
 ```
 
-第一条命令会生成 `artifacts/ai-validation-evidence-summary.json`。第二条命令会用证据目录更新本页真实站点验收表。它们不会把待验收状态误判为通过；`memoryInsertPassed`、`diagnosticsCopied`、`siteInputStillWorks` 都为通过时，才会计入真实证据通过数。公开发布仍需 ChatGPT、Claude、Gemini、Perplexity 都有通过证据。
+第一条命令会把诊断 JSON 保存成标准证据文件。第二条命令会生成 `artifacts/ai-validation-evidence-summary.json`。第三条命令会用证据目录更新本页真实站点验收表。它们不会把待验收状态误判为通过；`memoryInsertPassed`、`diagnosticsCopied`、`siteInputStillWorks` 都为通过时，才会计入真实证据通过数。公开发布仍需 ChatGPT、Claude、Gemini、Perplexity 都有通过证据。
 
 ## 本地可验证项
 
@@ -63,6 +72,7 @@ npm run sync:ai-validation-table
 | 插件包检查 | `npm run package:browser-extension` | 生成 `artifacts/agent-memory-lab-extension.zip`，且包含 manifest、content script、service worker、side panel、popup/options、shared files、PNG 图标 | 已通过 | package check: 25 entries |
 | 交付检查 | `npm run check:delivery` | 构建、README 图片引用、插件预览页、插件包检查均通过 | 已通过 | delivery checks ok |
 | 免登录预览页 | `http://localhost:3113/demo/browser-extension.html` | 页面可访问，并含 `Agent Memory Demo`、演示输入框和演示记忆 | 已通过 | `check:delivery` 会启动预览服务并抓取页面 |
+| 真实证据记录 | `npm run record:ai-validation-evidence` | 从剪贴板或文件保存标准诊断 JSON，不手工猜文件名 | 已接入 | `docs/validation/browser-extension-ai-sites/` |
 | 真实证据汇总 | `npm run check:ai-validation-evidence` | 读取真实 AI 页面诊断 JSON，输出必需产品通过计数 | 已接入 | `artifacts/ai-validation-evidence-summary.json` |
 
 ## 真实站点验收表

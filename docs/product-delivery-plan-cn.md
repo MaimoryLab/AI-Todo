@@ -78,6 +78,7 @@
 - 发布门槛：`docs/release-gates-cn.md`
 - 真实站点验收记录：`docs/browser-extension-ai-validation-cn.md`
 - 真实站点证据目录：`docs/validation/browser-extension-ai-sites/`
+- 真实站点证据记录命令：`npm run record:ai-validation-evidence`
 - 插件 PNG 图标资产：`browser-extension/icons/icon16.png`、`icon32.png`、`icon48.png`、`icon128.png`
 - 本地检查：`npm run check:browser-extension`
 - 试用入口检查：`check:browser-extension` 会确认弹窗显示扩展版本、本地试用状态和外部试用指南入口

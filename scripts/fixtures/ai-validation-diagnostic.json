@@ -1,0 +1,36 @@
+{
+  "product": "Agent Memory Lab Browser Extension",
+  "extension": {
+    "name": "Agent Memory Lab",
+    "version": "0.1.0",
+    "manifestVersion": 3
+  },
+  "generatedAt": "2026-06-08T00:00:00.000Z",
+  "page": {
+    "title": "Agent Memory Demo",
+    "url": "http://localhost:3113/demo/browser-extension.html",
+    "host": "localhost",
+    "origin": "http://localhost:3113",
+    "type": "ai-chat",
+    "typeLabel": "AI 对话"
+  },
+  "ai": {
+    "supportedAiPage": true,
+    "provider": "Agent Memory Demo",
+    "editorFound": true,
+    "editorSelector": "#agentmemory-demo-input",
+    "anchorFound": true,
+    "placement": "toolbar-end",
+    "memoryWidgetVisible": true,
+    "promptLength": 18,
+    "turnCount": 2,
+    "checkedAt": "2026-06-08T00:00:00.000Z"
+  },
+  "manualValidation": {
+    "memoryInsertPassed": false,
+    "diagnosticsCopied": true,
+    "siteInputStillWorks": false,
+    "browser": "Fixture",
+    "notes": "Fixture for record command only"
+  }
+}

@@ -36,6 +36,7 @@
     "check:workbench": "node scripts/check-workbench-status.mjs",
     "check:release-gates": "node scripts/check-release-gates.mjs",
     "check:release-public": "node scripts/check-release-gates.mjs --public",
+    "record:ai-validation-evidence": "node scripts/record-ai-validation-evidence.mjs",
     "check:ai-validation-evidence": "node scripts/check-ai-validation-evidence.mjs",
     "sync:ai-validation-table": "node scripts/sync-ai-validation-table.mjs --write",
     "check:ai-validation-table": "node scripts/sync-ai-validation-table.mjs --check",

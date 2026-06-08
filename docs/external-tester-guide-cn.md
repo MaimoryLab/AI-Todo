@@ -144,11 +144,12 @@ docs/validation/browser-extension-ai-sites/
 保存后运行：
 
 ```bash
+npm run record:ai-validation-evidence -- --file diagnostics.json
 npm run check:ai-validation-evidence
 npm run sync:ai-validation-table
 ```
 
-第一条命令会生成 `artifacts/ai-validation-evidence-summary.json`，第二条命令会同步 `docs/browser-extension-ai-validation-cn.md` 的真实站点验收表，用于汇总 ChatGPT、Claude、Gemini、Perplexity 是否已经具备公开发布所需的真实页面证据。
+第一条命令会把复制出来的诊断 JSON 保存成标准证据文件；第二条命令会生成 `artifacts/ai-validation-evidence-summary.json`；第三条命令会同步 `docs/browser-extension-ai-validation-cn.md` 的真实站点验收表，用于汇总 ChatGPT、Claude、Gemini、Perplexity 是否已经具备公开发布所需的真实页面证据。
 
 ## 反馈时请提供
 

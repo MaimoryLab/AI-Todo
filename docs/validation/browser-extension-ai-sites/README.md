@@ -8,7 +8,27 @@
 2. 输入一个真实问题，确认输入框旁出现“记忆建议”。
 3. 尝试插入或复制一条本地记忆。
 4. 点击侧栏里的“复制诊断”。
-5. 把 JSON 保存成下面这种文件名：
+5. 用命令把诊断 JSON 保存成标准证据文件。
+
+从剪贴板保存：
+
+```bash
+npm run record:ai-validation-evidence -- --clipboard
+```
+
+从文件保存：
+
+```bash
+npm run record:ai-validation-evidence -- --file diagnostics.json
+```
+
+如果已经人工确认插入记忆成功、诊断复制成功、原站输入仍正常，可以加 `--pass`：
+
+```bash
+npm run record:ai-validation-evidence -- --clipboard --pass --browser "Chrome 版本号" --notes "无隐私信息的备注"
+```
+
+也可以手动把 JSON 保存成下面这种文件名：
 
 ```text
 YYYY-MM-DD-provider.json
