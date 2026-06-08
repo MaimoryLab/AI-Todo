@@ -13,6 +13,26 @@
 从剪贴板保存：
 
 ```bash
+npm run wizard:ai-validation-evidence
+```
+
+向导会读取剪贴板里的诊断 JSON，并逐项询问人工验收结果：插入/复制本地记忆是否成功、诊断是否复制成功、原站输入和发送是否仍正常、浏览器版本和无隐私备注。
+
+如果已经把诊断保存成文件：
+
+```bash
+npm run wizard:ai-validation-evidence -- --file diagnostics.json
+```
+
+如果你已经确认三项人工验收都通过，也可以用无交互模式：
+
+```bash
+npm run wizard:ai-validation-evidence -- --file diagnostics.json --yes --browser "Chrome 版本号" --notes "无隐私信息的备注"
+```
+
+也可以直接用命令行参数保存：
+
+```bash
 npm run record:ai-validation-evidence -- --clipboard
 ```
 

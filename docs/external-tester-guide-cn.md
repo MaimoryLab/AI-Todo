@@ -158,7 +158,7 @@ npm run check:ai-validation-evidence
 npm run sync:ai-validation-table
 ```
 
-第一条命令会把复制出来的诊断 JSON 保存成标准证据文件；第二条命令会生成 `artifacts/ai-validation-evidence-summary.json`；第三条命令会同步 `docs/browser-extension-ai-validation-cn.md` 的真实站点验收表，用于汇总 ChatGPT、Claude、Gemini、Perplexity 是否已经具备公开发布所需的真实页面证据。
+优先使用 `npm run wizard:ai-validation-evidence`。它会读取剪贴板里的诊断 JSON，并询问插入/复制本地记忆、诊断复制、原站输入发送、浏览器版本和无隐私备注。后续命令会生成 `artifacts/ai-validation-evidence-summary.json` 并同步 `docs/browser-extension-ai-validation-cn.md` 的真实站点验收表，用于汇总 ChatGPT、Claude、Gemini、Perplexity 是否已经具备公开发布所需的真实页面证据。
 
 ## 反馈时请提供
 

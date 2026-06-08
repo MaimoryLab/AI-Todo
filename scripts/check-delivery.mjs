@@ -69,6 +69,7 @@ const requiredFiles = [
   'scripts/check-browser-extension-package.mjs',
   'scripts/check-release-gates.mjs',
   'scripts/record-ai-validation-evidence.mjs',
+  'scripts/wizard-ai-validation-evidence.mjs',
   'scripts/check-ai-validation-evidence.mjs',
   'scripts/sync-ai-validation-table.mjs',
   'scripts/delivery-status.mjs',
@@ -200,8 +201,13 @@ for (const marker of ['ChatGPT', 'Claude', 'Gemini', 'Perplexity', '复制诊断
 }
 
 const evidenceReadme = read('docs/validation/browser-extension-ai-sites/README.md');
-for (const marker of ['npm run record:ai-validation-evidence', '--clipboard', '--file diagnostics.json', '--pass', '证据质量门槛', 'matchedSelectors.editor', 'matchedSelectors.anchor', 'matchedSelectors.send', 'matchedSelectors.turn', '可以删掉 prompt 草稿']) {
+for (const marker of ['npm run wizard:ai-validation-evidence', 'npm run record:ai-validation-evidence', '--clipboard', '--file diagnostics.json', '--pass', '证据质量门槛', 'matchedSelectors.editor', 'matchedSelectors.anchor', 'matchedSelectors.send', 'matchedSelectors.turn', '可以删掉 prompt 草稿']) {
   assert(evidenceReadme.includes(marker), `AI validation evidence README missing marker: ${marker}`);
+}
+
+const evidenceWizard = read('scripts/wizard-ai-validation-evidence.mjs');
+for (const marker of ['createInterface', '--yes', 'Did inserting/copying a local memory work?', 'siteInputStillWorks', 'npm run check:ai-validation-evidence']) {
+  assert(evidenceWizard.includes(marker), `AI validation evidence wizard missing marker: ${marker}`);
 }
 
 const demoPage = read('src/viewer/demo/browser-extension.html');
