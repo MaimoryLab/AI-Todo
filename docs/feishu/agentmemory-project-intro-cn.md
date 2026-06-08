@@ -67,8 +67,15 @@ Skill 页会扫描本机的 Codex、Agents 和插件 Skill 目录，展示每个
 
 ## 5. 插件与集成
 
+当前产品里的“插件”优先指浏览器插件：用户在网页上看到有价值的资料、竞品、文档、GitHub 页面或飞书材料时，可以直接保存当前网页为记忆线索，也可以补充一条可复用经验。
+
+浏览器插件 MVP 位于 `browser-extension/`，当前支持：保存当前网页、保存经验、打开本地工作台、打开 Skill 管理台、本地连接设置。
+
+Agent 插件、MCP 和 hooks 则作为底层集成，用来接入 Codex、Claude Code、OpenCode、Cursor 等 Agent 工作流。
+
 | 接入方式 | 适合场景 | 作用 |
 | --- | --- | --- |
+| 浏览器插件 | 网页资料、竞品、文档、GitHub、飞书材料 | 保存当前页面为记忆线索，补充网页相关经验。 |
 | Codex 插件 | Codex CLI / Codex Desktop | 记录会话、工具调用、任务完成、上下文线索。 |
 | Claude Code 插件 | Claude Code 长期项目 | 通过 hooks 和 MCP 连接记忆层。 |
 | OpenCode 插件 | OpenCode 工作流 | 捕捉命令和会话片段。 |

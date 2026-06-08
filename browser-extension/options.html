@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Agent Memory Lab 设置</title>
+  <link rel="stylesheet" href="popup.css" />
+</head>
+<body>
+  <main class="panel">
+    <header><div><h1>设置</h1><p>连接本地 Agent Memory Lab 服务</p></div></header>
+    <label class="lesson-box"><span>API 地址</span><textarea id="apiBase" rows="1"></textarea></label>
+    <label class="lesson-box"><span>Viewer 地址</span><textarea id="viewerBase" rows="1"></textarea></label>
+    <label class="lesson-box"><span>访问密钥（可选）</span><textarea id="secret" rows="2" placeholder="如果 AGENTMEMORY_SECRET 为空，这里也留空"></textarea></label>
+    <button id="save" class="primary">保存设置</button>
+    <div id="message" class="message"></div>
+  </main>
+  <script type="module" src="options.js"></script>
+</body>
+</html>

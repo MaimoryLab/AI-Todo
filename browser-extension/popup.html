@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Agent Memory Lab</title>
+  <link rel="stylesheet" href="popup.css" />
+</head>
+<body>
+  <main class="panel">
+    <header>
+      <div>
+        <h1>Agent Memory Lab</h1>
+        <p id="status">正在检查本地服务...</p>
+      </div>
+      <button id="openOptions" class="icon-btn" title="设置" aria-label="设置">⚙</button>
+    </header>
+
+    <section class="page-card">
+      <div class="label">当前网页</div>
+      <div id="pageTitle" class="title">读取中...</div>
+      <div id="pageUrl" class="url"></div>
+    </section>
+
+    <div class="actions">
+      <button id="saveMemory" class="primary">保存为记忆线索</button>
+      <button id="openWorkbench">打开工作台</button>
+      <button id="openSkills">打开 Skill 管理</button>
+    </div>
+
+    <label class="lesson-box">
+      <span>补充一条经验</span>
+      <textarea id="lessonNote" rows="3" placeholder="例如：这个页面的排版适合借鉴为项目介绍结构。"></textarea>
+      <button id="saveLesson">保存经验</button>
+    </label>
+
+    <div id="message" class="message"></div>
+  </main>
+  <script type="module" src="popup.js"></script>
+</body>
+</html>

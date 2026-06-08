@@ -86,9 +86,33 @@ Skill 页会扫描本机的 Codex、Agents 和插件 Skill 目录，展示每个
 4. 你审阅重要内容，删掉不该保留的，补充缺失线索。
 5. 重复出现的做法沉淀成 Skill，让下次 Agent 更快进入状态。
 
-## 插件与集成
+## 浏览器插件与集成
 
-这个项目的核心不是单独打开一个网页，而是通过插件接入日常 Agent 工作流。
+这个项目的插件入口优先是 **浏览器插件**：你在网页上看到有价值的资料、竞品、文档、GitHub 页面或飞书材料时，可以直接把当前页面保存成记忆线索，也可以补充一条可复用经验。
+
+浏览器插件 MVP 在：
+
+```text
+browser-extension/
+```
+
+它现在支持：
+
+| 功能 | 作用 |
+| --- | --- |
+| 保存当前网页 | 把标题、URL、摘要、选中文本和页面结构保存为记忆线索。 |
+| 保存经验 | 在浏览网页时补充一条可复用经验，写入本地经验库。 |
+| 打开工作台 | 一键打开本地 Agent Memory Lab 首页。 |
+| 打开 Skill 管理 | 一键进入 Skill 管理台。 |
+| 本地连接设置 | 配置 API 地址、Viewer 地址和访问密钥。 |
+
+本地预览方式：
+
+```text
+Chrome / Edge -> chrome://extensions -> 开发者模式 -> 加载已解压的扩展程序 -> 选择 browser-extension/
+```
+
+Agent 插件、MCP 和 hooks 则作为底层集成，用来接入 Codex、Claude Code、OpenCode、Cursor 等 Agent 工作流。
 
 | 接入方式 | 适合场景 | 作用 |
 | --- | --- | --- |
@@ -101,6 +125,7 @@ Skill 页会扫描本机的 Codex、Agents 和插件 Skill 目录，展示每个
 仓库中相关目录：
 
 ```text
+browser-extension/      浏览器插件 MVP
 plugin/                 通用插件主体
 plugin/skills/          remember / recall / recap / handoff 等 Skill
 plugin/hooks/           Codex、Copilot 等 hook 配置
