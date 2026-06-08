@@ -117,6 +117,12 @@ body {
   margin-bottom: 8px;
 }
 
+.section-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
 .eyebrow, .count {
   color: var(--faint);
   font-size: 12px;
@@ -211,6 +217,14 @@ body {
   margin-top: 8px;
   min-height: 30px;
   padding: 0 10px;
+  font-size: 12px;
+}
+
+.ghost-button {
+  min-height: 24px;
+  padding: 0 8px;
+  color: var(--muted);
+  background: #fff;
   font-size: 12px;
 }
 

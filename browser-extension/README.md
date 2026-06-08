@@ -11,6 +11,7 @@
 - 把当前网页上的一条观察加入待审阅经验队列
 - 侧边栏查看当前页面类型、候选记忆、候选经验和隐私提示
 - 侧边栏在 AI 页面显示输入框诊断：识别到的产品、输入框状态、输入草稿长度和最近对话数量
+- 侧边栏可一键复制 AI 页面诊断，方便逐站修正输入框和对话抽取规则
 - 初步识别 ChatGPT、Claude、Gemini、Perplexity、Grok 等 AI 对话页面
 - 参考 OpenMemory / Mem0 的 supported-sites 架构，按 AI 产品维护独立站点配置
 - 在 AI 输入框附近召回本地记忆，但长期写入必须先进入本地审阅队列
@@ -30,7 +31,7 @@
 | --- | --- |
 | 弹窗 | 快速保存当前网页、补充一条经验、打开本地工作台 |
 | 同步侧栏 | 边浏览边看页面类型、候选记忆、候选经验和隐私提示 |
-| AI 页面状态 | 检查 ChatGPT / Claude 等页面是否找到了输入框和最近对话，便于逐站验收 |
+| AI 页面状态 | 检查 ChatGPT / Claude 等页面是否找到了输入框和最近对话；如果未命中，可复制诊断用于修正规则 |
 | 输入框记忆提示 | 在 ChatGPT / Claude / Gemini / Perplexity 等页面输入问题时，提示本地相关记忆，并可插入当前输入框 |
 
 更推荐日常使用“同步侧栏”，因为它更接近未来的跨 AI 产品记忆同步体验。
@@ -118,7 +119,8 @@ icons/                  插件图标
 1. 打开 ChatGPT / Claude / Gemini / Perplexity 任一页面。
 2. 在输入框输入一个和本地项目相关的问题。
 3. 查看输入框附近的“本地记忆”提示，尝试插入或复制相关记忆。
-4. 用弹窗或同步侧栏把当前网页加入待审阅，再回到 Viewer 记忆库确认保存。
+4. 打开同步侧栏查看“AI 页面状态”。如果显示“输入框：未找到”，点击“复制诊断”，把诊断交给开发者补站点规则。
+5. 用弹窗或同步侧栏把当前网页加入待审阅，再回到 Viewer 记忆库确认保存。
 
 交付检查：
 
@@ -150,6 +152,7 @@ Viewer: http://localhost:3113
 
 - Mem0 / OpenMemory：Cross-LLM memory，把记忆带到 ChatGPT、Claude、Perplexity 等产品里。
 - Mem0 的实现启发：每个 AI 产品维护独立 content script / site config，再共享后台、侧栏和类型定义；记忆召回应贴近输入框，而不是藏在单独页面里。
+- Agent Memory Lab 的逐站适配方法：复制侧栏诊断 -> 更新 `shared/site-config.js` 或 `content-script.js` 的 selector -> 运行 `npm run check:browser-extension` -> 在真实页面确认输入框提示和插入行为。
 - Agent Memory Lab 的差异：浏览器里只生成候选和召回建议，长期记忆写入必须经过 Viewer 的审阅、编辑、删除和来源筛选。
 - Rethread / Nico / ContextBridge / Personal AI Memory：都在强调跨 AI 产品的上下文延续。
 - Agent Memory Lab 的取向：本地优先、保存前可审阅、和主工作台统一数据，而不是把浏览器里看到的内容直接上传到云端。

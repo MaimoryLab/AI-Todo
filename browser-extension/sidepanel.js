@@ -1,4 +1,5 @@
 const $ = (id) => document.getElementById(id);
+let latestCapture = null;
 
 function escapeHtml(value) {
   return String(value).replace(/[&<>'"]/g, (char) => ({
@@ -15,6 +16,47 @@ async function send(type, payload = {}) {
 function setMessage(text, kind = '') {
   $('message').textContent = text || '';
   $('message').className = `message ${kind}`.trim();
+}
+
+async function copyText(text) {
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    await navigator.clipboard.writeText(text);
+    return;
+  }
+  const textarea = document.createElement('textarea');
+  textarea.value = text;
+  textarea.setAttribute('readonly', '');
+  textarea.style.position = 'fixed';
+  textarea.style.left = '-9999px';
+  document.body.appendChild(textarea);
+  textarea.select();
+  document.execCommand('copy');
+  textarea.remove();
+}
+
+function buildDiagnosticReport(capture) {
+  const page = capture && capture.page ? capture.page : {};
+  const diagnostics = capture && capture.diagnostics ? capture.diagnostics : {};
+  const conversation = capture && capture.conversation ? capture.conversation : {};
+  return {
+    product: 'Agent Memory Lab Browser Extension',
+    generatedAt: new Date().toISOString(),
+    page: {
+      title: page.title || '',
+      url: page.url || '',
+      host: page.host || '',
+      type: page.type || '',
+      typeLabel: page.typeLabel || ''
+    },
+    ai: {
+      supportedAiPage: !!diagnostics.supportedAiPage,
+      provider: diagnostics.provider || conversation.provider || '',
+      editorFound: !!diagnostics.editorFound,
+      editorSelector: diagnostics.editorSelector || '',
+      promptLength: diagnostics.promptLength || 0,
+      turnCount: diagnostics.turnCount || 0
+    }
+  };
 }
 
 function setConnectionState(state, text) {
@@ -75,9 +117,11 @@ function renderDiagnostics(capture) {
   const section = $('aiDiagnostics');
   if (!diagnostics.supportedAiPage) {
     section.hidden = true;
+    $('copyDiagnostics').disabled = true;
     return;
   }
   section.hidden = false;
+  $('copyDiagnostics').disabled = false;
   $('aiProvider').textContent = diagnostics.provider || 'AI 页面';
   const rows = [
     { label: '页面识别', value: diagnostics.provider || '已识别', ok: true },
@@ -111,6 +155,7 @@ function renderRecent(items) {
 }
 
 function renderCapture(capture) {
+  latestCapture = capture;
   const page = capture.page || {};
   $('pageType').textContent = page.typeLabel || '网页';
   $('pageTitle').textContent = page.title || '当前页面';
@@ -170,6 +215,14 @@ document.addEventListener('click', async (event) => {
 
 $('refresh').addEventListener('click', refresh);
 $('connectionAction').addEventListener('click', refresh);
+$('copyDiagnostics').addEventListener('click', async () => {
+  try {
+    await copyText(JSON.stringify(buildDiagnosticReport(latestCapture), null, 2));
+    setMessage('已复制诊断信息', 'ok');
+  } catch (err) {
+    setMessage(err.message || '复制失败', 'error');
+  }
+});
 $('savePage').addEventListener('click', async () => {
   $('savePage').disabled = true;
   setMessage('正在加入待审阅...');

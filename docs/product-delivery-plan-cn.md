@@ -30,6 +30,7 @@
 - AI 对话页抽取更精确，减少误抓导航和无关按钮
 - 在 ChatGPT / Claude / Gemini / Perplexity 的 AI 输入框附近提示可用记忆，并支持插入/复制
 - 同步侧栏能显示 AI 页面诊断，帮助确认输入框和最近对话是否被识别
+- AI 页面诊断支持一键复制，方便像 Mem0 / OpenMemory 那样逐站维护 supported-sites 规则
 - 活动页、会话页加载失败时有明确兜底状态：先展示可用数据，再提示失败来源和重试入口
 - 插件有独立交付检查，避免 supported-sites 配置和运行脚本分叉
 - 记忆库有“待审阅”入口，避免自动内容直接混入长期记忆
@@ -69,6 +70,7 @@
 - 一键交付检查：`npm run check:delivery`
 - 本地预览包：`npm run package:browser-extension`，输出 `artifacts/agent-memory-lab-extension.zip`
 - 试用者解压后选择包内 `browser-extension/` 文件夹加载
+- AI 站点适配材料：同步侧栏“复制诊断”输出的 JSON，可用于补 selector 和真实网页验收
 - 未来商店发布仍需英文隐私政策、发布截图和逐站真实网页验收
 
 ## 默认更新工作流
@@ -85,6 +87,8 @@
 ## 插件对标原则
 
 参考 Mem0 / OpenMemory 的不是视觉，而是工作流结构：跨 ChatGPT、Claude、Gemini、Perplexity 等网页维护 supported sites，把记忆能力放在用户正在输入的位置。Agent Memory Lab 保留这个入口位置，但把数据策略改成本地优先：插件只负责识别页面、召回相关记忆、生成候选；长期写入必须回到 Viewer 审阅后确认。
+
+逐站迭代时，以“复制诊断”为最小反馈单元：先确认 provider、输入框、草稿长度、最近对话数量，再决定是补 selector、调整插入逻辑，还是优化本地搜索召回。
 
 ## 预计时间
 
