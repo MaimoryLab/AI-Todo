@@ -103,12 +103,12 @@ for (const marker of ['本地预览包', '权限与隐私说明', 'Skill 草稿'
 }
 
 const releaseGates = read('docs/release-gates-cn.md');
-for (const marker of ['本地可演示', '外部可试用', '公开可发布', '未达到', '真实 AI 站点逐站验收']) {
+for (const marker of ['本地可演示', '外部可试用', '公开可发布', '未达到', '真实 AI 站点逐站验收', '入口位置策略']) {
   assert(releaseGates.includes(marker), `Release gates doc missing marker: ${marker}`);
 }
 
 const aiValidation = read('docs/browser-extension-ai-validation-cn.md');
-for (const marker of ['ChatGPT', 'Claude', 'Gemini', 'Perplexity', '复制诊断', '通过标准']) {
+for (const marker of ['ChatGPT', 'Claude', 'Gemini', 'Perplexity', '复制诊断', '通过标准', 'anchorFound', 'placement', 'memoryWidgetVisible']) {
   assert(aiValidation.includes(marker), `AI validation doc missing marker: ${marker}`);
 }
 

@@ -41,6 +41,8 @@ for (const size of [16, 32, 48, 128]) {
 
 const contentScript = readFileSync('browser-extension/content-script.js', 'utf8');
 const serviceWorker = readFileSync('browser-extension/service-worker.js', 'utf8');
+const sidepanel = readFileSync('browser-extension/sidepanel.js', 'utf8');
+const schema = readFileSync('browser-extension/shared/schema.js', 'utf8');
 const siteConfig = readFileSync('browser-extension/shared/site-config.js', 'utf8');
 if (!contentScript.includes('DEMO_MEMORIES') || !contentScript.includes("provider.id === 'agentmemoryDemo'")) {
   throw new Error('Content script must provide local demo memories for the Agent Memory Demo page.');
@@ -63,6 +65,15 @@ if (!serviceWorker.includes('browser-extension-link') || !serviceWorker.includes
 }
 if (!menuContexts.includes("contexts: ['page', 'selection', 'link']")) {
   throw new Error('Context menu must expose page, selection, and link save actions.');
+}
+
+for (const field of ['anchorFound', 'placement', 'memoryWidgetVisible', 'checkedAt']) {
+  if (!contentScript.includes(field)) throw new Error(`Content script diagnostics missing ${field}.`);
+  if (!schema.includes(field)) throw new Error(`Shared schema diagnostics must preserve ${field}.`);
+  if (!sidepanel.includes(field)) throw new Error(`Side panel diagnostics must expose ${field}.`);
+}
+for (const field of ['getManifest', 'manifestVersion', 'version']) {
+  if (!sidepanel.includes(field)) throw new Error(`Diagnostic report must include extension ${field}.`);
 }
 
 console.log('browser extension checks ok');

@@ -20,6 +20,7 @@
 - Provider 被正确识别。
 - 输入框状态为“已找到”。
 - 输入框附近出现“记忆建议”入口。
+- 侧栏显示入口锚点已找到，并记录入口位置策略。
 - 本地搜索有结果时，可以插入或复制记忆。
 - 同步侧栏可复制诊断 JSON。
 - 插件没有导致原站点输入框、发送按钮、页面滚动异常。
@@ -50,11 +51,17 @@
 ```json
 {
   "product": "Agent Memory Lab Browser Extension",
+  "extension": {
+    "name": "Agent Memory Lab",
+    "version": "0.1.0",
+    "manifestVersion": 3
+  },
   "generatedAt": "2026-06-08T00:00:00.000Z",
   "page": {
     "title": "ChatGPT",
     "url": "https://chatgpt.com/",
     "host": "chatgpt.com",
+    "origin": "https://chatgpt.com",
     "type": "ai-chat",
     "typeLabel": "AI 对话"
   },
@@ -63,8 +70,12 @@
     "provider": "ChatGPT",
     "editorFound": true,
     "editorSelector": "#prompt-textarea",
+    "anchorFound": true,
+    "placement": "toolbar-end",
+    "memoryWidgetVisible": true,
     "promptLength": 18,
-    "turnCount": 4
+    "turnCount": 4,
+    "checkedAt": "2026-06-08T00:00:00.000Z"
   }
 }
 ```

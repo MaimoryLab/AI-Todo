@@ -110,6 +110,7 @@ docs/browser-extension-ai-validation-cn.md
 - 目标站点。
 - 截图或录屏。
 - 同步侧栏复制出来的诊断 JSON。
+- 诊断 JSON 里 `editorFound`、`anchorFound`、`placement`、`memoryWidgetVisible` 的状态。
 - 哪一步不符合预期。
 
 ## 当前不能承诺

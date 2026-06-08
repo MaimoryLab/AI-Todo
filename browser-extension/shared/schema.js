@@ -57,6 +57,8 @@ function normalizeDiagnostics(value) {
     provider: String(input.provider || ''),
     editorFound: !!input.editorFound,
     editorSelector: String(input.editorSelector || ''),
+    anchorFound: !!input.anchorFound,
+    placement: String(input.placement || ''),
     promptLength: Number.isFinite(Number(input.promptLength)) ? Number(input.promptLength) : 0,
     turnCount: Number.isFinite(Number(input.turnCount)) ? Number(input.turnCount) : 0,
     memoryWidgetVisible: !!input.memoryWidgetVisible,

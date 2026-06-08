@@ -38,13 +38,20 @@ function buildDiagnosticReport(capture) {
   const page = capture && capture.page ? capture.page : {};
   const diagnostics = capture && capture.diagnostics ? capture.diagnostics : {};
   const conversation = capture && capture.conversation ? capture.conversation : {};
+  const manifest = chrome.runtime && chrome.runtime.getManifest ? chrome.runtime.getManifest() : {};
   return {
     product: 'Agent Memory Lab Browser Extension',
+    extension: {
+      name: manifest.name || 'Agent Memory Lab',
+      version: manifest.version || '',
+      manifestVersion: manifest.manifest_version || 3
+    },
     generatedAt: new Date().toISOString(),
     page: {
       title: page.title || '',
       url: page.url || '',
       host: page.host || '',
+      origin: page.origin || '',
       type: page.type || '',
       typeLabel: page.typeLabel || ''
     },
@@ -53,8 +60,12 @@ function buildDiagnosticReport(capture) {
       provider: diagnostics.provider || conversation.provider || '',
       editorFound: !!diagnostics.editorFound,
       editorSelector: diagnostics.editorSelector || '',
+      anchorFound: !!diagnostics.anchorFound,
+      placement: diagnostics.placement || '',
+      memoryWidgetVisible: !!diagnostics.memoryWidgetVisible,
       promptLength: diagnostics.promptLength || 0,
-      turnCount: diagnostics.turnCount || 0
+      turnCount: diagnostics.turnCount || 0,
+      checkedAt: diagnostics.checkedAt || ''
     }
   };
 }
@@ -126,6 +137,8 @@ function renderDiagnostics(capture) {
   const rows = [
     { label: '页面识别', value: diagnostics.provider || '已识别', ok: true },
     { label: '输入框', value: diagnostics.editorFound ? '已找到' : '未找到', ok: !!diagnostics.editorFound },
+    { label: '入口锚点', value: diagnostics.anchorFound ? '已找到' : '未找到', ok: !!diagnostics.anchorFound },
+    { label: '入口位置', value: diagnostics.placement || '自动', ok: true },
     { label: '输入草稿', value: `${diagnostics.promptLength || 0} 字`, ok: true },
     { label: '最近对话', value: `${diagnostics.turnCount || 0} 条`, ok: true }
   ];
