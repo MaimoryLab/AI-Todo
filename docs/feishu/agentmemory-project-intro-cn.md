@@ -1,6 +1,6 @@
-# Codex Memory Lab：本地优先的 Agent 记忆工作台
+# Agent Memory Lab：本地优先的 Agent 记忆工作台
 
-一句话：把 Codex / Claude Code / Cursor 里的聊天记录、项目上下文、个人偏好、可复用经验和本地 Skill，整理成能被 Agent 继续使用的工作记忆。
+一句话：把 Codex、Claude Code、Cursor、OpenCode 等 Agent 里的聊天记录、项目上下文、个人偏好、可复用经验和本地 Skill，整理成能被 Agent 继续使用的工作记忆。
 
 ## 0. 先看这一页
 
@@ -14,7 +14,7 @@
 
 ## 1. 产品定位
 
-Codex Memory Lab 解决的是长期使用 Agent 时的上下文断层：每次都要重讲项目、偏好和上次进度；做过的经验留在聊天里，没有进入可复用系统；本地 Skill 越装越多，但来源和用途不清楚。
+Agent Memory Lab 解决的是长期使用 Agent 时的上下文断层：每次都要重讲项目、偏好和上次进度；做过的经验留在聊天里，没有进入可复用系统；本地 Skill 越装越多，但来源和用途不清楚。
 
 它把 Agent 工作流拆成四层：
 
@@ -58,7 +58,7 @@ Skill 页会扫描本机的 Codex、Agents 和插件 Skill 目录，展示每个
 
 ## 4. 推荐工作流
 
-1. 用户正常和 Codex / Claude Code / Cursor 对话。
+1. 用户正常和 Codex、Claude Code、Cursor、OpenCode 等 Agent 对话。
 2. 后台记录会话、工具调用、项目路径和关键上下文。
 3. Viewer 把内容整理成记忆、会话、行动、经验。
 4. 用户审阅重要内容，删掉不该保留的，补充缺失线索。

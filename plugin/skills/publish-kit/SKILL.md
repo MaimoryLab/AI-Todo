@@ -12,7 +12,7 @@ Check these surfaces:
 - Feishu doc: synced with README direction, not stale, not overfull.
 - Screenshots: only real product screenshots; avoid loading states, private memory pages, or old upstream images.
 - Repository identity: not presented as a random fork if the product direction has diverged.
-- Plugin metadata: name, description, homepage, repository, and market entry point match Codex Memory Lab.
+- Plugin metadata: name, description, homepage, repository, and market entry point match Agent Memory Lab.
 
 Recommended screenshot rule for this project:
 - Use only 首页/总览 and Skill 管理台 in public project intro unless the user requests more.

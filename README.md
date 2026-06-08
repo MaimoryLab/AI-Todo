@@ -1,15 +1,15 @@
 <p align="center">
-  <img src="assets/banner.png" alt="Codex Memory Lab" width="860" />
+  <img src="assets/banner.png" alt="Agent Memory Lab" width="860" />
 </p>
 
-# Codex Memory Lab
+# Agent Memory Lab
 
 **一个本地优先的 Agent 记忆工作台：把聊天记录、项目上下文、个人偏好、可复用经验和本地 Skill 整理成能被 Agent 继续使用的工作记忆。**
 
 它不是普通的聊天记录列表，也不是只给工程师看的日志面板。这个版本更关注一个问题：当你和 Codex、Claude Code、Cursor 这类 Agent 长期协作时，哪些内容应该被自动留下来，哪些内容应该被你审阅、编辑、删除、沉淀成 Skill？
 
 <p align="center">
-  <img src="docs/readme-assets/screenshots/dashboard.jpg" alt="Codex Memory Lab 总览页" width="860" />
+  <img src="docs/readme-assets/screenshots/dashboard.jpg" alt="Agent Memory Lab 总览页" width="860" />
 </p>
 
 ## 为什么做它
@@ -56,7 +56,7 @@ Skill 页会扫描本机的 Codex、Agents 和插件 Skill 目录，展示每个
 它目前支持：
 
 - 搜索 Skill 名称和路径
-- 按来源筛选：Codex 环境、共享目录、插件提供
+- 按来源筛选：当前 Agent 环境、共享目录、插件提供
 - 查看 `SKILL.md` 详情
 - 复制本地路径
 - 把成熟经验继续沉淀进 Skill
@@ -80,7 +80,7 @@ Skill 页会扫描本机的 Codex、Agents 和插件 Skill 目录，展示每个
 
 更接近真实使用时，它像一个循环：
 
-1. 你继续正常和 Codex / Claude Code / Cursor 对话。
+1. 你继续正常和 Codex、Claude Code、Cursor、OpenCode 等 Agent 对话。
 2. 后台记录会话、工具调用、项目路径和关键上下文。
 3. Viewer 里把这些内容整理成记忆、会话、行动、经验。
 4. 你审阅重要内容，删掉不该保留的，补充缺失线索。
@@ -162,7 +162,7 @@ agentmemory viewer
 适合这些使用方式：
 
 - 个人长期项目记忆
-- Codex / Claude Code 协作复盘
+- Codex / Claude Code / Cursor 等 Agent 协作复盘
 - 本地 Skill 管理
 - Agent 记忆产品原型研究
 - 人工审阅的工作流沉淀
@@ -181,7 +181,7 @@ agentmemory viewer
 
 ## 当前状态
 
-这是一个面向 **Codex / Agent 记忆工作台** 的产品化实验分支，基于 Agentmemory 的本地记忆能力继续做 UI、交互和工作流迭代。
+这是一个面向 **Agent 记忆工作台** 的产品化实验分支，基于 Agentmemory 的本地记忆能力继续做 UI、交互和工作流迭代。
 
 已经完成：
 

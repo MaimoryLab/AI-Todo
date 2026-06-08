@@ -5,7 +5,7 @@ argument-hint: "[what to sync or focus on]"
 user-invocable: true
 ---
 
-The user wants Codex Memory Lab to sync the current session: $ARGUMENTS
+The user wants Agent Memory Lab to sync the current session: $ARGUMENTS
 
 Act as a careful memory curator. Do not save everything. Extract only durable, reusable items.
 

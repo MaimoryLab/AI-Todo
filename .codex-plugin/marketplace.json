@@ -1,11 +1,11 @@
 {
-  "name": "codex-memory-lab",
+  "name": "agent-memory-lab",
   "interface": {
-    "displayName": "Codex Memory Lab"
+    "displayName": "Agent Memory Lab"
   },
   "plugins": [
     {
-      "name": "codex-memory-lab",
+      "name": "agent-memory-lab",
       "source": {
         "source": "git-subdir",
         "url": "https://github.com/sznnnnn/agentmemory-lab.git",

@@ -1,5 +1,5 @@
 {
-  "name": "codex-memory-lab",
+  "name": "agent-memory-lab",
   "version": "0.9.24",
   "description": "Local-first Agent memory workbench -- captures sessions, opens a reviewable viewer, syncs durable memories, promotes lessons into Skills, and prepares README/Feishu publishing materials.",
   "author": {

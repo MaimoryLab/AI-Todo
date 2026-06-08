@@ -1,11 +1,11 @@
 ---
 name: open-workbench
-description: Open the local Codex Memory Lab viewer or tell the user the exact local URL. Use when the user asks to open memory, dashboard, viewer, workbench, Agentmemory Lab, or wants to inspect memories, sessions, skills, actions, or activity.
+description: Open the local Agent Memory Lab viewer or tell the user the exact local URL. Use when the user asks to open memory, dashboard, viewer, workbench, Agent Memory Lab, or wants to inspect memories, sessions, skills, actions, or activity.
 argument-hint: "[dashboard|memories|sessions|skills|actions|activity]"
 user-invocable: true
 ---
 
-The user wants to open Codex Memory Lab: $ARGUMENTS
+The user wants to open Agent Memory Lab: $ARGUMENTS
 
 Choose the target tab from `$ARGUMENTS`:
 - `dashboard`, `home`, `overview`, empty -> `dashboard`
