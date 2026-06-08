@@ -1055,8 +1055,24 @@ export function registerApiTriggers(
       const now = new Date().toISOString();
       let result: unknown;
       const approvedKind = body.kind === "lesson" || body.kind === "memory" ? body.kind : item.kind;
+      const payload = (item.payload || {}) as Record<string, unknown>;
+      const provider = asNonEmptyString(payload.provider) || undefined;
+      const pageType = asNonEmptyString(payload.pageType) || item.page?.type;
+      const sourceLabel = asNonEmptyString(payload.sourceLabel) || provider || item.page?.typeLabel || item.page?.host;
+      const sourceConcepts = [
+        "browser-context",
+        item.page?.host,
+        pageType ? `browser-page:${pageType}` : undefined,
+        provider ? `browser-source:${provider.toLowerCase()}` : undefined,
+        !provider && item.page?.host ? `browser-host:${item.page.host}` : undefined,
+      ].filter((value): value is string => typeof value === "string" && value.length > 0);
+      const sourceTags = [
+        "browser",
+        "reviewed",
+        provider ? `source:${provider.toLowerCase()}` : undefined,
+        pageType ? `page:${pageType}` : undefined,
+      ].filter((value): value is string => typeof value === "string" && value.length > 0);
       if (approvedKind === "lesson") {
-        const payload = (item.payload || {}) as Record<string, unknown>;
         result = await sdk.trigger({
           function_id: "mem::lesson-save",
           payload: {
@@ -1064,20 +1080,22 @@ export function registerApiTriggers(
             context: typeof payload.context === "string" ? payload.context : [item.page?.title, item.page?.url].filter(Boolean).join("\n"),
             confidence: typeof payload.confidence === "number" ? payload.confidence : 0.75,
             project: project || (typeof payload.project === "string" ? payload.project : "browser"),
-            tags: tags || (Array.isArray(payload.tags) ? payload.tags : ["browser", "reviewed"]),
+            tags: tags || (Array.isArray(payload.tags) ? payload.tags : sourceTags),
             source: "manual",
           },
         });
       } else {
-        const payload = (item.payload || {}) as Record<string, unknown>;
         const rawType = asNonEmptyString(body.type) || (typeof payload.type === "string" ? payload.type : "fact");
         const validTypes = new Set(["pattern", "preference", "architecture", "bug", "workflow", "fact"]);
+        const concepts = Array.isArray(payload.concepts)
+          ? Array.from(new Set([...payload.concepts.filter((c): c is string => typeof c === "string" && c.length > 0), ...sourceConcepts]))
+          : sourceConcepts;
         result = await sdk.trigger({
           function_id: "mem::remember",
           payload: {
             content: title ? `${title}\n\n${content}` : content,
             type: validTypes.has(rawType) ? rawType : "fact",
-            concepts: Array.isArray(payload.concepts) ? payload.concepts : ["browser-context", item.page?.host].filter(Boolean),
+            concepts,
             files: Array.isArray(payload.files) ? payload.files : [],
             project: project || (typeof payload.project === "string" ? payload.project : "browser"),
           },
@@ -1095,6 +1113,9 @@ export function registerApiTriggers(
         ...(project ? { project } : {}),
         ...(tags ? { tags } : {}),
         ...(body.type ? { type: body.type } : {}),
+        ...(sourceLabel ? { sourceLabel } : {}),
+        ...(provider ? { provider } : {}),
+        ...(pageType ? { pageType } : {}),
       };
       item.updatedAt = now;
       item.reviewedAt = now;

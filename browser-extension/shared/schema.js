@@ -102,11 +102,17 @@ export function captureToMemoryPayload(capture) {
   const page = capture.page;
   const selected = page.selection ? `\n\n选中文本：\n${page.selection}` : '';
   const headings = page.headings.length ? `\n\n页面结构：${page.headings.join(' / ')}` : '';
+  const provider = capture.conversation && capture.conversation.provider ? capture.conversation.provider : '';
+  const sourceKind = provider || page.typeLabel || page.host || '浏览器';
   return {
     content: `网页记忆线索：${page.title}\nURL：${page.url}\n摘要：${page.description || '无'}${selected}${headings}`,
-    concepts: ['browser-context', page.host].filter(Boolean),
+    concepts: ['browser-context', page.host, `browser-page:${page.type}`, provider ? `browser-source:${provider.toLowerCase()}` : ''].filter(Boolean),
     files: [],
-    project: 'browser'
+    project: 'browser',
+    sourceKind,
+    sourceLabel: provider ? provider : page.typeLabel || '浏览器',
+    pageType: page.type,
+    provider
   };
 }
 
@@ -117,6 +123,10 @@ export function captureToLessonPayload(capture, note) {
     context: `${page.title}\n${page.url}`,
     tags: ['browser', 'web-context'],
     project: 'browser',
+    sourceKind: capture.conversation && capture.conversation.provider ? capture.conversation.provider : page.typeLabel || '浏览器',
+    sourceLabel: capture.conversation && capture.conversation.provider ? capture.conversation.provider : page.typeLabel || '浏览器',
+    pageType: page.type,
+    provider: capture.conversation && capture.conversation.provider ? capture.conversation.provider : '',
     confidence: 0.75
   };
 }

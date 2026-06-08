@@ -3811,9 +3811,29 @@
       if (m && m.sessionIds && m.sessionIds.length) return 'session';
       return 'manual';
     }
+    function browserSourceFromMemory(m) {
+      var concepts = m && Array.isArray(m.concepts) ? m.concepts : [];
+      var source = '';
+      concepts.forEach(function(c) {
+        var s = String(c || '');
+        if (s.indexOf('browser-source:') === 0 && !source) source = s.slice('browser-source:'.length);
+      });
+      if (source) return source;
+      var host = '';
+      concepts.forEach(function(c) {
+        var s = String(c || '');
+        if (s.indexOf('browser-host:') === 0 && !host) host = s.slice('browser-host:'.length);
+      });
+      return host;
+    }
+    function browserSourceLabel(source) {
+      var labels = { chatgpt: 'ChatGPT', claude: 'Claude', gemini: 'Gemini', perplexity: 'Perplexity', grok: 'Grok', deepseek: 'DeepSeek', github: 'GitHub', feishu: '飞书', notion: 'Notion' };
+      if (!source) return '浏览器';
+      return labels[source] || source.replace(/^www\./, '');
+    }
     function memorySourceLabel(m) {
       var kind = memorySourceKind(m);
-      if (kind === 'browser') return '浏览器';
+      if (kind === 'browser') return browserSourceLabel(browserSourceFromMemory(m));
       if (kind === 'session') return '会话';
       return '手动';
     }
@@ -5260,7 +5280,14 @@
 
       var filtered = items.filter(function(m) {
         if (typeFilter && m.type !== typeFilter) return false;
-        if (sourceFilter && memorySourceKind(m) !== sourceFilter) return false;
+        if (sourceFilter) {
+          if (sourceFilter.indexOf('browser:') === 0) {
+            if (memorySourceKind(m) !== 'browser') return false;
+            if (browserSourceFromMemory(m) !== sourceFilter.slice('browser:'.length)) return false;
+          } else if (memorySourceKind(m) !== sourceFilter) {
+            return false;
+          }
+        }
         const normalizedSearch = (search || '')
           .normalize("NFKC")
           .toLowerCase();
@@ -5315,7 +5342,7 @@
       });
       html += '</select>';
       html += '<select id="mem-source-filter" aria-label="筛选来源"><option value="">全部来源</option>';
-      [['browser', '浏览器'], ['session', '会话'], ['manual', '手动']].forEach(function(item) {
+      [['browser', '浏览器'], ['browser:chatgpt', 'ChatGPT'], ['browser:claude', 'Claude'], ['browser:gemini', 'Gemini'], ['browser:perplexity', 'Perplexity'], ['browser:grok', 'Grok'], ['browser:deepseek', 'DeepSeek'], ['session', '会话'], ['manual', '手动']].forEach(function(item) {
         html += '<option value="' + item[0] + '"' + (sourceFilter === item[0] ? ' selected' : '') + '>' + item[1] + '</option>';
       });
       html += '</select></div>';
@@ -5531,11 +5558,13 @@
       var item = (state.memories.reviewItems || []).find(function(x) { return x.id === id; });
       if (!item) return;
       var payload = item.payload || {};
+      var sourceLabel = payload.sourceLabel || payload.provider || (item.page && (item.page.typeLabel || item.page.host)) || '浏览器';
+      var defaultTags = Array.isArray(payload.tags) ? payload.tags.join(', ') : ['browser', 'reviewed', payload.provider ? 'source:' + String(payload.provider).toLowerCase() : '', item.page && item.page.type ? 'page:' + item.page.type : ''].filter(Boolean).join(', ');
       var modal = document.getElementById('modal');
       var overlay = document.getElementById('modal-overlay');
       modal.innerHTML =
         '<h3>审阅后保存</h3>' +
-        '<p>这条内容来自浏览器插件。确认前可以调整标题、内容和归属，避免临时信息直接进入长期记忆。</p>' +
+        '<p>这条内容来自 ' + esc(sourceLabel) + '。确认前可以调整标题、内容和归属，避免临时信息直接进入长期记忆。</p>' +
         '<div class="memory-add-form">' +
         '<label>标题<input id="review-title" value="' + esc(item.title || '') + '"></label>' +
         '<label>内容<textarea id="review-content" rows="8">' + esc(item.content || '') + '</textarea></label>' +
@@ -5545,7 +5574,7 @@
         '</div>' +
         '<div class="memory-add-grid">' +
         '<label>记忆类型<select id="review-type"><option value="fact"' + (payload.type === 'fact' || !payload.type ? ' selected' : '') + '>事实</option><option value="preference"' + (payload.type === 'preference' ? ' selected' : '') + '>偏好</option><option value="workflow"' + (payload.type === 'workflow' ? ' selected' : '') + '>工作流</option><option value="pattern"' + (payload.type === 'pattern' ? ' selected' : '') + '>模式</option><option value="architecture"' + (payload.type === 'architecture' ? ' selected' : '') + '>架构</option><option value="bug"' + (payload.type === 'bug' ? ' selected' : '') + '>问题</option></select></label>' +
-        '<label>标签<input id="review-tags" value="' + esc(Array.isArray(payload.tags) ? payload.tags.join(', ') : 'browser, reviewed') + '"></label>' +
+        '<label>标签<input id="review-tags" value="' + esc(defaultTags) + '"></label>' +
         '</div>' +
         '<div id="review-error" class="memory-form-error"></div>' +
         '</div>' +

@@ -86,6 +86,8 @@ icons/                  插件图标
 
 所有写入本地记忆、经验和最近保存记录的逻辑都从这个结构转换，避免 popup、content script、service worker 各自拼一套数据。
 
+写入审阅队列时会保留更细的来源信息，例如 `browser-source:chatgpt`、`browser-page:ai-chat`。用户在 Viewer 记忆库里既可以筛选“浏览器”，也可以进一步筛选 ChatGPT、Claude、Gemini、Perplexity 等来源。
+
 ## 本地预览
 
 1. 打开 Chrome / Edge：`chrome://extensions`
