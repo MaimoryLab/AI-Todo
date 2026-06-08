@@ -82,6 +82,7 @@
 - 本地检查：`npm run check:browser-extension`
 - 试用入口检查：`check:browser-extension` 会确认弹窗显示扩展版本、本地试用状态和外部试用指南入口
 - 保存前审阅草稿检查：`check:browser-extension` 会确认弹窗和同步侧栏都能编辑标题、正文、项目、标签和经验候选状态，并通过 `SAVE_CANDIDATE` 进入 Viewer 待审阅队列
+- Viewer 待审阅检查：`check:delivery` 会确认插件送来的项目、标签、来源和经验候选状态在待审阅卡片与审阅弹窗里可见
 - 一键交付检查：`npm run check:delivery`
 - 交付状态总览：`npm run status:delivery`
 - 发布门槛检查：`npm run check:release-gates`；公开发布前必须通过 `npm run check:release-public`

@@ -3714,9 +3714,31 @@
     }
     function projectDisplayName(key) {
       var k = String(key || '未归类');
+      if (k === 'all') return '全部项目';
+      if (k === 'browser') return '浏览器';
       if (k === '未归类' || k === '演示数据') return k;
       var parts = k.split('/').filter(Boolean);
       return parts.length ? parts[parts.length - 1] : k;
+    }
+    function arrayFromCsv(value) {
+      if (Array.isArray(value)) return value.map(function(v) { return String(v || '').trim(); }).filter(Boolean);
+      return String(value || '').split(/[,，\s]+/).map(function(v) { return v.trim(); }).filter(Boolean);
+    }
+    function reviewPayload(item) {
+      return (item && item.payload && typeof item.payload === 'object') ? item.payload : {};
+    }
+    function reviewProject(item) {
+      var payload = reviewPayload(item);
+      if (payload.projectScope === 'all' || payload.project === 'all') return 'all';
+      return payload.project || (item && item.page && item.page.host) || 'browser';
+    }
+    function reviewTags(item) {
+      var payload = reviewPayload(item);
+      return arrayFromCsv(payload.tags).slice(0, 6);
+    }
+    function reviewSourceLabel(item) {
+      var payload = reviewPayload(item);
+      return payload.sourceLabel || payload.provider || (item && item.page && (item.page.typeLabel || item.page.host)) || '浏览器';
     }
     function groupSessionsByProject(items) {
       var groups = {};
@@ -5435,11 +5457,19 @@
       html += '<div class="memory-card-grid">';
       items.forEach(function(item) {
         var page = item.page || {};
-        var meta = [item.kind === 'lesson' ? '经验候选' : '记忆候选', page.typeLabel || page.host || '', page.url || ''].filter(Boolean).join(' · ');
+        var payload = reviewPayload(item);
+        var tags = reviewTags(item);
+        var project = reviewProject(item);
+        var meta = [item.kind === 'lesson' ? '经验候选' : '记忆候选', reviewSourceLabel(item), page.url || ''].filter(Boolean).join(' · ');
         html += '<article class="memory-display-card" style="border-radius:8px;">';
         html += '<div class="memory-card-topline"><span class="memory-card-type">待审阅</span><span class="memory-card-strength">' + esc(item.kind === 'lesson' ? '经验' : '记忆') + '</span></div>';
         html += '<h3>' + esc(item.title || '未命名候选') + '</h3>';
         html += '<p>' + esc(item.content || '').replace(/\n/g, '<br>') + '</p>';
+        html += '<div class="tag-list" style="margin-top:10px;">';
+        html += '<span class="badge badge-muted">' + esc(projectDisplayName(project)) + '</span>';
+        if (payload.asLesson || item.kind === 'lesson') html += '<span class="badge badge-green">经验候选</span>';
+        tags.forEach(function(tag) { html += '<span class="tag">' + esc(tag) + '</span>'; });
+        html += '</div>';
         html += '<div class="memory-card-source">' + esc(meta) + '</div>';
         html += '<div class="memory-card-actions"><button class="btn btn-primary" data-action="edit-review" data-review-id="' + esc(item.id) + '">审阅保存</button><button class="btn" data-action="dismiss-review" data-review-id="' + esc(item.id) + '">忽略</button></div>';
         html += '</article>';
@@ -5577,8 +5607,9 @@
       var item = (state.memories.reviewItems || []).find(function(x) { return x.id === id; });
       if (!item) return;
       var payload = item.payload || {};
-      var sourceLabel = payload.sourceLabel || payload.provider || (item.page && (item.page.typeLabel || item.page.host)) || '浏览器';
-      var defaultTags = Array.isArray(payload.tags) ? payload.tags.join(', ') : ['browser', 'reviewed', payload.provider ? 'source:' + String(payload.provider).toLowerCase() : '', item.page && item.page.type ? 'page:' + item.page.type : ''].filter(Boolean).join(', ');
+      var sourceLabel = reviewSourceLabel(item);
+      var defaultTags = reviewTags(item).length ? reviewTags(item).join(', ') : ['browser', 'reviewed', payload.provider ? 'source:' + String(payload.provider).toLowerCase() : '', item.page && item.page.type ? 'page:' + item.page.type : ''].filter(Boolean).join(', ');
+      var defaultProject = reviewProject(item);
       var modal = document.getElementById('modal');
       var overlay = document.getElementById('modal-overlay');
       modal.innerHTML =
@@ -5589,7 +5620,7 @@
         '<label>内容<textarea id="review-content" rows="8">' + esc(item.content || '') + '</textarea></label>' +
         '<div class="memory-add-grid">' +
         '<label>类型<select id="review-kind"><option value="memory"' + (item.kind !== 'lesson' ? ' selected' : '') + '>记忆</option><option value="lesson"' + (item.kind === 'lesson' ? ' selected' : '') + '>经验</option></select></label>' +
-        '<label>项目<input id="review-project" value="' + esc(payload.project || 'browser') + '"></label>' +
+        '<label>项目<input id="review-project" value="' + esc(defaultProject) + '"></label>' +
         '</div>' +
         '<div class="memory-add-grid">' +
         '<label>记忆类型<select id="review-type"><option value="fact"' + (payload.type === 'fact' || !payload.type ? ' selected' : '') + '>事实</option><option value="preference"' + (payload.type === 'preference' ? ' selected' : '') + '>偏好</option><option value="workflow"' + (payload.type === 'workflow' ? ' selected' : '') + '>工作流</option><option value="pattern"' + (payload.type === 'pattern' ? ' selected' : '') + '>模式</option><option value="architecture"' + (payload.type === 'architecture' ? ' selected' : '') + '>架构</option><option value="bug"' + (payload.type === 'bug' ? ' selected' : '') + '>问题</option></select></label>' +

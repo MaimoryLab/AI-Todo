@@ -154,6 +154,11 @@ for (const marker of ['agentmemory-demo-input', 'Agent Memory Demo', '记忆建�
   assert(demoPage.includes(marker), `Browser extension demo page missing marker: ${marker}`);
 }
 
+const viewer = read('src/viewer/index.html');
+for (const marker of ['function reviewProject', 'function reviewTags', 'function reviewSourceLabel', 'payload.asLesson', '经验候选']) {
+  assert(viewer.includes(marker), `Viewer review queue missing browser draft metadata marker: ${marker}`);
+}
+
 const privacyEn = read('docs/browser-extension-privacy-en.md');
 for (const marker of ['Privacy Policy', 'local-first', 'Data We Process', 'Where Data Goes', 'AI Diagnostics']) {
   assert(privacyEn.includes(marker), `English privacy policy missing marker: ${marker}`);
