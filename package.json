@@ -38,7 +38,8 @@
     "check:release-public": "node scripts/check-release-gates.mjs --public",
     "check:ai-validation-evidence": "node scripts/check-ai-validation-evidence.mjs",
     "sync:ai-validation-table": "node scripts/sync-ai-validation-table.mjs --write",
-    "check:ai-validation-table": "node scripts/sync-ai-validation-table.mjs --check"
+    "check:ai-validation-table": "node scripts/sync-ai-validation-table.mjs --check",
+    "status:delivery": "node scripts/delivery-status.mjs"
   },
   "keywords": [
     "ai",

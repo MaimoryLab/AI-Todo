@@ -63,6 +63,7 @@ const requiredFiles = [
   'scripts/check-release-gates.mjs',
   'scripts/check-ai-validation-evidence.mjs',
   'scripts/sync-ai-validation-table.mjs',
+  'scripts/delivery-status.mjs',
   'scripts/check-workbench-status.mjs',
   'scripts/package-browser-extension.mjs',
   'scripts/write-delivery-summary.mjs'
@@ -78,6 +79,7 @@ assert(readme.includes('npm run build && npm run start'), 'README must mention f
 assert(readme.includes('npm run check:workbench'), 'README must mention workbench status check command.');
 assert(readme.includes('npm run check:release-gates'), 'README must mention release gates check command.');
 assert(readme.includes('npm run check:release-public'), 'README must mention public release check command.');
+assert(readme.includes('npm run status:delivery'), 'README must mention delivery status command.');
 const imageRefs = [...readme.matchAll(/<img\s+src="([^"]+)"/g)].map((match) => match[1]);
 const allowedImages = new Set([
   'assets/banner.png',
@@ -93,6 +95,7 @@ assert(imageRefs.includes('docs/readme-assets/screenshots/skills.jpg'), 'README 
 
 const browserReadme = read('browser-extension/README.md');
 assert(browserReadme.includes('npm run package:browser-extension'), 'Browser extension README must mention packaging command.');
+assert(browserReadme.includes('npm run status:delivery'), 'Browser extension README must mention delivery status command.');
 assert(browserReadme.includes('npm run preview:browser-extension'), 'Browser extension README must mention preview command.');
 assert(browserReadme.includes('docs/browser-extension-privacy-cn.md'), 'Browser extension README must link privacy doc.');
 assert(browserReadme.includes('docs/browser-extension-mem0-reference-cn.md'), 'Browser extension README must link Mem0 reference doc.');
@@ -173,6 +176,7 @@ run(process.execPath, ['scripts/check-browser-extension-package.mjs']);
 run(process.execPath, ['scripts/check-ai-validation-evidence.mjs']);
 run(process.execPath, ['scripts/sync-ai-validation-table.mjs', '--check']);
 run(process.execPath, ['scripts/write-delivery-summary.mjs']);
+run(process.execPath, ['scripts/delivery-status.mjs']);
 run(process.execPath, ['scripts/check-release-gates.mjs']);
 assert(existsSync('artifacts/agent-memory-lab-extension.zip'), 'Browser extension package was not created.');
 assert(existsSync('artifacts/delivery-summary.md'), 'Delivery summary was not created.');

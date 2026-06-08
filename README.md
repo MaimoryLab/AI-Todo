@@ -50,6 +50,14 @@
 
 演示前可以按 [演示检查清单](docs/demo-checklist-cn.md) 自查。
 
+查看当前交付状态：
+
+```bash
+npm run status:delivery
+```
+
+它会汇总插件 zip、核心体验、外部试用状态、真实 AI 站点验收和下一步目标。
+
 ## 为什么不是普通网页剪藏
 
 普通剪藏工具更像“收藏夹”：保存标题、链接、正文，然后等你以后再找。
@@ -188,6 +196,12 @@ npm run check:workbench
 
 ```bash
 npm run check:release-gates
+```
+
+快速看交付状态：
+
+```bash
+npm run status:delivery
 ```
 
 公开发布前再运行：

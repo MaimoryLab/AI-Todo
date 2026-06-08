@@ -236,6 +236,7 @@ ${extractGateTable(releaseGates)}
 
 - \`npm run package:browser-extension\`
 - \`npm run check:delivery\`
+- \`npm run status:delivery\`
 - \`npm run check:ai-validation-evidence\`
 - \`npm run check:workbench\` when the full local workbench should be running
 

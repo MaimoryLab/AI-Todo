@@ -58,6 +58,12 @@ npm run package:browser-extension && npm run check:delivery
 查看当前发布门槛：
 
 ```bash
+npm run status:delivery
+```
+
+再看详细发布门槛：
+
+```bash
 npm run check:release-gates
 ```
 

@@ -81,6 +81,7 @@
 - 试用入口检查：`check:browser-extension` 会确认弹窗显示扩展版本、本地试用状态和外部试用指南入口
 - 保存前审阅草稿检查：`check:browser-extension` 会确认弹窗和同步侧栏都能编辑标题、正文，并通过 `SAVE_CANDIDATE` 进入 Viewer 待审阅队列
 - 一键交付检查：`npm run check:delivery`
+- 交付状态总览：`npm run status:delivery`
 - 发布门槛检查：`npm run check:release-gates`；公开发布前必须通过 `npm run check:release-public`
 - 真实站点证据汇总：`npm run check:ai-validation-evidence`，输出 `artifacts/ai-validation-evidence-summary.json`
 - 真实站点表格同步：`npm run sync:ai-validation-table`，把证据 JSON 同步到 `docs/browser-extension-ai-validation-cn.md`

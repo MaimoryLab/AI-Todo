@@ -90,6 +90,14 @@ npm run check:workbench
 也可以检查当前发布门槛：
 
 ```bash
+npm run status:delivery
+```
+
+这个命令会先告诉你当前插件包、核心体验、真实 AI 站点证据和下一步目标是什么。
+
+也可以继续看发布门槛：
+
+```bash
 npm run check:release-gates
 ```
 

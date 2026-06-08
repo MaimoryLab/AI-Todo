@@ -146,10 +146,11 @@ http://localhost:3113/demo/browser-extension.html
 ```bash
 npm run check:browser-extension
 npm run package:browser-extension
+npm run status:delivery
 npm run preview:browser-extension
 ```
 
-第一个命令会确认扩展脚本语法、Manifest V3 content script 配置、图标尺寸、`shared/site-config.js` 和运行脚本里的 AI provider 没有分叉；也会检查弹窗和同步侧栏都保留“保存前审阅草稿”，候选内容必须先填入草稿，再把编辑后的标题和正文送到 Viewer 待审阅队列。它还会用本地 fixture 检查 ChatGPT、Claude、Gemini、Perplexity、Grok、DeepSeek 的输入框和对话 selector 至少能命中最小页面模型。第二个命令会生成可分发的本地预览包：`artifacts/agent-memory-lab-extension.zip`，并检查 zip 里包含 manifest、content script、侧栏、弹窗、设置页、shared 数据结构和 PNG 图标。
+第一个命令会确认扩展脚本语法、Manifest V3 content script 配置、图标尺寸、`shared/site-config.js` 和运行脚本里的 AI provider 没有分叉；也会检查弹窗和同步侧栏都保留“保存前审阅草稿”，候选内容必须先填入草稿，再把编辑后的标题和正文送到 Viewer 待审阅队列。它还会用本地 fixture 检查 ChatGPT、Claude、Gemini、Perplexity、Grok、DeepSeek 的输入框和对话 selector 至少能命中最小页面模型。第二个命令会生成可分发的本地预览包：`artifacts/agent-memory-lab-extension.zip`，并检查 zip 里包含 manifest、content script、侧栏、弹窗、设置页、shared 数据结构和 PNG 图标。第三个命令会汇总当前交付状态和下一步真实站点验收目标。
 
 本地 fixture 不是正式站点验收的替代品，只是防回归网。真正发布前仍需在真实 AI 页面打开插件，确认输入框旁提示、插入、复制和侧栏诊断都可用。
 
