@@ -1,4 +1,5 @@
 import { existsSync, readFileSync, statSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
 
 function readJson(path) {
   return JSON.parse(readFileSync(path, 'utf8'));
@@ -10,6 +11,18 @@ function fileSize(path) {
 
 function printStatus(label, ok, detail = '') {
   console.log(`${label}: ${ok ? 'ready' : 'not-ready'}${detail ? ` (${detail})` : ''}`);
+}
+
+function git(args) {
+  const result = spawnSync('git', args, { encoding: 'utf8' });
+  return result.status === 0 ? result.stdout.trim() : '';
+}
+
+function hasTrackedChanges() {
+  return git(['status', '--short'])
+    .split(/\r?\n/)
+    .filter(Boolean)
+    .some((line) => !line.startsWith('?? .learnings/') && !line.includes('index.html.bak-'));
 }
 
 const manifestPath = 'artifacts/delivery-manifest.json';
@@ -29,13 +42,18 @@ const release = manifest.releaseState || {};
 const realSite = release.realSiteValidation || {};
 const core = manifest.coreExperience || {};
 const external = manifest.externalTesting || {};
+const currentCommit = git(['rev-parse', '--short', 'HEAD']) || 'unknown';
+const artifactCommit = manifest.git?.commit || 'unknown';
+const artifactStale = currentCommit !== 'unknown' && artifactCommit !== 'unknown' && currentCommit !== artifactCommit;
+const trackedChangesPending = hasTrackedChanges();
 
 function readyFromEntry(entry) {
   return !!(entry && entry.exists !== false && (entry.path || entry.command));
 }
 
 console.log('Agent Memory Lab delivery status');
-console.log(`commit: ${manifest.git?.commit || 'unknown'}${manifest.git?.trackedChangesPending ? ' (tracked changes pending)' : ''}`);
+console.log(`current commit: ${currentCommit}${trackedChangesPending ? ' (tracked changes pending)' : ''}`);
+console.log(`artifact commit: ${artifactCommit}${artifactStale ? ' (stale; rerun npm run package:browser-extension)' : ''}`);
 console.log(`extension: ${manifest.extension?.name || 'Agent Memory Lab'} ${manifest.extension?.version || ''}`.trim());
 console.log(`zip: ${zipPath} (${zipBytes} bytes)`);
 printStatus('local demo', release.localDemo === 'ready');

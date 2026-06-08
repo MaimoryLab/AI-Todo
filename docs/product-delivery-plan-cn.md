@@ -84,7 +84,7 @@
 - 真实站点证据记录命令：`npm run record:ai-validation-evidence`
 - 插件 PNG 图标资产：`browser-extension/icons/icon16.png`、`icon32.png`、`icon48.png`、`icon128.png`
 - 本地检查：`npm run check:browser-extension`
-- 试用入口检查：`check:browser-extension` 会确认弹窗显示扩展版本、本地试用状态和外部试用指南入口
+- 试用入口检查：`check:browser-extension` 会确认弹窗显示扩展版本、本地工作台状态和使用指南入口
 - 保存前审阅草稿检查：`check:browser-extension` 会确认弹窗和同步侧栏都能编辑标题、正文、项目、标签和经验候选状态，并通过 `SAVE_CANDIDATE` 进入 Viewer 待审阅队列
 - Viewer 待审阅检查：`check:delivery` 会确认插件送来的项目、标签、来源和经验候选状态在待审阅卡片与审阅弹窗里可见
 - 一键交付检查：`npm run check:delivery`
@@ -96,6 +96,7 @@
 - 本地预览包：`npm run package:browser-extension`，输出 `artifacts/agent-memory-lab-extension.zip`
 - 交付摘要：`artifacts/delivery-summary.md`，记录版本、提交、产物、发布门槛和检查命令
 - 交付清单：`artifacts/delivery-manifest.json`，记录版本、提交、zip 大小、sha256、发布状态和真实 AI 站点验收计数
+- 提交后刷新：每次完成代码提交后，都要重新运行 `npm run package:browser-extension`，让 `artifacts/delivery-manifest.json` 的 artifact commit 与当前 commit 对齐；`npm run status:delivery` 会同时显示 current commit 和 artifact commit
 - 预览包内容检查：`check:browser-extension-package` 会确认 zip 内含 manifest、content script、侧栏、弹窗、设置页、shared 文件和 PNG 图标
 - AI fixture 验收：`check:browser-extension` 会用本地最小页面模型检查 ChatGPT、Claude、Gemini、Perplexity、Grok、DeepSeek 的输入框和对话 selector
 - 本地免登录预览：`http://localhost:3113/demo/browser-extension.html`，用于快速展示输入框旁“记忆建议”、演示记忆、插入/复制

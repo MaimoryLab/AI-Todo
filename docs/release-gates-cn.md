@@ -65,6 +65,8 @@ npm run package:browser-extension && npm run check:delivery
 npm run status:delivery
 ```
 
+`status:delivery` 会同时显示 current commit 和 artifact commit。两者不一致时，说明交付物是旧提交生成的，需要先重新运行 `npm run package:browser-extension`。
+
 再看详细发布门槛：
 
 ```bash

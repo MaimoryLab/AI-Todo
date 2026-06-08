@@ -222,6 +222,11 @@ for (const marker of ['deliveryArtifactRoot', 'process.cwd()', 'readProjectDoc',
   assert(viewerServer.includes(marker), `Viewer server missing delivery status marker: ${marker}`);
 }
 
+const deliveryStatusScript = read('scripts/delivery-status.mjs');
+for (const marker of ['current commit', 'artifact commit', 'stale; rerun npm run package:browser-extension']) {
+  assert(deliveryStatusScript.includes(marker), `Delivery status script missing freshness marker: ${marker}`);
+}
+
 const privacyEn = read('docs/browser-extension-privacy-en.md');
 for (const marker of ['Privacy Policy', 'local-first', 'Data We Process', 'Where Data Goes', 'AI Diagnostics', 'External testers may redact', 'matchedSelectors.editor/anchor/send/turn']) {
   assert(privacyEn.includes(marker), `English privacy policy missing marker: ${marker}`);
