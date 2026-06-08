@@ -194,7 +194,13 @@ function getDraftMetaFields() {
 }
 
 function cleanDraftText(value) {
-  return String(value || '').replace(/\s+/g, ' ').trim();
+  return String(value || '')
+    .replace(/\s+/g, ' ')
+    .replace(/^(Gemini|ChatGPT|Claude|Perplexity)\s+said\s+/i, '')
+    .replace(/^(用户|User|我)[:：]\s*/i, '')
+    .replace(/^我知道你是([^，。；;]+)([，。；;])/i, '$1$2')
+    .replace(/^你是([^，。；;]+)([，。；;])/i, '$1$2')
+    .trim();
 }
 
 function truncateText(text, limit = 180) {
@@ -207,7 +213,7 @@ function isUsefulFact(text) {
   if (/^https?:\/\//i.test(text)) return false;
   if (/^(摘要|来源|URL|页面结构|网页记忆线索|浏览器候选记忆|浏览器候选经验|在\s*ChatGPT\s*中继续跟进)[:：]?/.test(text)) return false;
   if (/ChatGPT\s*是一款供日常使用的\s*AI\s*聊天机器人/i.test(text)) return false;
-  return /(我|我的|我们|用户|希望|想要|需要|正在|计划|偏好|喜欢|不喜欢|不要|应该|必须|学习|备考|项目|产品|设计|插件|记忆|Skill|飞书|GitHub|雅思|IELTS)/i.test(text);
+  return /(我|我的|我们|你是|你叫|用户|刘欣|Liu Xin|coco|szn|背景|学生|设计师|UI\/?UX|交互设计|产品设计|希望|想要|需要|正在|计划|偏好|喜欢|不喜欢|不要|应该|必须|学习|备考|项目|产品|设计|插件|记忆|Skill|飞书|GitHub|雅思|IELTS)/i.test(text);
 }
 
 function splitFactSentences(text) {
@@ -238,12 +244,37 @@ function buildMemoryDraft(capture) {
   const page = capture && capture.page ? capture.page : {};
   const conversation = capture && capture.conversation ? capture.conversation : {};
   const memories = capture && capture.candidates && Array.isArray(capture.candidates.memories) ? capture.candidates.memories : [];
-  const fact = cleanDraftText(memories.find((item) => String(item || '').trim()) || `请从这个页面提炼一条具体事实：${page.title || '当前页面'}`);
+  const turns = Array.isArray(conversation.turns) ? conversation.turns : [];
+  const userTurns = turns.filter((turn) => turn && turn.role === 'user').map((turn) => turn.text);
+  const assistantTurns = turns.filter((turn) => turn && turn.role === 'assistant').map((turn) => turn.text);
+  const evidence = uniqueTexts([
+    ...conversationSummaryFacts(turns),
+    ...splitFactSentences(page.selection),
+    ...userTurns.flatMap(splitFactSentences),
+    ...assistantTurns.flatMap(splitFactSentences),
+    ...splitFactSentences(conversation.promptDraft)
+  ]);
+  const fact = cleanDraftText(evidence[0] || memories.find((item) => isUsefulFact(item)) || `请从这个页面提炼一条具体事实：${page.title || '当前页面'}`);
   const provider = conversation.provider || page.typeLabel || page.host || '浏览器';
   return {
     title: fact.length > 42 ? `${fact.slice(0, 42)}...` : fact,
-    content: [`候选事实：${fact}`, buildSourceNote(page), `来源类型：${provider}`].filter(Boolean).join('\n')
+    content: [`候选事实：${fact}`, `依据：来自 ${provider} 的具体对话`].filter(Boolean).join('\n')
   };
+}
+
+function conversationSummaryFacts(turns = []) {
+  const text = turns.map((turn) => cleanDraftText(turn && turn.text ? turn.text : '')).filter(Boolean).join('。');
+  const facts = [];
+  const identity = text.match(/(?:你是|我知道你是|用户是)?\s*(刘欣（Liu Xin）|刘欣|Liu Xin|coco|szn)[，,、\s]*(?:是)?\s*([^。！？!?]{8,140})/i);
+  if (identity) {
+    const desc = cleanDraftText(identity[2]).replace(/^(是|一位|一个)\s*/, '');
+    if (desc) facts.push(`${identity[1]}是一位${desc}`);
+  }
+  const background = text.match(/(?:有着|具有|拥有)([^。！？!?]{0,120}?(?:UI\/?UX|交互设计|产品设计|用户体验)[^。！？!?]{0,120}?)(?:背景|经验|经历|能力)?/i);
+  if (background && !facts.some((item) => item.includes(background[1]))) facts.push(`用户具有${cleanDraftText(background[1])}背景`);
+  const preference = text.match(/(?:希望|想要|需要|偏好|喜欢|不喜欢|不要)([^。！？!?]{6,160})/i);
+  if (preference) facts.push(`用户偏好或需求：${cleanDraftText(preference[0])}`);
+  return facts.filter(isUsefulFact);
 }
 
 function makeLessonFromEvidence(primary = '') {

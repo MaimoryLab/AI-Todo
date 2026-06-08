@@ -97,6 +97,12 @@ if (!popupJs.includes('buildBrowserMemoryDraft') || !serviceWorker.includes('bui
 if (!schema.includes('buildBrowserLessonDraft') || !serviceWorker.includes('buildBrowserLessonDraft') || !sidepanel.includes('buildLessonDraft')) {
   throw new Error('Browser extension must draft lessons from concrete conversation evidence.');
 }
+if (!schema.includes('conversationSummaryFacts') || !sidepanel.includes('conversationSummaryFacts')) {
+  throw new Error('Browser extension must extract memory candidates from conversation summaries.');
+}
+if (!schema.includes('刘欣（Liu Xin）') || !schema.includes('UI\\/?UX')) {
+  throw new Error('Browser memory extraction must handle concrete identity/background facts from AI conversations.');
+}
 for (const marker of ['对话依据', '这段对话还没有足够内容提炼经验', 'ChatGPT\\s*是一款供日常使用']) {
   if (!schema.includes(marker)) throw new Error(`Shared lesson drafting guard missing ${marker}.`);
 }
