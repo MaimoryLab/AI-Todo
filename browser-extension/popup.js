@@ -2,6 +2,8 @@ import { getSettings } from './config.js';
 
 const $ = (id) => document.getElementById(id);
 let settings = await getSettings();
+let latestCapture = null;
+let defaultDraft = { title: '', content: '' };
 
 function setMessage(text, kind = '') {
   $('message').textContent = text || '';
@@ -18,6 +20,44 @@ function renderPage(capture) {
   const page = capture && capture.page ? capture.page : capture;
   $('pageTitle').textContent = page.title || '当前页面';
   $('pageUrl').textContent = page.url || '';
+}
+
+function getPrimaryMemoryCandidate(capture) {
+  const memories = capture && capture.candidates && Array.isArray(capture.candidates.memories) ? capture.candidates.memories : [];
+  return memories.find((item) => String(item || '').trim()) || '';
+}
+
+function buildDraft(capture) {
+  const page = capture && capture.page ? capture.page : {};
+  const candidate = getPrimaryMemoryCandidate(capture);
+  const description = String(page.description || '').trim();
+  const selection = String(page.selection || '').trim();
+  const body = [
+    candidate || `网页线索：${page.title || '当前页面'}`,
+    description ? `摘要：${description}` : '',
+    selection ? `选中文本：${selection.slice(0, 600)}` : '',
+    page.url ? `来源：${page.url}` : ''
+  ].filter(Boolean).join('\n');
+  return {
+    title: page.title || '浏览器记忆候选',
+    content: body
+  };
+}
+
+function renderDraft(capture) {
+  latestCapture = capture;
+  defaultDraft = buildDraft(capture);
+  $('draftTitle').value = defaultDraft.title;
+  $('draftContent').value = defaultDraft.content;
+  renderDraftMeta(capture);
+}
+
+function renderDraftMeta(capture) {
+  const page = capture && capture.page ? capture.page : {};
+  const provider = capture && capture.conversation && capture.conversation.provider ? capture.conversation.provider : '';
+  const type = provider || page.typeLabel || page.host || '浏览器';
+  const risk = capture && capture.privacy && capture.privacy.risk === 'medium' ? '可能含敏感信息，建议先删改' : '保存后仍需在工作台确认';
+  $('draftMeta').textContent = `${type} · ${risk}`;
 }
 
 function renderRecent(items) {
@@ -56,10 +96,15 @@ async function refresh() {
   }
 
   try {
-    renderPage(await send('COLLECT_PAGE'));
+    const capture = await send('COLLECT_PAGE');
+    renderPage(capture);
+    renderDraft(capture);
   } catch (err) {
     $('pageTitle').textContent = '无法读取当前页面';
     $('pageUrl').textContent = err.message || '';
+    $('draftTitle').value = '';
+    $('draftContent').value = '';
+    $('draftMeta').textContent = '当前页面不可读取';
   }
 
   await refreshRecent();
@@ -69,7 +114,10 @@ $('saveMemory').addEventListener('click', async () => {
   $('saveMemory').disabled = true;
   setMessage('正在加入待审阅...');
   try {
-    await send('SAVE_PAGE_MEMORY');
+    const text = $('draftContent').value.trim();
+    const title = $('draftTitle').value.trim();
+    if (!text) throw new Error('先确认一条要保存的记忆内容');
+    await send('SAVE_CANDIDATE', { kind: 'memory', title, text });
     await refreshRecent();
     setMessage('已加入待审阅队列', 'ok');
   } catch (err) {
@@ -77,6 +125,13 @@ $('saveMemory').addEventListener('click', async () => {
   } finally {
     $('saveMemory').disabled = false;
   }
+});
+
+$('resetDraft').addEventListener('click', () => {
+  $('draftTitle').value = defaultDraft.title || '';
+  $('draftContent').value = defaultDraft.content || '';
+  renderDraftMeta(latestCapture);
+  setMessage('已恢复为自动生成草稿');
 });
 
 $('saveLesson').addEventListener('click', async () => {

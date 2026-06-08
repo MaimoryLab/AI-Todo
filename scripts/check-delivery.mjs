@@ -93,6 +93,7 @@ assert(browserReadme.includes('npm run package:browser-extension'), 'Browser ext
 assert(browserReadme.includes('npm run preview:browser-extension'), 'Browser extension README must mention preview command.');
 assert(browserReadme.includes('docs/browser-extension-privacy-cn.md'), 'Browser extension README must link privacy doc.');
 assert(browserReadme.includes('docs/browser-extension-mem0-reference-cn.md'), 'Browser extension README must link Mem0 reference doc.');
+assert(browserReadme.includes('保存前编辑'), 'Browser extension README must mention edit-before-save flow.');
 assert(browserReadme.includes('/demo/browser-extension.html'), 'Browser extension README must mention local demo page.');
 
 const checklist = read('docs/demo-checklist-cn.md');

@@ -21,15 +21,21 @@ header { display: flex; justify-content: space-between; gap: 12px; align-items: 
 h1 { margin: 0; font-size: 18px; letter-spacing: 0; }
 p { margin: 3px 0 0; color: var(--muted); font-size: 12px; }
 .icon-btn { width: 34px; height: 34px; border-radius: 999px; border: 1px solid var(--line); background: var(--paper); cursor: pointer; }
-.page-card, .lesson-box, .recent-card { display: block; padding: 12px; border: 1px solid var(--line); border-radius: 14px; background: rgba(255,255,255,.82); margin-bottom: 10px; }
+.page-card, .review-card, .lesson-box, .recent-card { display: block; padding: 12px; border: 1px solid var(--line); border-radius: 8px; background: rgba(255,255,255,.88); margin-bottom: 10px; }
 .label, .lesson-box span { color: var(--faint); font-size: 12px; }
+.hint { margin-top: 2px; color: var(--muted); font-size: 11px; }
 .title { margin-top: 4px; font-weight: 700; font-size: 15px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .url { margin-top: 2px; color: var(--muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .actions { display: grid; gap: 8px; margin-bottom: 10px; }
 button { border: 1px solid var(--line); background: var(--paper); color: var(--ink); border-radius: 999px; min-height: 38px; padding: 0 13px; font-weight: 650; cursor: pointer; }
 button.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+button.wide { width: 100%; }
+button.text-button { min-height: 28px; padding: 0 8px; border: 0; background: transparent; color: var(--muted); font-size: 12px; }
 button:disabled { opacity: .55; cursor: default; }
-textarea { width: 100%; margin: 8px 0; resize: vertical; border: 1px solid var(--line); border-radius: 10px; padding: 9px; font: inherit; background: #fff; }
+textarea, .draft-input { width: 100%; margin: 8px 0; resize: vertical; border: 1px solid var(--line); border-radius: 8px; padding: 9px; font: inherit; background: #fff; color: var(--ink); }
+.review-head { display: flex; justify-content: space-between; gap: 8px; align-items: flex-start; }
+.draft-input { margin-bottom: 0; font-weight: 650; }
+.draft-meta { margin: -2px 0 8px; color: var(--faint); font-size: 11px; min-height: 15px; }
 .message { min-height: 18px; color: var(--muted); font-size: 12px; }
 .message.error { color: #9d342f; }
 .message.ok { color: #517355; }

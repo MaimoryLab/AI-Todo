@@ -41,6 +41,8 @@ for (const size of [16, 32, 48, 128]) {
 
 const contentScript = readFileSync('browser-extension/content-script.js', 'utf8');
 const serviceWorker = readFileSync('browser-extension/service-worker.js', 'utf8');
+const popupHtml = readFileSync('browser-extension/popup.html', 'utf8');
+const popupJs = readFileSync('browser-extension/popup.js', 'utf8');
 const sidepanel = readFileSync('browser-extension/sidepanel.js', 'utf8');
 const schema = readFileSync('browser-extension/shared/schema.js', 'utf8');
 const siteConfig = readFileSync('browser-extension/shared/site-config.js', 'utf8');
@@ -65,6 +67,12 @@ if (!serviceWorker.includes('browser-extension-link') || !serviceWorker.includes
 }
 if (!menuContexts.includes("contexts: ['page', 'selection', 'link']")) {
   throw new Error('Context menu must expose page, selection, and link save actions.');
+}
+if (!popupHtml.includes('待审阅草稿') || !popupHtml.includes('draftContent') || !popupHtml.includes('resetDraft')) {
+  throw new Error('Popup must expose an editable review draft before saving.');
+}
+if (!popupJs.includes('buildDraft') || !popupJs.includes('SAVE_CANDIDATE') || !popupJs.includes('resetDraft')) {
+  throw new Error('Popup must save the edited review draft via SAVE_CANDIDATE.');
 }
 
 for (const field of ['anchorFound', 'placement', 'memoryWidgetVisible', 'checkedAt']) {

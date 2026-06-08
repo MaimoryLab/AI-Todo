@@ -22,8 +22,21 @@
       <div id="pageUrl" class="url"></div>
     </section>
 
+    <section class="review-card">
+      <div class="review-head">
+        <div>
+          <div class="label">待审阅草稿</div>
+          <div class="hint">保存前可以先改成你希望 Agent 记住的说法。</div>
+        </div>
+        <button id="resetDraft" class="text-button" type="button">重置</button>
+      </div>
+      <input id="draftTitle" class="draft-input" type="text" placeholder="记忆标题" />
+      <textarea id="draftContent" rows="5" placeholder="正在生成候选记忆..."></textarea>
+      <div id="draftMeta" class="draft-meta"></div>
+      <button id="saveMemory" class="primary wide">加入待审阅</button>
+    </section>
+
     <div class="actions">
-      <button id="saveMemory" class="primary">加入待审阅</button>
       <button id="openSidePanel">打开同步侧栏</button>
       <button id="openWorkbench">打开工作台</button>
       <button id="openSkills">打开 Skill 管理</button>

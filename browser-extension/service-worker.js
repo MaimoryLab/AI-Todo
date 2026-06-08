@@ -108,15 +108,16 @@ async function savePageLesson(note) {
   return { capture, result };
 }
 
-async function saveCandidate(kind, text) {
+async function saveCandidate(kind, text, title = '') {
   const capture = await collectPage();
   const trimmed = String(text || '').trim();
+  const draftTitle = String(title || '').trim() || capture.page.title;
   if (!trimmed) throw new Error('没有可保存的候选内容');
   if (kind === 'lesson') {
     const payload = captureToLessonPayload(capture, trimmed);
     const result = await agentMemoryApi('/agentmemory/review', {
       method: 'POST',
-      body: JSON.stringify({ kind: 'lesson', title: capture.page.title, content: trimmed, source: 'browser-extension', page: capture.page, payload })
+      body: JSON.stringify({ kind: 'lesson', title: draftTitle, content: trimmed, source: 'browser-extension', page: capture.page, payload })
     });
     await rememberRecent(capture, 'review', result);
     return { capture, result };
@@ -127,7 +128,7 @@ async function saveCandidate(kind, text) {
   };
   const result = await agentMemoryApi('/agentmemory/review', {
     method: 'POST',
-    body: JSON.stringify({ kind: 'memory', title: capture.page.title, content: payload.content, source: 'browser-extension', page: capture.page, payload })
+    body: JSON.stringify({ kind: 'memory', title: draftTitle, content: payload.content, source: 'browser-extension', page: capture.page, payload })
   });
   await rememberRecent(capture, 'review', result);
   return { capture, result };
@@ -212,7 +213,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     if (message.type === 'RECENT_CAPTURES') return getRecentCaptures();
     if (message.type === 'SAVE_PAGE_MEMORY') return savePageMemory();
     if (message.type === 'SAVE_PAGE_LESSON') return savePageLesson(message.note || '');
-    if (message.type === 'SAVE_CANDIDATE') return saveCandidate(message.kind || 'memory', message.text || '');
+    if (message.type === 'SAVE_CANDIDATE') return saveCandidate(message.kind || 'memory', message.text || '', message.title || '');
     if (message.type === 'SEARCH_MEMORIES') return searchMemories(message.query || '');
     if (message.type === 'OPEN_SIDE_PANEL') return chrome.sidePanel.open({ windowId: message.windowId });
     if (message.type === 'OPEN_VIEWER') return openViewer(message.tab || 'dashboard');
