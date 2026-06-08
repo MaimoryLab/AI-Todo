@@ -34,32 +34,32 @@
     <section class="review-card">
       <div class="review-head">
         <div>
-          <div class="label">待审阅草稿</div>
-          <div class="hint">保存前可以先改成你希望 Agent 记住的说法。</div>
+          <div class="label">准备保存</div>
+          <div class="hint">先改成你希望下次能被想起的说法。</div>
         </div>
         <button id="resetDraft" class="text-button" type="button">重置</button>
       </div>
-      <input id="draftTitle" class="draft-input" type="text" placeholder="记忆标题" />
-      <textarea id="draftContent" rows="5" placeholder="正在生成候选记忆..."></textarea>
+      <input id="draftTitle" class="draft-input" type="text" placeholder="一句话标题" />
+      <textarea id="draftContent" rows="5" placeholder="正在整理这页值得记住的内容..."></textarea>
       <div class="draft-fields">
         <label>
-          <span>项目</span>
+          <span>保存范围</span>
           <select id="draftProject">
-            <option value="all">全部项目</option>
-            <option value="page">当前网页来源</option>
+            <option value="all">以后都能用</option>
+            <option value="page">只和这个网页相关</option>
           </select>
         </label>
         <label>
-          <span>标签</span>
-          <input id="draftTags" type="text" placeholder="browser, ai" />
+          <span>分类备注</span>
+          <input id="draftTags" type="text" placeholder="例如：学习、产品、设计" />
         </label>
       </div>
       <label class="draft-check">
         <input id="draftAsLesson" type="checkbox" />
-        <span>同时标记为可沉淀经验</span>
+        <span>整理成可复用经验</span>
       </label>
       <div id="draftMeta" class="draft-meta"></div>
-      <button id="saveMemory" class="primary wide">送到工作台审阅</button>
+      <button id="saveMemory" class="primary wide">加入待确认</button>
     </section>
 
     <div class="actions">
@@ -70,8 +70,8 @@
 
     <label class="lesson-box">
       <span>补充一条经验</span>
-      <textarea id="lessonNote" rows="3" placeholder="例如：这个页面的排版适合借鉴为项目介绍结构。"></textarea>
-      <button id="saveLesson">加入待审阅</button>
+      <textarea id="lessonNote" rows="3" placeholder="例如：以后介绍项目时，先给用户看真实界面，再讲能力。"></textarea>
+      <button id="saveLesson">加入待确认</button>
     </label>
 
     <section class="recent-card">

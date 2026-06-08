@@ -186,16 +186,17 @@
     root.innerHTML = `
       <style>
         * { box-sizing: border-box; }
-        .wrap { width: 296px; font: 13px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: #292521; }
+        .wrap { width: min(296px, calc(100vw - 24px)); font: 13px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: #292521; }
         button { font: inherit; cursor: pointer; }
         .trigger { display: inline-flex; align-items: center; gap: 7px; min-height: 32px; padding: 0 10px; border: 1px solid #11100f; border-radius: 7px; background: #11100f; color: #fff; font-weight: 750; box-shadow: 0 8px 24px rgba(0,0,0,.14); }
         .trigger svg { width: 15px; height: 15px; }
-        .panel { display: none; margin-top: 8px; border: 1px solid #ded7cf; border-radius: 8px; background: #fffefb; box-shadow: 0 16px 44px rgba(0,0,0,.18); overflow: hidden; }
+        .panel { display: none; margin-top: 8px; border: 1px solid #ded7cf; border-radius: 8px; background: #fffefb; box-shadow: 0 16px 44px rgba(0,0,0,.18); overflow: hidden; max-height: min(420px, calc(100vh - 24px)); }
         .panel.open { display: block; }
+        .wrap.open-up .panel { margin-top: 0; margin-bottom: 8px; }
         .head { display: flex; justify-content: space-between; gap: 8px; align-items: center; padding: 10px 11px; border-bottom: 1px solid #ded7cf; background: #f7f3ee; }
         .title { font-weight: 780; }
         .provider { color: #72685e; font-size: 12px; }
-        .body { display: grid; gap: 8px; max-height: 290px; overflow: auto; padding: 10px; }
+        .body { display: grid; gap: 8px; max-height: var(--agent-memory-body-max, 290px); overflow: auto; padding: 10px; overscroll-behavior: contain; }
         .empty { color: #9a9188; padding: 2px; }
         .item { border: 1px solid #ded7cf; border-radius: 8px; padding: 8px; background: #fff; }
         .item-title { font-weight: 720; margin-bottom: 3px; }
@@ -216,8 +217,14 @@
     document.documentElement.appendChild(host);
     memoryWidget = { host, root, provider, results: [] };
     root.querySelector('.provider').textContent = provider.label;
-    root.querySelector('.trigger').addEventListener('click', () => root.querySelector('.panel').classList.toggle('open'));
-    root.querySelector('.close').addEventListener('click', () => root.querySelector('.panel').classList.remove('open'));
+    root.querySelector('.trigger').addEventListener('click', () => {
+      root.querySelector('.panel').classList.toggle('open');
+      positionMemoryWidget(provider);
+    });
+    root.querySelector('.close').addEventListener('click', () => {
+      root.querySelector('.panel').classList.remove('open');
+      positionMemoryWidget(provider);
+    });
     root.addEventListener('click', (event) => {
       const insertButton = event.target && event.target.closest ? event.target.closest('[data-insert-memory]') : null;
       if (insertButton) {
@@ -246,9 +253,10 @@
     const anchor = findAdjacentAnchor(provider) || findAnchor(provider) || editor;
     if (!anchor) {
       memoryWidget.host.style.right = '18px';
-      memoryWidget.host.style.bottom = '88px';
+      memoryWidget.host.style.bottom = '18px';
       memoryWidget.host.style.left = 'auto';
       memoryWidget.host.style.top = 'auto';
+      fitMemoryWidgetToViewport();
       return;
     }
     const rect = anchor.getBoundingClientRect();
@@ -265,6 +273,56 @@
     memoryWidget.host.style.top = `${Math.max(margin, top)}px`;
     memoryWidget.host.style.right = 'auto';
     memoryWidget.host.style.bottom = 'auto';
+    fitMemoryWidgetToViewport();
+  }
+
+  function fitMemoryWidgetToViewport() {
+    if (!memoryWidget) return;
+    const host = memoryWidget.host;
+    const root = memoryWidget.root;
+    const wrap = root.querySelector('.wrap');
+    const panel = root.querySelector('.panel');
+    const body = root.querySelector('.body');
+    if (!wrap || !panel || !body) return;
+    if (wrap.classList && typeof wrap.classList.remove === 'function') wrap.classList.remove('open-up');
+    setBodyMaxHeight(body, '290px');
+    const margin = 12;
+    const hostRect = host.getBoundingClientRect();
+    const panelOpen = panel.classList && typeof panel.classList.contains === 'function'
+      ? panel.classList.contains('open')
+      : String(panel.className || '').split(/\s+/).includes('open');
+    if (!panelOpen) {
+      if (hostRect.right > window.innerWidth - margin) host.style.left = `${Math.max(margin, window.innerWidth - hostRect.width - margin)}px`;
+      if (hostRect.left < margin) host.style.left = `${margin}px`;
+      return;
+    }
+    const trigger = root.querySelector('.trigger');
+    const triggerHeight = trigger ? trigger.getBoundingClientRect().height : 32;
+    const spaceBelow = window.innerHeight - hostRect.top - triggerHeight - margin - 8;
+    const spaceAbove = hostRect.top - margin - 8;
+    const openUp = spaceBelow < 240 && spaceAbove > spaceBelow;
+    if (wrap.classList && typeof wrap.classList.toggle === 'function') {
+      wrap.classList.toggle('open-up', openUp);
+    } else if (wrap.classList && typeof wrap.classList.add === 'function' && typeof wrap.classList.remove === 'function') {
+      if (openUp) wrap.classList.add('open-up'); else wrap.classList.remove('open-up');
+    }
+    const available = Math.max(180, Math.min(420, openUp ? spaceAbove : spaceBelow));
+    panel.style.maxHeight = `${available}px`;
+    setBodyMaxHeight(body, `${Math.max(96, available - 82)}px`);
+    const nextRect = host.getBoundingClientRect();
+    if (nextRect.right > window.innerWidth - margin) host.style.left = `${Math.max(margin, window.innerWidth - nextRect.width - margin)}px`;
+    if (nextRect.left < margin) host.style.left = `${margin}px`;
+    if (!openUp && nextRect.bottom > window.innerHeight - margin) host.style.top = `${Math.max(margin, window.innerHeight - nextRect.height - margin)}px`;
+    if (openUp && nextRect.top < margin) host.style.top = `${margin}px`;
+  }
+
+  function setBodyMaxHeight(body, value) {
+    if (!body || !body.style) return;
+    if (typeof body.style.setProperty === 'function') {
+      body.style.setProperty('--agent-memory-body-max', value);
+    } else {
+      body.style.maxHeight = value;
+    }
   }
 
   function memorySnippet(item) {
@@ -373,6 +431,7 @@
         <div class="actions"><button class="insert" type="button" data-insert-memory="${index}">插入</button><button class="copy" type="button" data-copy-memory="${index}">复制</button></div>
       </article>
     `).join('');
+    positionMemoryWidget(provider);
   }
 
   function escapeHtml(value) {
@@ -389,6 +448,7 @@
     if (searchTimer) clearTimeout(searchTimer);
     if (!draft || draft.length < 8) {
       renderMemoryResults([], false);
+      positionMemoryWidget(provider);
       return;
     }
     searchTimer = setTimeout(() => {

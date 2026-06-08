@@ -62,6 +62,82 @@ function requireConfiguredSecret(
   };
 }
 
+function shortHash(input: string): string {
+  let hash = 2166136261;
+  for (let i = 0; i < input.length; i += 1) {
+    hash ^= input.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return (hash >>> 0).toString(36);
+}
+
+function browserSessionId(reviewId: string, page: Record<string, unknown>, createdAt: string): string {
+  const url = asNonEmptyString(page.url) || asNonEmptyString(page.title) || reviewId;
+  return `browser_${shortHash(`${url}:${createdAt}:${reviewId}`)}`;
+}
+
+async function recordBrowserSessionFromReview(
+  sdk: ISdk,
+  item: ReviewQueueItem,
+): Promise<{ sessionId: string; observationCount: number }> {
+  const page = item.page || {};
+  const conversation = item.conversation || {};
+  const turns = Array.isArray(conversation.turns) ? conversation.turns : [];
+  const provider = conversation.provider || (typeof item.payload?.provider === "string" ? item.payload.provider : undefined) || page.host || "浏览器";
+  const createdAt = item.createdAt || new Date().toISOString();
+  const sessionId = browserSessionId(item.id, page as Record<string, unknown>, createdAt);
+  const project = String(provider || "浏览器");
+  const cwd = `browser/${page.host || provider || "web"}`;
+  await sdk.trigger({
+    function_id: "api::session::start",
+    payload: {
+      sessionId,
+      project,
+      cwd,
+      title: page.title || item.title || "浏览器会话",
+      agentId: provider || "浏览器",
+    },
+  });
+  let observationCount = 0;
+  const observe = async (timestamp: string, data: Record<string, unknown>) => {
+    observationCount += 1;
+    await sdk.trigger({
+      function_id: "mem::observe",
+      payload: {
+        hookType: "prompt_submit",
+        sessionId,
+        project,
+        cwd,
+        timestamp,
+        data,
+      },
+    });
+  };
+  if (page.title || page.url) {
+    await observe(createdAt, {
+      tool_name: "browser_page",
+      prompt: `打开网页：${[page.title, page.url].filter(Boolean).join("\n")}`,
+      tool_output: { page },
+    });
+  }
+  for (let index = 0; index < turns.length; index += 1) {
+    const turn = turns[index];
+    const role = turn.role === "assistant" ? "AI" : turn.role === "user" ? "用户" : "对话";
+    await observe(createdAt, {
+      tool_name: "browser_conversation",
+      prompt: `${role}：${turn.text}`,
+      tool_output: { role: turn.role || "unknown", provider, pageTitle: page.title || "" },
+    });
+  }
+  await observe(item.updatedAt || createdAt, {
+    tool_name: item.kind === "lesson" ? "browser_lesson_candidate" : "browser_memory_candidate",
+    prompt: `${item.kind === "lesson" ? "从浏览器会话抽取经验" : "从浏览器会话抽取记忆"}：${item.title}`,
+    tool_output: { content: item.content, status: item.status, kind: item.kind },
+  });
+  await sdk.trigger({ function_id: "api::session::end", payload: { sessionId } });
+  return { sessionId, observationCount };
+}
+
 function flagDisabledResponse(opts: {
   error: string;
   flag: string;
@@ -985,6 +1061,18 @@ export function registerApiTriggers(
       }
       const now = new Date().toISOString();
       const page = body.page && typeof body.page === "object" ? body.page as Record<string, unknown> : {};
+      const rawConversation = body.conversation && typeof body.conversation === "object" ? body.conversation as Record<string, unknown> : {};
+      const rawTurns = Array.isArray(rawConversation.turns) ? rawConversation.turns : [];
+      const conversation = {
+        provider: asNonEmptyString(rawConversation.provider) || undefined,
+        promptDraft: asNonEmptyString(rawConversation.promptDraft) || undefined,
+        turns: rawTurns.map((turn) => {
+          const t = turn && typeof turn === "object" ? turn as Record<string, unknown> : {};
+          const role = asNonEmptyString(t.role) || "unknown";
+          const text = asNonEmptyString(t.text);
+          return text ? { role, text } : null;
+        }).filter((turn): turn is { role: string; text: string } => turn !== null).slice(-12),
+      };
       const title = asNonEmptyString(body.title) || asNonEmptyString(page.title) || (rawKind === "lesson" ? "待审阅经验" : "待审阅记忆");
       const item: ReviewQueueItem = {
         id: `review_${Date.now().toString(36)}_${crypto.randomUUID().replace(/-/g, "").slice(0, 10)}`,
@@ -1002,8 +1090,24 @@ export function registerApiTriggers(
           url: typeof page.url === "string" ? page.url : undefined,
           host: typeof page.host === "string" ? page.host : undefined,
         },
+        ...(conversation.provider || conversation.promptDraft || conversation.turns.length ? { conversation } : {}),
         payload: body.payload && typeof body.payload === "object" ? body.payload as Record<string, unknown> : {},
       };
+      if (item.source === "browser-extension") {
+        try {
+          const browserSession = await recordBrowserSessionFromReview(sdk, item);
+          item.payload = {
+            ...(item.payload || {}),
+            browserSessionId: browserSession.sessionId,
+            browserObservationCount: browserSession.observationCount,
+          };
+        } catch (err) {
+          logger.warn("failed to record browser session from review candidate", {
+            reviewId: item.id,
+            error: err instanceof Error ? err.message : String(err),
+          });
+        }
+      }
       await kv.set(KV.reviewQueue, item.id, item);
       return { status_code: 201, body: { success: true, item } };
     },

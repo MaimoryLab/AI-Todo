@@ -70,7 +70,7 @@ if (!serviceWorker.includes('browser-extension-link') || !serviceWorker.includes
 if (!menuContexts.includes("contexts: ['page', 'selection', 'link']")) {
   throw new Error('Context menu must expose page, selection, and link save actions.');
 }
-if (!popupHtml.includes('待审阅草稿') || !popupHtml.includes('draftContent') || !popupHtml.includes('resetDraft')) {
+if (!popupHtml.includes('准备保存') || !popupHtml.includes('draftContent') || !popupHtml.includes('resetDraft')) {
   throw new Error('Popup must expose an editable review draft before saving.');
 }
 for (const field of ['draftProject', 'draftTags', 'draftAsLesson']) {
@@ -81,6 +81,9 @@ if (!popupJs.includes('buildDraft') || !popupJs.includes('SAVE_CANDIDATE') || !p
 }
 if (!popupJs.includes('getDraftMetaFields') || !serviceWorker.includes('message.meta')) {
   throw new Error('Popup draft metadata must be sent with review candidates.');
+}
+if (!serviceWorker.includes('conversation: capture.conversation')) {
+  throw new Error('Browser review candidates must preserve captured browser conversation turns.');
 }
 if (!popupHtml.includes('本地工作台') || !popupHtml.includes('versionInfo') || !popupHtml.includes('openGuide')) {
   throw new Error('Popup must expose local workbench status, version, and guide entry.');
@@ -97,7 +100,7 @@ if (!schema.includes('buildBrowserLessonDraft') || !serviceWorker.includes('buil
 for (const marker of ['对话依据', '这段对话还没有足够内容提炼经验', 'ChatGPT\\s*是一款供日常使用']) {
   if (!schema.includes(marker)) throw new Error(`Shared lesson drafting guard missing ${marker}.`);
 }
-if (!sidepanelHtml.includes('审阅草稿') || !sidepanelHtml.includes('draftContent') || !sidepanelHtml.includes('resetDraft')) {
+if (!sidepanelHtml.includes('准备保存') || !sidepanelHtml.includes('draftContent') || !sidepanelHtml.includes('resetDraft')) {
   throw new Error('Side panel must expose an editable review draft before saving.');
 }
 for (const field of ['draftProject', 'draftTags', 'draftAsLesson']) {
@@ -112,7 +115,7 @@ if (!sidepanel.includes('getDraftMetaFields') || !serviceWorker.includes('normal
 if (!sidepanelHtml.includes('openTestCards') || !sidepanel.includes('AI_SITE_TEST_CARDS_PATH')) {
   throw new Error('Side panel must expose the local AI site test cards entry.');
 }
-if (!sidepanelHtml.includes('copyEvidenceCommand') || !sidepanelHtml.includes('复制向导') || !sidepanel.includes('buildEvidenceCommand') || !sidepanel.includes('wizard:ai-validation-evidence')) {
+if (!sidepanelHtml.includes('copyEvidenceCommand') || !sidepanelHtml.includes('复制检查步骤') || !sidepanel.includes('buildEvidenceCommand') || !sidepanel.includes('wizard:ai-validation-evidence')) {
   throw new Error('Side panel must expose a copyable AI validation evidence wizard command.');
 }
 if (!sharedApi.includes('path =') || !serviceWorker.includes('message.path')) {
@@ -124,8 +127,11 @@ for (const field of ['anchorFound', 'placement', 'memoryWidgetVisible', 'checked
   if (!schema.includes(field)) throw new Error(`Shared schema diagnostics must preserve ${field}.`);
   if (!sidepanel.includes(field)) throw new Error(`Side panel diagnostics must expose ${field}.`);
 }
-for (const label of ['输入规则', '锚点规则', '相邻控件', '发送规则', '会话规则']) {
+for (const label of ['页面', '输入框', '记忆入口', '发送按钮', '最近对话']) {
   if (!sidepanel.includes(label)) throw new Error(`Side panel diagnostics must show ${label}.`);
+}
+for (const internalLabel of ['输入规则', '锚点规则', '相邻控件', '发送规则', '会话规则']) {
+  if (sidepanel.includes(internalLabel)) throw new Error(`Side panel must not expose internal selector label: ${internalLabel}.`);
 }
 for (const field of ['getManifest', 'manifestVersion', 'version']) {
   if (!sidepanel.includes(field)) throw new Error(`Diagnostic report must include extension ${field}.`);

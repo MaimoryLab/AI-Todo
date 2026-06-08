@@ -120,6 +120,11 @@ export interface ReviewQueueItem {
     url?: string;
     host?: string;
   };
+  conversation?: {
+    provider?: string;
+    promptDraft?: string;
+    turns?: Array<{ role?: string; text?: string }>;
+  };
   payload?: Record<string, unknown>;
   resultId?: string;
   reviewedAt?: string;

@@ -20,7 +20,7 @@
     <section id="connectionCard" class="connection-card checking">
       <div>
         <div id="connectionTitle" class="connection-title">检查连接中</div>
-        <div id="connectionText" class="connection-text">正在确认本地审阅队列是否可用。</div>
+        <div id="connectionText" class="connection-text">正在确认能否保存到本地工作台。</div>
       </div>
       <button id="connectionAction" type="button">重试</button>
     </section>
@@ -37,59 +37,59 @@
 
     <section class="section ai-diagnostics" id="aiDiagnostics" hidden>
       <div class="section-head">
-        <span class="eyebrow">AI 页面状态</span>
+        <span class="eyebrow">当前网页可用性</span>
         <div class="section-actions">
           <button id="openTestCards" class="ghost-button" type="button">测试卡</button>
-          <button id="copyEvidenceCommand" class="ghost-button" type="button" disabled>复制向导</button>
-          <button id="copyDiagnostics" class="ghost-button" type="button" disabled>复制诊断</button>
+          <button id="copyEvidenceCommand" class="ghost-button" type="button" disabled>复制检查步骤</button>
+          <button id="copyDiagnostics" class="ghost-button" type="button" disabled>复制问题信息</button>
           <span id="aiProvider" class="type-pill">AI</span>
         </div>
       </div>
       <div id="aiDiagnosticList" class="diagnostic-list"></div>
-      <div id="evidenceCommandHint" class="command-hint" hidden>先复制诊断，再复制向导命令保存证据。</div>
+      <div id="evidenceCommandHint" class="command-hint" hidden>如果网页识别不准，先复制问题信息，再复制检查步骤。</div>
     </section>
 
     <section class="section review-draft">
       <div class="section-head">
-        <span class="eyebrow">审阅草稿</span>
+        <span class="eyebrow">准备保存</span>
         <button id="resetDraft" class="ghost-button" type="button">重置</button>
       </div>
-      <input id="draftTitle" class="draft-input" type="text" placeholder="记忆标题" />
-      <textarea id="draftContent" rows="5" placeholder="选择一个候选，或直接改写要送审的记忆。"></textarea>
+      <input id="draftTitle" class="draft-input" type="text" placeholder="一句话标题" />
+      <textarea id="draftContent" rows="5" placeholder="选择一条建议，或直接改写要保存的内容。"></textarea>
       <div class="draft-fields">
         <label>
-          <span>项目</span>
+          <span>保存范围</span>
           <select id="draftProject">
-            <option value="all">全部项目</option>
-            <option value="page">当前网页来源</option>
+            <option value="all">以后都能用</option>
+            <option value="page">只和这个网页相关</option>
           </select>
         </label>
         <label>
-          <span>标签</span>
-          <input id="draftTags" type="text" placeholder="browser, ai" />
+          <span>分类备注</span>
+          <input id="draftTags" type="text" placeholder="例如：学习、产品、设计" />
         </label>
       </div>
       <label class="draft-check">
         <input id="draftAsLesson" type="checkbox" />
-        <span>同时标记为可沉淀经验</span>
+        <span>整理成可复用经验</span>
       </label>
       <div id="draftMeta" class="draft-meta">保存后仍需在工作台确认。</div>
     </section>
 
     <section class="section">
       <div class="section-head">
-        <span class="eyebrow">候选记忆</span>
+        <span class="eyebrow">可以记住</span>
         <span class="count" id="memoryCount">0</span>
       </div>
-      <div id="memoryCandidates" class="candidate-list empty">暂无候选</div>
+      <div id="memoryCandidates" class="candidate-list empty">暂时没有建议</div>
     </section>
 
     <section class="section">
       <div class="section-head">
-        <span class="eyebrow">候选经验</span>
+        <span class="eyebrow">可以沉淀</span>
         <span class="count" id="lessonCount">0</span>
       </div>
-      <div id="lessonCandidates" class="candidate-list empty">暂无候选</div>
+      <div id="lessonCandidates" class="candidate-list empty">暂时没有建议</div>
     </section>
 
     <section class="section chat-section" id="chatSection" hidden>
@@ -108,9 +108,9 @@
     </section>
 
     <footer class="footer-actions">
-      <button id="savePage" class="primary">加入审阅</button>
+      <button id="savePage" class="primary">加入待确认</button>
       <button id="openWorkbench">工作台</button>
-      <button id="openSkills">Skill</button>
+      <button id="openSkills">能力库</button>
     </footer>
 
     <div id="message" class="message"></div>

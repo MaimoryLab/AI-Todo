@@ -219,6 +219,13 @@ const viewer = read('src/viewer/index.html');
 for (const marker of ['function reviewProject', 'function reviewTags', 'function reviewSourceLabel', 'payload.asLesson', '经验候选']) {
   assert(viewer.includes(marker), `Viewer review queue missing browser draft metadata marker: ${marker}`);
 }
+for (const marker of ['browserReviewSessions', 'browserSessionObservations', 'embeddedObservations', '浏览器对话']) {
+  assert(viewer.includes(marker), `Viewer sessions must include browser conversations: ${marker}`);
+}
+const apiSource = read('src/triggers/api.ts');
+for (const marker of ['recordBrowserSessionFromReview', 'browserSessionId', 'browser_conversation', 'browser_memory_candidate']) {
+  assert(apiSource.includes(marker), `Browser reviews must be recorded as real sessions first: ${marker}`);
+}
 for (const marker of ['delivery-status', 'renderDeliveryStatusCard', '浏览器记忆入口', '安装说明', '保存具体事实', '沉淀为经验', '不要把链接当记忆', '真实 AI 证据', '等待证据', '待验收', '待修复', '/docs/browser-extension-ai-site-test-cards-cn.md']) {
   assert(viewer.includes(marker), `Viewer dashboard missing delivery status marker: ${marker}`);
 }

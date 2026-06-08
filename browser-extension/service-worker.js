@@ -125,6 +125,7 @@ async function savePageMemory() {
       content: payload.content,
       source: 'browser-extension',
       page: capture.page,
+      conversation: capture.conversation,
       payload
     })
   });
@@ -144,6 +145,7 @@ async function savePageLesson(note) {
       content: payload.content,
       source: 'browser-extension',
       page: capture.page,
+      conversation: capture.conversation,
       payload
     })
   });
@@ -162,7 +164,7 @@ async function saveCandidate(kind, text, title = '', meta = {}) {
     const payload = applyCandidateMeta(captureToLessonPayload(capture, trimmed), meta, capture, 'lesson');
     const result = await agentMemoryApi('/agentmemory/review', {
       method: 'POST',
-      body: JSON.stringify({ kind: 'lesson', title: draftTitle, content: payload.content, source: 'browser-extension', page: capture.page, payload, meta: payload })
+      body: JSON.stringify({ kind: 'lesson', title: draftTitle, content: payload.content, source: 'browser-extension', page: capture.page, conversation: capture.conversation, payload, meta: payload })
     });
     await rememberRecent(capture, 'review', result);
     return { capture, result };
@@ -173,7 +175,7 @@ async function saveCandidate(kind, text, title = '', meta = {}) {
   }, meta, capture, 'memory');
   const result = await agentMemoryApi('/agentmemory/review', {
     method: 'POST',
-    body: JSON.stringify({ kind: 'memory', title: draftTitle, content: payload.content, source: 'browser-extension', page: capture.page, payload, meta: payload })
+    body: JSON.stringify({ kind: 'memory', title: draftTitle, content: payload.content, source: 'browser-extension', page: capture.page, conversation: capture.conversation, payload, meta: payload })
   });
   await rememberRecent(capture, 'review', result);
   return { capture, result };

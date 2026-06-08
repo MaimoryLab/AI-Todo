@@ -115,35 +115,35 @@ function setConnectionState(state, text) {
   const card = $('connectionCard');
   card.className = `connection-card ${state}`;
   if (state === 'connected') {
-    $('connectionTitle').textContent = '审阅队列可用';
-    $('connectionText').textContent = text || '保存内容会先进入本地工作台，由你确认后再写入长期记忆。';
+    $('connectionTitle').textContent = '可以保存';
+    $('connectionText').textContent = text || '内容会先放进本地工作台，由你确认后再变成长期记忆。';
     $('connectionAction').textContent = '刷新';
     $('savePage').disabled = false;
     return;
   }
   if (state === 'offline') {
     $('connectionTitle').textContent = '本地工作台未连接';
-    $('connectionText').textContent = text || '先启动 Agent Memory Lab，再把网页内容送去审阅。';
+    $('connectionText').textContent = text || '先启动 Agent Memory Lab，再保存网页内容。';
     $('connectionAction').textContent = '重试';
     $('savePage').disabled = true;
     return;
   }
   $('connectionTitle').textContent = '检查连接中';
-  $('connectionText').textContent = '正在确认本地审阅队列是否可用。';
+  $('connectionText').textContent = '正在确认能否保存到本地工作台。';
   $('connectionAction').textContent = '重试';
 }
 
 function renderCandidateList(node, items, kind) {
   if (!items || !items.length) {
     node.className = 'candidate-list empty';
-    node.textContent = '暂无候选';
+    node.textContent = '暂时没有建议';
     return;
   }
   node.className = 'candidate-list';
   node.innerHTML = items.map((text) => `
     <article class="candidate">
       <p>${escapeHtml(text)}</p>
-      <button data-draft-kind="${kind}" data-draft-text="${escapeHtml(text)}">填入草稿</button>
+      <button data-draft-kind="${kind}" data-draft-text="${escapeHtml(text)}">使用这条</button>
     </article>
   `).join('');
 }
@@ -305,9 +305,9 @@ function draftMetaText(capture, kind) {
   const provider = capture && capture.conversation && capture.conversation.provider ? capture.conversation.provider : '';
   const source = provider || page.typeLabel || page.host || '浏览器';
   const meta = getDraftMetaFields();
-  const type = meta.asLesson || kind === 'lesson' ? '经验候选' : '记忆候选';
-  const project = meta.projectScope === 'all' ? '全部项目' : `项目：${meta.project}`;
-  const tags = meta.tags.length ? `标签：${meta.tags.join(', ')}` : '未加标签';
+  const type = meta.asLesson || kind === 'lesson' ? '会整理成经验' : '会保存为记忆';
+  const project = meta.projectScope === 'all' ? '以后都能用' : '只和这个网页相关';
+  const tags = meta.tags.length ? `已加备注：${meta.tags.join('、')}` : '还没有分类备注';
   const privacy = capture && capture.privacy && capture.privacy.risk === 'medium' ? '可能含敏感信息，建议先删改' : '保存后仍需在工作台确认';
   return `${source} · ${project} · ${tags} · ${type} · ${privacy}`;
 }
@@ -353,20 +353,13 @@ function renderDiagnostics(capture) {
   $('evidenceCommandHint').hidden = false;
   $('aiProvider').textContent = diagnostics.provider || 'AI 页面';
   const rows = [
-    { label: '页面识别', value: diagnostics.provider || '已识别', ok: true },
-    { label: '输入框', value: diagnostics.editorFound ? '已找到' : '未找到', ok: !!diagnostics.editorFound },
-    { label: '入口锚点', value: diagnostics.anchorFound ? '已找到' : '未找到', ok: !!diagnostics.anchorFound },
-    { label: '发送按钮', value: diagnostics.sendFound ? '已找到' : '未确认', ok: !!diagnostics.sendFound },
-    { label: '入口位置', value: diagnostics.placement || '自动', ok: true },
+    { label: '页面', value: diagnostics.provider || '已识别', ok: true },
+    { label: '输入框', value: diagnostics.editorFound ? '可用' : '未找到', ok: !!diagnostics.editorFound },
+    { label: '记忆入口', value: diagnostics.anchorFound ? '可显示' : '未找到合适位置', ok: !!diagnostics.anchorFound },
+    { label: '发送按钮', value: diagnostics.sendFound ? '未受影响' : '未确认', ok: !!diagnostics.sendFound },
     { label: '输入草稿', value: `${diagnostics.promptLength || 0} 字`, ok: true },
     { label: '最近对话', value: `${diagnostics.turnCount || 0} 条`, ok: true }
   ];
-  const matched = diagnostics.matchedSelectors || {};
-  if (matched.editor || diagnostics.editorSelector) rows.push({ label: '输入规则', value: matched.editor || diagnostics.editorSelector, ok: true });
-  if (matched.anchor || diagnostics.anchorSelector) rows.push({ label: '锚点规则', value: [matched.anchor || diagnostics.anchorSelector, matched.anchorSource || diagnostics.anchorSource].filter(Boolean).join(' · '), ok: true });
-  if (matched.adjacent || diagnostics.adjacentSelector) rows.push({ label: '相邻控件', value: matched.adjacent || diagnostics.adjacentSelector, ok: true });
-  if (matched.send || diagnostics.sendSelector) rows.push({ label: '发送规则', value: matched.send || diagnostics.sendSelector, ok: true });
-  if (matched.turn || diagnostics.turnSelector) rows.push({ label: '会话规则', value: `${matched.turn || diagnostics.turnSelector}${diagnostics.turnSelectorCount ? ` · ${diagnostics.turnSelectorCount} 个节点` : ''}`, ok: true });
   $('aiDiagnosticList').innerHTML = rows.map((row) => `
     <div class="diagnostic-row${row.ok ? '' : ' warn'}">
       <span>${escapeHtml(row.label)}</span>
@@ -385,7 +378,7 @@ function renderRecent(items) {
   node.className = 'recent-list';
   node.innerHTML = items.slice(0, 6).map((item) => `
     <article class="recent-item">
-      <div class="recent-meta">${escapeHtml(item.typeLabel || item.host || '')} · ${item.kind === 'review' ? '待审阅' : item.kind === 'lesson' ? '经验' : '记忆'}</div>
+      <div class="recent-meta">${escapeHtml(item.typeLabel || item.host || '')} · ${item.kind === 'review' ? '待确认' : item.kind === 'lesson' ? '经验' : '记忆'}</div>
       <div class="recent-title">${escapeHtml(item.title || '未命名页面')}</div>
     </article>
   `).join('');
@@ -448,7 +441,7 @@ document.addEventListener('click', async (event) => {
     content: lessonDraft ? lessonDraft.content : selectedText,
     meta: buildDraftMetaFields(latestCapture, kind)
   });
-  setMessage('已填入审阅草稿');
+  setMessage('已放入准备保存区');
 });
 
 $('refresh').addEventListener('click', refresh);
@@ -456,7 +449,7 @@ $('connectionAction').addEventListener('click', refresh);
 $('copyDiagnostics').addEventListener('click', async () => {
   try {
     await copyText(JSON.stringify(buildDiagnosticReport(latestCapture), null, 2));
-    setMessage('已复制诊断信息', 'ok');
+    setMessage('已复制问题信息', 'ok');
   } catch (err) {
     setMessage(err.message || '复制失败', 'error');
   }
@@ -464,22 +457,22 @@ $('copyDiagnostics').addEventListener('click', async () => {
 $('copyEvidenceCommand').addEventListener('click', async () => {
   try {
     await copyText(buildEvidenceCommand(latestCapture));
-    setMessage('已复制证据向导命令', 'ok');
+    setMessage('已复制检查步骤', 'ok');
   } catch (err) {
     setMessage(err.message || '复制失败', 'error');
   }
 });
 $('savePage').addEventListener('click', async () => {
   $('savePage').disabled = true;
-  setMessage('正在加入待审阅...');
+  setMessage('正在加入待确认...');
   try {
     const title = $('draftTitle').value.trim();
     const text = $('draftContent').value.trim();
     const meta = getDraftMetaFields();
     const kind = meta.asLesson ? 'lesson' : ($('draftContent').dataset.kind || 'memory');
-    if (!text) throw new Error('先确认一条要送审的内容');
+    if (!text) throw new Error('先确认一条要保存的内容');
     await send('SAVE_CANDIDATE', { kind, title, text, meta });
-    setMessage('页面已加入待审阅', 'ok');
+    setMessage('已加入工作台，稍后确认即可保存', 'ok');
     await refresh();
   } catch (err) {
     setMessage(err.message || '保存失败', 'error');
@@ -489,7 +482,7 @@ $('savePage').addEventListener('click', async () => {
 });
 $('resetDraft').addEventListener('click', () => {
   setDraft(defaultDraft);
-  setMessage('已恢复为自动生成草稿');
+  setMessage('已恢复为自动整理的内容');
 });
 $('draftProject').addEventListener('change', () => {
   $('draftMeta').textContent = draftMetaText(latestCapture, $('draftContent').dataset.kind || 'memory');

@@ -3772,9 +3772,93 @@
       var payload = reviewPayload(item);
       return arrayFromCsv(payload.tags).slice(0, 6);
     }
-    function reviewSourceLabel(item) {
-      var payload = reviewPayload(item);
-      return payload.sourceLabel || payload.provider || (item && item.page && (item.page.typeLabel || item.page.host)) || '浏览器';
+ function reviewSourceLabel(item) {
+   var payload = reviewPayload(item);
+   return payload.sourceLabel || payload.provider || (item && item.page && (item.page.typeLabel || item.page.host)) || '浏览器';
+ }
+    function browserSessionObservations(item) {
+      var page = (item && item.page) || {};
+      var conversation = (item && item.conversation) || {};
+      var turns = Array.isArray(conversation.turns) ? conversation.turns : [];
+      var createdAt = (item && (item.createdAt || item.updatedAt)) || new Date().toISOString();
+      var observations = [];
+      if (page.title || page.url) {
+        observations.push({
+          id: (item.id || 'browser') + '_page',
+          sessionId: 'browser_' + (item.id || ''),
+          timestamp: createdAt,
+          type: 'web_fetch',
+          title: page.title || '浏览器页面',
+          subtitle: page.host || page.typeLabel || '浏览器',
+          narrative: [page.title, page.url].filter(Boolean).join('\n'),
+          facts: [],
+          concepts: ['browser'],
+          files: [],
+          importance: 0.5
+        });
+      }
+      turns.forEach(function(turn, index) {
+        var role = turn && turn.role === 'assistant' ? 'AI' : turn && turn.role === 'user' ? '用户' : '对话';
+        var text = String((turn && turn.text) || '').trim();
+        if (!text) return;
+        observations.push({
+          id: (item.id || 'browser') + '_turn_' + index,
+          sessionId: 'browser_' + (item.id || ''),
+          timestamp: createdAt,
+          type: 'conversation',
+          title: role,
+          subtitle: page.title || page.host || '浏览器对话',
+          narrative: text,
+          facts: [],
+          concepts: ['browser', role],
+          files: [],
+          importance: role === '用户' ? 0.8 : 0.6
+        });
+      });
+      if (item && item.content) {
+        observations.push({
+          id: (item.id || 'browser') + '_review',
+          sessionId: 'browser_' + (item.id || ''),
+          timestamp: item.updatedAt || createdAt,
+          type: item.kind === 'lesson' ? 'decision' : 'discovery',
+          title: item.kind === 'lesson' ? '经验候选' : '记忆候选',
+          subtitle: item.status === 'approved' ? '已保存' : item.status === 'dismissed' ? '已忽略' : '待审阅',
+          narrative: item.content,
+          facts: [],
+          concepts: ['browser', item.kind || 'memory'],
+          files: [],
+          importance: 0.7
+        });
+      }
+      return observations;
+    }
+    function browserReviewSessions(items) {
+      return (items || []).filter(function(item) {
+        var payload = reviewPayload(item);
+        return item && item.source === 'browser-extension' && !payload.browserSessionId && item.page && (item.page.type === 'ai-chat' || item.conversation || item.page.url);
+      }).map(function(item) {
+        var page = item.page || {};
+        var payload = reviewPayload(item);
+        var provider = (item.conversation && item.conversation.provider) || payload.provider || page.host || '浏览器';
+        var obs = browserSessionObservations(item);
+        return {
+          id: 'browser_' + item.id,
+          project: provider || '浏览器',
+          cwd: 'browser/' + (page.host || provider || 'web'),
+          source: 'browser-extension',
+          agentId: provider || '浏览器',
+          startedAt: item.createdAt || item.updatedAt || '',
+          updatedAt: item.updatedAt || item.createdAt || '',
+          endedAt: item.reviewedAt || item.updatedAt || item.createdAt || '',
+          status: item.status === 'pending' ? 'active' : 'completed',
+          observationCount: obs.length,
+          firstPrompt: page.title || item.title || '浏览器对话',
+          summary: item.content || '',
+          tags: ['browser', page.type || '', item.kind || ''].filter(Boolean),
+          embeddedObservations: obs,
+          browserPage: page
+        };
+      });
     }
     function groupSessionsByProject(items) {
       var groups = {};
@@ -6315,10 +6399,12 @@
       el.innerHTML = '<div class="loading">加载会话中...</div>';
       var results = await Promise.all([
         settledData('工作台会话', { sessions: [] }, function() { return apiGet('sessions'); }),
-        settledData('本地会话', [], function() { return loadLocalCodexSessions(120); })
+        settledData('本地会话', [], function() { return loadLocalCodexSessions(120); }),
+        settledData('浏览器对话', { items: [] }, function() { return apiGet('review?limit=200'); })
       ]);
       state.sessions.warnings = results.filter(function(r) { return r.failed; }).map(function(r) { return r.label; });
-      state.sessions.items = mergeSessions(((results[0].data && results[0].data.sessions) || []), results[1].data || []).filter(function(s) { return !isDemoSession(s); });
+      var browserSessions = browserReviewSessions((results[2].data && results[2].data.items) || []);
+      state.sessions.items = mergeSessions(((results[0].data && results[0].data.sessions) || []).concat(browserSessions), results[1].data || []).filter(function(s) { return !isDemoSession(s); });
       state.sessions.loaded = true;
       renderSessions();
     }
@@ -6389,8 +6475,11 @@
 
       panel.innerHTML = '<div class="detail-panel"><h3>加载会话详情中…</h3></div>';
 
-      var obsRes = await apiGet('observations?sessionId=' + encodeURIComponent(id));
-      var obs = (obsRes && obsRes.observations) || [];
+      var obs = Array.isArray(s.embeddedObservations) ? s.embeddedObservations : [];
+      if (!obs.length) {
+        var obsRes = await apiGet('observations?sessionId=' + encodeURIComponent(id));
+        obs = (obsRes && obsRes.observations) || [];
+      }
       if ((!obs || obs.length === 0) && String(s.source || '').indexOf('local-') === 0) {
         var localRes = await apiGet('local-agent-session-events?sessionId=' + encodeURIComponent(id));
         obs = (localRes && localRes.observations) || obs || [];

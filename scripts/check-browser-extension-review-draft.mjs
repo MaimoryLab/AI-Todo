@@ -23,8 +23,8 @@ for (const [name, html] of [['popup', popupHtml], ['sidepanel', sidepanelHtml]])
   assert(html.includes('resetDraft'), `${name}: missing draft reset action.`);
 }
 
-assert(popupHtml.includes('待审阅草稿'), 'popup: draft section must be visible to users.');
-assert(sidepanelHtml.includes('审阅草稿'), 'sidepanel: draft section must be visible to users.');
+assert(popupHtml.includes('准备保存'), 'popup: draft section must be visible to users.');
+assert(sidepanelHtml.includes('准备保存'), 'sidepanel: draft section must be visible to users.');
 
 assert(popupJs.includes('buildDraft'), 'popup: missing default draft builder.');
 assert(popupJs.includes('getDraftMetaFields'), 'popup: missing editable draft metadata reader.');
