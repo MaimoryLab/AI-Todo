@@ -52,12 +52,28 @@ export function createPageCapture(page = {}) {
 
 function normalizeDiagnostics(value) {
   const input = value && typeof value === 'object' ? value : {};
+  const matched = input.matchedSelectors && typeof input.matchedSelectors === 'object' ? input.matchedSelectors : {};
   return {
     supportedAiPage: !!input.supportedAiPage,
     provider: String(input.provider || ''),
     editorFound: !!input.editorFound,
     editorSelector: String(input.editorSelector || ''),
     anchorFound: !!input.anchorFound,
+    anchorSelector: String(input.anchorSelector || ''),
+    anchorSource: String(input.anchorSource || ''),
+    adjacentSelector: String(input.adjacentSelector || ''),
+    sendFound: !!input.sendFound,
+    sendSelector: String(input.sendSelector || ''),
+    turnSelector: String(input.turnSelector || ''),
+    turnSelectorCount: Number.isFinite(Number(input.turnSelectorCount)) ? Number(input.turnSelectorCount) : 0,
+    matchedSelectors: {
+      editor: String(matched.editor || input.editorSelector || ''),
+      anchor: String(matched.anchor || input.anchorSelector || ''),
+      anchorSource: String(matched.anchorSource || input.anchorSource || ''),
+      adjacent: String(matched.adjacent || input.adjacentSelector || ''),
+      send: String(matched.send || input.sendSelector || ''),
+      turn: String(matched.turn || input.turnSelector || '')
+    },
     placement: String(input.placement || ''),
     promptLength: Number.isFinite(Number(input.promptLength)) ? Number(input.promptLength) : 0,
     turnCount: Number.isFinite(Number(input.turnCount)) ? Number(input.turnCount) : 0,

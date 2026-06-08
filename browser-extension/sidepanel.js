@@ -236,11 +236,17 @@ function renderDiagnostics(capture) {
     { label: '页面识别', value: diagnostics.provider || '已识别', ok: true },
     { label: '输入框', value: diagnostics.editorFound ? '已找到' : '未找到', ok: !!diagnostics.editorFound },
     { label: '入口锚点', value: diagnostics.anchorFound ? '已找到' : '未找到', ok: !!diagnostics.anchorFound },
+    { label: '发送按钮', value: diagnostics.sendFound ? '已找到' : '未确认', ok: !!diagnostics.sendFound },
     { label: '入口位置', value: diagnostics.placement || '自动', ok: true },
     { label: '输入草稿', value: `${diagnostics.promptLength || 0} 字`, ok: true },
     { label: '最近对话', value: `${diagnostics.turnCount || 0} 条`, ok: true }
   ];
-  if (diagnostics.editorSelector) rows.push({ label: '命中规则', value: diagnostics.editorSelector, ok: true });
+  const matched = diagnostics.matchedSelectors || {};
+  if (matched.editor || diagnostics.editorSelector) rows.push({ label: '输入规则', value: matched.editor || diagnostics.editorSelector, ok: true });
+  if (matched.anchor || diagnostics.anchorSelector) rows.push({ label: '锚点规则', value: [matched.anchor || diagnostics.anchorSelector, matched.anchorSource || diagnostics.anchorSource].filter(Boolean).join(' · '), ok: true });
+  if (matched.adjacent || diagnostics.adjacentSelector) rows.push({ label: '相邻控件', value: matched.adjacent || diagnostics.adjacentSelector, ok: true });
+  if (matched.send || diagnostics.sendSelector) rows.push({ label: '发送规则', value: matched.send || diagnostics.sendSelector, ok: true });
+  if (matched.turn || diagnostics.turnSelector) rows.push({ label: '会话规则', value: `${matched.turn || diagnostics.turnSelector}${diagnostics.turnSelectorCount ? ` · ${diagnostics.turnSelectorCount} 个节点` : ''}`, ok: true });
   $('aiDiagnosticList').innerHTML = rows.map((row) => `
     <div class="diagnostic-row${row.ok ? '' : ' warn'}">
       <span>${escapeHtml(row.label)}</span>

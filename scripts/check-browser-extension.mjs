@@ -107,10 +107,13 @@ if (!sharedApi.includes('path =') || !serviceWorker.includes('message.path')) {
   throw new Error('OPEN_VIEWER must support local viewer document paths.');
 }
 
-for (const field of ['anchorFound', 'placement', 'memoryWidgetVisible', 'checkedAt']) {
+for (const field of ['anchorFound', 'placement', 'memoryWidgetVisible', 'checkedAt', 'anchorSelector', 'anchorSource', 'adjacentSelector', 'sendFound', 'sendSelector', 'turnSelector', 'turnSelectorCount', 'matchedSelectors']) {
   if (!contentScript.includes(field)) throw new Error(`Content script diagnostics missing ${field}.`);
   if (!schema.includes(field)) throw new Error(`Shared schema diagnostics must preserve ${field}.`);
   if (!sidepanel.includes(field)) throw new Error(`Side panel diagnostics must expose ${field}.`);
+}
+for (const label of ['输入规则', '锚点规则', '相邻控件', '发送规则', '会话规则']) {
+  if (!sidepanel.includes(label)) throw new Error(`Side panel diagnostics must show ${label}.`);
 }
 for (const field of ['getManifest', 'manifestVersion', 'version']) {
   if (!sidepanel.includes(field)) throw new Error(`Diagnostic report must include extension ${field}.`);

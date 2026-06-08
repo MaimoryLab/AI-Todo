@@ -81,6 +81,23 @@
     return turns.slice(-8);
   }
 
+  function findSelectorMatch(selectors) {
+    for (const selector of selectors || []) {
+      const el = document.querySelector(selector);
+      if (el) return { el, selector };
+    }
+    return null;
+  }
+
+  function findTurnSelectorMatch(provider) {
+    if (!provider) return null;
+    for (const selector of provider.turnSelectors || []) {
+      const count = document.querySelectorAll(selector).length;
+      if (count) return { selector, count };
+    }
+    return null;
+  }
+
   function collectPromptDraft(provider) {
     if (!provider) return '';
     for (const selector of provider.editorSelectors) {
@@ -99,42 +116,59 @@
 
   function findEditorMatch(provider) {
     if (!provider) return null;
-    for (const selector of provider.editorSelectors) {
-      const el = document.querySelector(selector);
-      if (el) return { el, selector };
-    }
-    return null;
+    return findSelectorMatch(provider.editorSelectors);
   }
 
   function findAnchor(provider) {
+    const match = findAnchorMatch(provider);
+    return match ? match.el : null;
+  }
+
+  function findAnchorMatch(provider) {
     if (!provider) return null;
-    const editor = findEditor(provider);
-    const selectors = provider.anchorSelectors || [];
-    for (const selector of selectors) {
-      const el = document.querySelector(selector);
-      if (el) return el;
+    const editorMatch = findEditorMatch(provider);
+    const configuredMatch = findSelectorMatch(provider.anchorSelectors || []);
+    if (configuredMatch) return { ...configuredMatch, source: 'configured' };
+    const editor = editorMatch ? editorMatch.el : null;
+    if (editor) {
+      const fallback = editor.closest('form') || editor.parentElement || editor;
+      if (fallback) return { el: fallback, selector: editorMatch.selector, source: 'editor-fallback' };
     }
-    if (editor) return editor.closest('form') || editor.parentElement || editor;
     return null;
   }
 
   function findAdjacentAnchor(provider) {
-    const selectors = provider && provider.adjacentSelectors ? provider.adjacentSelectors : [];
-    for (const selector of selectors) {
-      const el = document.querySelector(selector);
-      if (el) return el;
-    }
-    return null;
+    const match = findSelectorMatch(provider && provider.adjacentSelectors ? provider.adjacentSelectors : []);
+    return match ? match.el : null;
   }
 
   function collectDiagnostics(provider, promptDraft, turns) {
-    const match = findEditorMatch(provider);
+    const editorMatch = findEditorMatch(provider);
+    const anchorMatch = findAnchorMatch(provider);
+    const adjacentMatch = findSelectorMatch(provider && provider.adjacentSelectors ? provider.adjacentSelectors : []);
+    const sendMatch = findSelectorMatch(provider && provider.sendSelectors ? provider.sendSelectors : []);
+    const turnMatch = findTurnSelectorMatch(provider);
     return {
       supportedAiPage: !!provider,
       provider: provider ? provider.label : '',
-      editorFound: !!match,
-      editorSelector: match ? match.selector : '',
-      anchorFound: !!findAnchor(provider),
+      editorFound: !!editorMatch,
+      editorSelector: editorMatch ? editorMatch.selector : '',
+      anchorFound: !!anchorMatch,
+      anchorSelector: anchorMatch ? anchorMatch.selector : '',
+      anchorSource: anchorMatch ? anchorMatch.source || 'configured' : '',
+      adjacentSelector: adjacentMatch ? adjacentMatch.selector : '',
+      sendFound: !!sendMatch,
+      sendSelector: sendMatch ? sendMatch.selector : '',
+      turnSelector: turnMatch ? turnMatch.selector : '',
+      turnSelectorCount: turnMatch ? turnMatch.count : 0,
+      matchedSelectors: {
+        editor: editorMatch ? editorMatch.selector : '',
+        anchor: anchorMatch ? anchorMatch.selector : '',
+        anchorSource: anchorMatch ? anchorMatch.source || 'configured' : '',
+        adjacent: adjacentMatch ? adjacentMatch.selector : '',
+        send: sendMatch ? sendMatch.selector : '',
+        turn: turnMatch ? turnMatch.selector : ''
+      },
       placement: provider ? provider.placement || 'input-corner' : '',
       promptLength: String(promptDraft || '').length,
       turnCount: Array.isArray(turns) ? turns.length : 0,
