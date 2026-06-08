@@ -72,6 +72,7 @@ const requiredFiles = [
   'scripts/check-ai-validation-evidence.mjs',
   'scripts/sync-ai-validation-table.mjs',
   'scripts/delivery-status.mjs',
+  'scripts/check-viewer-delivery-runtime.mjs',
   'scripts/check-workbench-status.mjs',
   'scripts/package-browser-extension.mjs',
   'scripts/write-delivery-summary.mjs',
@@ -239,6 +240,7 @@ run(process.execPath, ['scripts/check-ai-validation-evidence.mjs']);
 run(process.execPath, ['scripts/sync-ai-validation-table.mjs', '--check']);
 run(process.execPath, ['scripts/write-delivery-summary.mjs']);
 run(process.execPath, ['scripts/delivery-status.mjs']);
+run(process.execPath, ['--import', 'tsx', 'scripts/check-viewer-delivery-runtime.mjs']);
 run(process.execPath, ['scripts/check-release-gates.mjs']);
 assert(existsSync('artifacts/agent-memory-lab-extension.zip'), 'Browser extension package was not created.');
 assert(existsSync('artifacts/delivery-summary.md'), 'Delivery summary was not created.');
