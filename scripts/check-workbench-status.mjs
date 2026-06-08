@@ -10,10 +10,11 @@ async function fetchJson(url) {
   return { ok: res.ok, status: res.status, body };
 }
 
-async function fetchStatus(url) {
+async function fetchStatus(url, marker = '') {
   try {
-    const res = await fetch(url, { method: 'HEAD' });
-    return { ok: res.ok, status: res.status };
+    const res = await fetch(url, { headers: { Accept: 'text/html,text/plain,*/*' } });
+    const text = await res.text();
+    return { ok: res.ok && (!marker || text.includes(marker)), status: res.status };
   } catch (err) {
     return { ok: false, error: err && err.message ? err.message : String(err) };
   }
@@ -41,7 +42,7 @@ try {
     demo: { url: `http://127.0.0.1:${expectedViewerPort}/demo/browser-extension.html`, ok: false }
   };
   printSummary(summary);
-  console.log('Next: start the workbench with `npm run build && npm run start`, or check whether another process already uses the API port.');
+  console.log('Next: start the workbench with `npm run build && npm run start:local-memory`, or check whether another process already uses the API port.');
   process.exit(1);
 }
 
@@ -49,8 +50,8 @@ const body = health.body || {};
 const viewerPort = Number(body.viewerPort || expectedViewerPort);
 const viewerUrl = `http://127.0.0.1:${viewerPort}/#dashboard`;
 const demoUrl = `http://127.0.0.1:${viewerPort}/demo/browser-extension.html`;
-const viewer = await fetchStatus(`http://127.0.0.1:${viewerPort}/`);
-const demo = await fetchStatus(demoUrl);
+const viewer = await fetchStatus(`http://127.0.0.1:${viewerPort}/#dashboard`, 'view-dashboard');
+const demo = await fetchStatus(demoUrl, 'agentmemory-demo-input');
 
 const summary = {
   api: { url: `${apiBase}/agentmemory/health`, ok: health.ok, status: health.status, version: body.version || '' },
@@ -68,7 +69,7 @@ if (body.viewerSkipped || !summary.viewer.ok) {
   process.exit(1);
 }
 if (!summary.demo.ok) {
-  console.log('Next: Viewer is reachable, but the plugin demo page is missing. Run `npm run build` and restart the workbench.');
+  console.log('Next: Viewer is reachable, but the plugin demo page is missing. Run `npm run build` and restart with `npm run start:local-memory`.');
   process.exit(1);
 }
 

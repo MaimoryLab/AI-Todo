@@ -97,6 +97,7 @@
 - 交付摘要：`artifacts/delivery-summary.md`，记录版本、提交、产物、发布门槛和检查命令
 - 交付清单：`artifacts/delivery-manifest.json`，记录版本、提交、zip 大小、sha256、发布状态和真实 AI 站点验收计数
 - 提交后刷新：每次完成代码提交后，都要重新运行 `npm run package:browser-extension`，让 `artifacts/delivery-manifest.json` 的 artifact commit 与当前 commit 对齐；`npm run status:delivery` 会同时显示 current commit 和 artifact commit
+- 运行态复核：`npm run build` 或 `npm run package:browser-extension` 之后，如果本地工作台正在运行，需要重启 `npm run start:local-memory`，再用 `npm run check:workbench` 确认 API、Viewer 和插件 demo 页都可访问
 - 预览包内容检查：`check:browser-extension-package` 会确认 zip 内含 manifest、content script、侧栏、弹窗、设置页、shared 文件和 PNG 图标
 - AI fixture 验收：`check:browser-extension` 会用本地最小页面模型检查 ChatGPT、Claude、Gemini、Perplexity、Grok、DeepSeek 的输入框和对话 selector
 - 本地免登录预览：`http://localhost:3113/demo/browser-extension.html`，用于快速展示输入框旁“记忆建议”、演示记忆、插入/复制

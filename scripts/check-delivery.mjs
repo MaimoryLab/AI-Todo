@@ -227,6 +227,11 @@ for (const marker of ['current commit', 'artifact commit', 'stale; rerun npm run
   assert(deliveryStatusScript.includes(marker), `Delivery status script missing freshness marker: ${marker}`);
 }
 
+const workbenchStatusScript = read('scripts/check-workbench-status.mjs');
+for (const marker of ['view-dashboard', 'agentmemory-demo-input', 'start:local-memory']) {
+  assert(workbenchStatusScript.includes(marker), `Workbench status script missing runtime marker: ${marker}`);
+}
+
 const privacyEn = read('docs/browser-extension-privacy-en.md');
 for (const marker of ['Privacy Policy', 'local-first', 'Data We Process', 'Where Data Goes', 'AI Diagnostics', 'External testers may redact', 'matchedSelectors.editor/anchor/send/turn']) {
   assert(privacyEn.includes(marker), `English privacy policy missing marker: ${marker}`);
