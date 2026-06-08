@@ -11,6 +11,7 @@
 - 把当前网页上的一条观察加入待审阅经验队列
 - 侧边栏查看当前页面类型、候选记忆、候选经验和隐私提示
 - 初步识别 ChatGPT、Claude、Gemini、Perplexity、Grok 等 AI 对话页面
+- 参考 OpenMemory / Mem0 的 supported-sites 架构，按 AI 产品维护独立站点配置
 - 初步识别 GitHub、飞书、Notion、论文 / PDF、插件商店等网页类型
 - 右键菜单保存当前页面
 - 弹窗里查看最近保存记录
@@ -40,6 +41,7 @@ sidepanel.html/js/css   浏览器侧边栏同步面板
 options.html/js         本地连接设置
 shared/schema.js        统一 PageCapture 数据结构
 shared/page-types.js    页面类型与 AI 产品识别
+shared/site-config.js   ChatGPT / Claude / Gemini / Perplexity 等站点配置
 shared/api.js           统一本地 Agent Memory Lab API 调用
 icons/                  插件图标
 ```
@@ -107,5 +109,6 @@ Viewer: http://localhost:3113
 ## 参考方向
 
 - Mem0 / OpenMemory：Cross-LLM memory，把记忆带到 ChatGPT、Claude、Perplexity 等产品里。
+- Mem0 的实现启发：每个 AI 产品维护独立 content script / site config，再共享后台、侧栏和类型定义。
 - Rethread / Nico / ContextBridge / Personal AI Memory：都在强调跨 AI 产品的上下文延续。
 - Agent Memory Lab 的取向：本地优先、保存前可审阅、和主工作台统一数据，而不是把浏览器里看到的内容直接上传到云端。

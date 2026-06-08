@@ -75,6 +75,8 @@ Agent Memory Lab 更像“工作记忆层”：它关心这段内容以后怎么
 - 当前页面有没有隐私风险
 - 最近同步了哪些内容
 
+插件结构参考了 OpenMemory / Mem0 这类跨 AI 产品记忆插件的做法：按 ChatGPT、Claude、Gemini、Perplexity 等 supported sites 维护独立配置，再把数据统一写入本地待审阅队列。
+
 你确认后，它才会进入长期记忆或经验；不合适的候选可以直接忽略。
 
 本地预览路径：

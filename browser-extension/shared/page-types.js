@@ -1,14 +1,8 @@
+import { getProviderForHost } from './site-config.js';
+
 export function detectAiProvider(page) {
-  const host = String(page.host || '').toLowerCase();
-  if (host.includes('chatgpt.com') || host.includes('chat.openai.com')) return 'ChatGPT';
-  if (host.includes('claude.ai')) return 'Claude';
-  if (host.includes('gemini.google.com')) return 'Gemini';
-  if (host.includes('perplexity.ai')) return 'Perplexity';
-  if (host.includes('grok.com') || host.includes('x.ai')) return 'Grok';
-  if (host.includes('poe.com')) return 'Poe';
-  if (host.includes('deepseek.com')) return 'DeepSeek';
-  if (host.includes('qwen')) return 'Qwen';
-  return '';
+  const provider = getProviderForHost(page.host || page.url || '');
+  return provider ? provider.label : '';
 }
 
 export function detectPageType(page) {

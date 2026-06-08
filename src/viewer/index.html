@@ -5342,7 +5342,7 @@
         html += '<h3>' + esc(item.title || '未命名候选') + '</h3>';
         html += '<p>' + esc(item.content || '').replace(/\n/g, '<br>') + '</p>';
         html += '<div class="memory-card-source">' + esc(meta) + '</div>';
-        html += '<div class="memory-card-actions"><button class="btn btn-primary" data-action="approve-review" data-review-id="' + esc(item.id) + '">确认保存</button><button class="btn" data-action="dismiss-review" data-review-id="' + esc(item.id) + '">忽略</button></div>';
+        html += '<div class="memory-card-actions"><button class="btn btn-primary" data-action="edit-review" data-review-id="' + esc(item.id) + '">审阅保存</button><button class="btn" data-action="dismiss-review" data-review-id="' + esc(item.id) + '">忽略</button></div>';
         html += '</article>';
       });
       html += '</div></section>';
@@ -5474,10 +5474,64 @@
       loadMemories();
     }
 
-    async function approveReviewItem(id) {
+    function editReviewItem(id) {
       var item = (state.memories.reviewItems || []).find(function(x) { return x.id === id; });
       if (!item) return;
-      await apiPost('review/approve', { id: id });
+      var payload = item.payload || {};
+      var modal = document.getElementById('modal');
+      var overlay = document.getElementById('modal-overlay');
+      modal.innerHTML =
+        '<h3>审阅后保存</h3>' +
+        '<p>这条内容来自浏览器插件。确认前可以调整标题、内容和归属，避免临时信息直接进入长期记忆。</p>' +
+        '<div class="memory-add-form">' +
+        '<label>标题<input id="review-title" value="' + esc(item.title || '') + '"></label>' +
+        '<label>内容<textarea id="review-content" rows="8">' + esc(item.content || '') + '</textarea></label>' +
+        '<div class="memory-add-grid">' +
+        '<label>类型<select id="review-kind"><option value="memory"' + (item.kind !== 'lesson' ? ' selected' : '') + '>记忆</option><option value="lesson"' + (item.kind === 'lesson' ? ' selected' : '') + '>经验</option></select></label>' +
+        '<label>项目<input id="review-project" value="' + esc(payload.project || 'browser') + '"></label>' +
+        '</div>' +
+        '<div class="memory-add-grid">' +
+        '<label>记忆类型<select id="review-type"><option value="fact"' + (payload.type === 'fact' || !payload.type ? ' selected' : '') + '>事实</option><option value="preference"' + (payload.type === 'preference' ? ' selected' : '') + '>偏好</option><option value="workflow"' + (payload.type === 'workflow' ? ' selected' : '') + '>工作流</option><option value="pattern"' + (payload.type === 'pattern' ? ' selected' : '') + '>模式</option><option value="architecture"' + (payload.type === 'architecture' ? ' selected' : '') + '>架构</option><option value="bug"' + (payload.type === 'bug' ? ' selected' : '') + '>问题</option></select></label>' +
+        '<label>标签<input id="review-tags" value="' + esc(Array.isArray(payload.tags) ? payload.tags.join(', ') : 'browser, reviewed') + '"></label>' +
+        '</div>' +
+        '<div id="review-error" class="memory-form-error"></div>' +
+        '</div>' +
+        '<div class="modal-actions"><button class="btn" data-action="close-modal">取消</button><button class="btn btn-primary" data-action="approve-review" data-review-id="' + esc(id) + '">确认写入</button></div>';
+      overlay.classList.add('open');
+    }
+
+    async function approveReviewItem(id) {
+      var err = document.getElementById('review-error');
+      var title = (document.getElementById('review-title') || {}).value || '';
+      var content = (document.getElementById('review-content') || {}).value || '';
+      var kind = (document.getElementById('review-kind') || {}).value || 'memory';
+      var project = (document.getElementById('review-project') || {}).value || '';
+      var type = (document.getElementById('review-type') || {}).value || 'fact';
+      var tags = (document.getElementById('review-tags') || {}).value || '';
+      if (!content.trim()) {
+        if (err) {
+          err.style.display = 'block';
+          err.textContent = '内容不能为空。';
+        }
+        return;
+      }
+      var result = await apiPost('review/approve', {
+        id: id,
+        title: title.trim(),
+        content: content.trim(),
+        kind: kind,
+        project: project.trim() || 'browser',
+        type: type,
+        tags: tags
+      });
+      if (!result || result.error) {
+        if (err) {
+          err.style.display = 'block';
+          err.textContent = (result && result.error) || '写入失败，请稍后再试。';
+        }
+        return;
+      }
+      closeModal();
       state.memories.loaded = false;
       await loadMemories();
     }
@@ -7402,6 +7456,11 @@
       if (action === 'confirm-delete-memory') {
         var memoryId = target.getAttribute('data-memory-id');
         if (memoryId) confirmDeleteMemory(memoryId);
+        return;
+      }
+      if (action === 'edit-review') {
+        var editReviewId = target.getAttribute('data-review-id');
+        if (editReviewId) editReviewItem(editReviewId);
         return;
       }
       if (action === 'approve-review') {

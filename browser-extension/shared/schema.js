@@ -34,7 +34,8 @@ export function createPageCapture(page = {}) {
       headings: Array.isArray(page.headings) ? page.headings.map(String).map((x) => x.trim()).filter(Boolean).slice(0, 12) : []
     },
     conversation: {
-      provider: detectAiProvider({ ...page, ...normalized }),
+      provider: String(page.aiProvider || detectAiProvider({ ...page, ...normalized }) || ''),
+      promptDraft: String(page.promptDraft || '').trim().slice(0, 1500),
       turns: Array.isArray(page.turns) ? page.turns.map(normalizeTurn).filter(Boolean).slice(-8) : []
     },
     candidates: {
@@ -62,6 +63,7 @@ function buildMemoryCandidates(page, normalized) {
   const candidates = [];
   if (provider) {
     candidates.push(`在 ${provider} 中继续跟进：${String(page.title || '当前对话').trim()}`);
+    if (page.promptDraft) candidates.push(`当前输入可能需要记忆辅助：${String(page.promptDraft).trim().slice(0, 180)}`);
   }
   if (page.selection) candidates.push(`选中文本可能值得保留：${String(page.selection).trim().slice(0, 180)}`);
   if (type === 'github') candidates.push(`GitHub 项目线索：${String(page.title || '').trim()}`);
