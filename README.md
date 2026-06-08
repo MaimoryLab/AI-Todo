@@ -38,6 +38,17 @@
 下次 Agent 协作时继续使用
 ```
 
+## 4 步试用路线
+
+第一次打开项目时，可以先按这条路线跑通核心体验：
+
+1. 启动本地 Viewer：`npm run dev`，打开 `http://localhost:3113/#dashboard`。
+2. 加载浏览器插件：Chrome / Edge → `chrome://extensions` → 开发者模式 → 加载 `browser-extension/`。
+3. 在 ChatGPT / Claude / Gemini / Perplexity 页面输入一个问题，查看输入框附近的“本地记忆”提示，并尝试插入相关记忆。
+4. 用插件把当前网页加入待审阅，回到 Viewer 的记忆库，在顶部审阅后保存，再用“浏览器”来源筛选找到它。
+
+演示前可以按 [演示检查清单](docs/demo-checklist-cn.md) 自查。
+
 ## 为什么不是普通网页剪藏
 
 普通剪藏工具更像“收藏夹”：保存标题、链接、正文，然后等你以后再找。
