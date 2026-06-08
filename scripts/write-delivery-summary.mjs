@@ -125,6 +125,10 @@ const deliveryManifest = {
       path: 'artifacts/external-tester-handout.md',
       exists: true
     },
+    releaseNotes: {
+      path: 'artifacts/release-notes.md',
+      exists: true
+    },
     screenshots: {
       dashboard: existsSync('docs/readme-assets/screenshots/dashboard.jpg'),
       skills: existsSync('docs/readme-assets/screenshots/skills.jpg')
@@ -369,9 +373,79 @@ npm run record:ai-validation-evidence -- --clipboard --browser "Chrome 版本号
 - 未通过的真实 AI 站点：${(aiEvidenceSummary ? aiEvidenceSummary.notPassedRequired : requiredAiProducts).join(', ')}
 `;
 
+const releaseNotes = `# Agent Memory Lab ${manifest.version} Release Notes
+
+生成时间：${generatedAt}
+
+## 版本信息
+
+- Package：${pkg.name}@${pkg.version}
+- Browser extension：${manifest.name} ${manifest.version}
+- Branch：${branch}
+- Commit：${commit}${dirty ? '（本地还有未提交改动）' : ''}
+- Extension zip：
+  - 路径：
+    
+    \`artifacts/agent-memory-lab-extension.zip\`
+  - 大小：${zipSize} bytes
+  - SHA256：\`${zipSha256 || 'missing'}\`
+
+## 本版可以交付给谁
+
+这个版本适合给外部测试者做本地试用，目标是验证浏览器插件、Viewer 待审阅队列、真实 AI 页面诊断和反馈闭环。
+
+这个版本不适合作为 Chrome Web Store 公开发布版，因为真实 AI 页面证据仍是 ${aiEvidenceSummary ? `${aiEvidenceSummary.passedCount}/${aiEvidenceSummary.requiredCount}` : '0/4'}。
+
+## 本版新增和已就绪能力
+
+- Viewer 总览可以显示外部试用状态、插件包状态、真实 AI 证据进度和测试卡入口。
+- 插件弹窗和同步侧栏都支持保存前编辑审阅草稿。
+- 草稿可编辑标题、正文、项目、标签，并可标记为可沉淀经验。
+- 浏览器插件保存内容默认进入 Viewer 待审阅队列，不直接写入长期记忆。
+- 同步侧栏可以复制真实 AI 页面诊断 JSON。
+- 同步侧栏提供本地测试卡入口：\`/docs/browser-extension-ai-site-test-cards-cn.md\`。
+- 诊断 JSON 带有 \`validationGuide\`，标明必测站点：ChatGPT、Claude、Gemini、Perplexity。
+- 插件 zip 内包含 \`browser-extension/LOAD-THIS-FIRST.md\` 和 \`browser-extension/AI-SITE-TEST-CARDS.md\`。
+- 交付检查会真实启动 Viewer，验证交付状态接口、测试卡文档和插件 demo 路由。
+
+## 试用路径
+
+1. 运行 \`npm run package:browser-extension\` 生成插件 zip。
+2. 解压 \`artifacts/agent-memory-lab-extension.zip\`。
+3. 在 Chrome / Edge 开发者模式加载解压后的 \`browser-extension/\` 文件夹。
+4. 打开 \`http://localhost:3113/demo/browser-extension.html\`，先验证本地 demo。
+5. 打开 ChatGPT、Claude、Gemini、Perplexity，按测试卡逐站验收。
+6. 复制同步侧栏诊断，用 \`npm run record:ai-validation-evidence\` 保存证据。
+
+## 已知边界
+
+- 真实 AI 页面证据：${aiEvidenceSummary ? `${aiEvidenceSummary.passedCount}/${aiEvidenceSummary.requiredCount}` : '0/4'}。
+- 未通过 / 待验证站点：${(aiEvidenceSummary ? aiEvidenceSummary.notPassedRequired : requiredAiProducts).join(', ')}。
+- 公开发布仍缺：真实 AI 站点通过证据、公开隐私政策 URL、无隐私商店截图、商店审核材料。
+- 本地 fixture 和 demo 只能防回归，不能替代真实站点验收。
+
+## 验证命令
+
+- \`npm run check:browser-extension\`
+- \`npm run package:browser-extension\`
+- \`npm run check:delivery\`
+- \`npm run status:delivery\`
+- \`npm run check:release-gates\`
+- \`npm run check:release-public\`：当前预期失败，直到真实 AI 站点证据齐全。
+
+## 反馈入口
+
+- 外部试用指南：\`docs/external-tester-guide-cn.md\`
+- 反馈模板：\`docs/external-feedback-template-cn.md\`
+- GitHub Issue 模板：\`.github/ISSUE_TEMPLATE/external-tester-feedback-cn.yml\`
+- 反馈分诊指南：\`docs/external-feedback-triage-cn.md\`
+`;
+
 writeFileSync('artifacts/delivery-summary.md', summary);
 writeFileSync('artifacts/external-tester-handout.md', externalHandout);
+writeFileSync('artifacts/release-notes.md', releaseNotes);
 writeFileSync('artifacts/delivery-manifest.json', `${JSON.stringify(deliveryManifest, null, 2)}\n`);
 console.log('delivery summary: artifacts/delivery-summary.md');
 console.log('external tester handout: artifacts/external-tester-handout.md');
+console.log('release notes: artifacts/release-notes.md');
 console.log('delivery manifest: artifacts/delivery-manifest.json');
