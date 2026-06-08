@@ -4,9 +4,10 @@ import {
   type IncomingMessage,
   type ServerResponse,
 } from "node:http";
-import { readFileSync } from "node:fs";
-import { join, dirname } from "node:path";
+import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
+import { basename, join, dirname, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
+import { homedir } from "node:os";
 import { renderViewerDocument } from "./document.js";
 
 // Self-host the viewer favicon at /favicon.svg instead of an inline
@@ -26,6 +27,344 @@ function loadViewerFavicon(): Buffer | null {
     } catch {}
   }
   return null;
+}
+
+function readViewerAsset(relativePath: string): Buffer | null {
+  const base = dirname(fileURLToPath(import.meta.url));
+  const candidates = [
+    join(base, "..", "src", "viewer", relativePath),
+    join(base, "..", "viewer", relativePath),
+    join(base, "viewer", relativePath),
+  ];
+  for (const path of candidates) {
+    try {
+      return readFileSync(path);
+    } catch {}
+  }
+  return null;
+}
+
+function parseViewerQuery(qs: string): Record<string, string> {
+  const params = new URLSearchParams(qs || "");
+  const out: Record<string, string> = {};
+  for (const [key, value] of params.entries()) out[key] = value;
+  return out;
+}
+
+function walkLocalJsonl(root: string, out: Array<{ file: string; mtimeMs: number }> = []): Array<{ file: string; mtimeMs: number }> {
+  if (!existsSync(root)) return out;
+  let st;
+  try {
+    st = statSync(root);
+  } catch {
+    return out;
+  }
+  if (st.isFile() && root.endsWith(".jsonl")) {
+    out.push({ file: root, mtimeMs: st.mtimeMs });
+    return out;
+  }
+  if (!st.isDirectory()) return out;
+  let names: string[] = [];
+  try {
+    names = readdirSync(root);
+  } catch {
+    return out;
+  }
+  for (const name of names) walkLocalJsonl(join(root, name), out);
+  return out;
+}
+
+function cleanLocalCodexText(text: unknown, max = 260): string {
+  let t = String(text || "").trim();
+  if (!t) return "";
+  t = t.replace(/# AGENTS.md instructions[\s\S]*?<\/INSTRUCTIONS>/g, "").trim();
+  t = t.replace(/<environment_context>[\s\S]*?<\/environment_context>/g, "").trim();
+  const noisy = [
+    "# AGENTS.md instructions",
+    "Automation:",
+    "<permissions instructions>",
+    "<skills_instructions>",
+    "<plugins_instructions>",
+    "<environment_context>",
+    "You are Codex",
+    "Filesystem sandboxing defines",
+    "Response MUST end with",
+  ];
+  if (noisy.some((prefix) => t.startsWith(prefix))) return "";
+  t = t.replace(/^# In app browser:[\s\S]*?## My request for Codex:\s*/m, "").trim();
+  t = t.replace(/^# Browser comments:[\s\S]*?## My request for Codex:\s*/m, "").trim();
+  t = t.replace(/^The next image is untrusted page evidence[\s\S]*?instructions\.\s*/m, "").trim();
+  t = t.replace(/\s+/g, " ").trim();
+  return t.length > max ? `${t.slice(0, max)}...` : t;
+}
+
+function localCodexTextFromContent(content: unknown): string {
+  if (typeof content === "string") return content;
+  if (!Array.isArray(content)) return "";
+  return content
+    .map((part) => {
+      if (!part || typeof part !== "object") return "";
+      const p = part as { type?: string; text?: string };
+      if (p.type === "input_text" || p.type === "output_text") return p.text || "";
+      return "";
+    })
+    .join("\n")
+    .trim();
+}
+
+function readLocalCodexRows(file: string): unknown[] {
+  try {
+    return readFileSync(file, "utf8")
+      .split(/\n/)
+      .filter(Boolean)
+      .map((line) => {
+        try {
+          return JSON.parse(line);
+        } catch {
+          return null;
+        }
+      })
+      .filter(Boolean);
+  } catch {
+    return [];
+  }
+}
+
+function localCodexPrompt(row: unknown): string {
+  const r = row as { type?: string; payload?: Record<string, unknown> };
+  const payload = r?.payload || {};
+  if (r?.type === "event_msg" && payload.type === "user_message") {
+    return cleanLocalCodexText(payload.message);
+  }
+  if (r?.type === "response_item" && payload.type === "message" && payload.role === "user") {
+    return cleanLocalCodexText(localCodexTextFromContent(payload.content));
+  }
+  return "";
+}
+
+function summarizeLocalCodexFile(file: string): Record<string, unknown> | null {
+  const rows = readLocalCodexRows(file) as Array<{ type?: string; payload?: Record<string, unknown> }>;
+  const meta = rows.find((r) => r.type === "session_meta")?.payload || {};
+  if (!meta.id) return null;
+  const prompts = rows.map(localCodexPrompt).filter(Boolean);
+  const observationCount = rows.filter((r) => r.type === "response_item" || r.type === "event_msg").length;
+  const cwd = typeof meta.cwd === "string" ? meta.cwd : "";
+  const timestamp = typeof meta.timestamp === "string" ? meta.timestamp : new Date(statSync(file).mtimeMs).toISOString();
+  return {
+    id: `codex_local_${meta.id}`,
+    project: cwd ? basename(cwd) : "Codex",
+    cwd,
+    title: prompts[0] || meta.originator || "Codex 会话",
+    firstPrompt: prompts[0] || "",
+    latestPrompt: prompts[prompts.length - 1] || prompts[0] || "",
+    startedAt: timestamp,
+    updatedAt: timestamp,
+    status: "completed",
+    agentId: "Codex",
+    source: "local-codex-jsonl",
+    observationCount,
+    messageCount: prompts.length,
+    file,
+  };
+}
+
+function readLocalCodexSessions(qs: string): Record<string, unknown> {
+  const params = parseViewerQuery(qs);
+  const cwdFilter = params.cwd || "";
+  const limit = Math.max(1, Math.min(1000, Number(params.limit || 500) || 500));
+  const roots = [
+    join(homedir(), ".codex", "sessions"),
+    join(homedir(), ".codex", "archived_sessions"),
+  ];
+  const entries = roots.flatMap((root) => walkLocalJsonl(root)).sort((a, b) => b.mtimeMs - a.mtimeMs);
+  const sessions: Array<Record<string, unknown>> = [];
+  for (const entry of entries) {
+    const session = summarizeLocalCodexFile(entry.file);
+    if (!session) continue;
+    if (cwdFilter && !String(session.cwd || "").startsWith(cwdFilter)) continue;
+    sessions.push(session);
+    if (sessions.length >= limit) break;
+  }
+  return { sessions, source: roots, cwdFilter, total: sessions.length };
+}
+
+let localAgentSessionsCache: { key: string; expiresAt: number; data: Record<string, unknown> | null } = {
+  key: "",
+  expiresAt: 0,
+  data: null,
+};
+
+function localAgentSourceDefs(home: string): Array<{
+  name: string;
+  roots: string[];
+  summarize: (file: string) => Record<string, unknown> | null;
+}> {
+  return [
+    { name: "codex", roots: [join(home, ".codex", "sessions"), join(home, ".codex", "archived_sessions")], summarize: summarizeLocalCodexFile },
+  ];
+}
+
+function localSessionSuffix(id: unknown): string {
+  return String(id || "").replace(/^(codex|claude)_local_/, "");
+}
+
+function readLocalAgentSessions(qs: string): Record<string, unknown> {
+  const params = parseViewerQuery(qs);
+  const home = homedir();
+  const cwdFilter = params.cwd || "";
+  const limit = Math.max(1, Math.min(2000, Number(params.limit || 1000) || 1000));
+  const cacheKey = JSON.stringify({ cwdFilter, limit });
+  const now = Date.now();
+  if (localAgentSessionsCache.key === cacheKey && localAgentSessionsCache.expiresAt > now && localAgentSessionsCache.data) {
+    return localAgentSessionsCache.data;
+  }
+  const sources = localAgentSourceDefs(home);
+  const sessions: Array<Record<string, unknown>> = [];
+  const roots: string[] = [];
+  const entries: Array<{ file: string; mtimeMs: number; summarize: (file: string) => Record<string, unknown> | null }> = [];
+  for (const source of sources) {
+    roots.push(...source.roots);
+    for (const entry of source.roots.flatMap((root) => walkLocalJsonl(root))) {
+      entries.push({ ...entry, summarize: source.summarize });
+    }
+  }
+  entries.sort((a, b) => b.mtimeMs - a.mtimeMs);
+  for (const entry of entries) {
+    const session = entry.summarize(entry.file);
+    if (!session) continue;
+    if (cwdFilter && !String(session.cwd || "").startsWith(cwdFilter)) continue;
+    sessions.push(session);
+    if (sessions.length >= limit) break;
+  }
+  sessions.sort((a, b) => String(b.updatedAt || b.startedAt || "").localeCompare(String(a.updatedAt || a.startedAt || "")));
+  const data = { sessions: sessions.slice(0, limit), source: roots, cwdFilter, total: sessions.length };
+  localAgentSessionsCache = { key: cacheKey, expiresAt: now + 15_000, data };
+  return data;
+}
+
+function localCodexEventObservation(row: unknown, index: number, session: Record<string, unknown>): Record<string, unknown> | null {
+  const r = row as { type?: string; payload?: Record<string, unknown> };
+  const payload = r?.payload || {};
+  const timestamp = typeof payload.timestamp === "string" ? payload.timestamp : String(session.updatedAt || session.startedAt || "");
+  let title = "";
+  let body = "";
+  if (r?.type === "event_msg") {
+    const eventType = String(payload.type || "event");
+    title = eventType === "user_message" ? "用户消息" : eventType === "agent_message" ? "Agent 回复" : eventType.replace(/_/g, " ");
+    body = String(payload.message || payload.text || payload.content || payload.summary || "");
+  } else if (r?.type === "response_item") {
+    const itemType = String(payload.type || "response");
+    if (itemType === "message") {
+      const role = String(payload.role || "assistant");
+      title = role === "user" ? "用户消息" : "Agent 回复";
+      body = localCodexTextFromContent(payload.content);
+    } else if (itemType === "function_call") {
+      title = `调用工具：${String(payload.name || "未知工具")}`;
+      body = String(payload.arguments || payload.input || "");
+    } else if (itemType === "function_call_output") {
+      title = "工具结果";
+      body = String(payload.output || "");
+    } else {
+      title = itemType.replace(/_/g, " ");
+      body = String(payload.text || payload.content || payload.summary || "");
+    }
+  }
+  if (!title && !body) return null;
+  return {
+    id: `${String(session.id)}:local:${index}`,
+    sessionId: session.id,
+    timestamp,
+    type: title.indexOf("工具") >= 0 ? "tool" : "conversation",
+    title,
+    narrative: cleanLocalCodexText(body, 10_000),
+    agentId: session.agentId,
+    project: session.project,
+    cwd: session.cwd,
+  };
+}
+
+function readLocalAgentSessionEvents(qs: string): Record<string, unknown> {
+  const params = parseViewerQuery(qs);
+  const sessionId = params.sessionId || params.id || "";
+  if (!sessionId) return { observations: [], error: "sessionId is required" };
+  const sessionSuffix = localSessionSuffix(sessionId);
+  let session: Record<string, unknown> | null = null;
+  for (const source of localAgentSourceDefs(homedir())) {
+    const entries = source.roots.flatMap((root) => walkLocalJsonl(root)).sort((a, b) => b.mtimeMs - a.mtimeMs);
+    for (const entry of entries) {
+      const s = source.summarize(entry.file);
+      if (!s) continue;
+      if (s.id === sessionId || localSessionSuffix(s.id) === sessionSuffix) {
+        session = s;
+        break;
+      }
+    }
+    if (session) break;
+  }
+  if (!session || !session.file) return { observations: [], session: session || null };
+  const rows = readLocalCodexRows(String(session.file));
+  const observations = rows.map((row, index) => localCodexEventObservation(row, index, session)).filter(Boolean);
+  return { observations, session };
+}
+
+function expandHomePath(path: string): string {
+  if (path === "~") return homedir();
+  if (path.startsWith("~/")) return join(homedir(), path.slice(2));
+  return path;
+}
+
+function parseSkillFrontmatter(text: string): Record<string, string> {
+  const out: Record<string, string> = {};
+  const match = text.match(/^---\n([\s\S]*?)\n---\n?/);
+  if (!match) return out;
+  for (const line of match[1].split(/\n/)) {
+    const idx = line.indexOf(":");
+    if (idx <= 0) continue;
+    const key = line.slice(0, idx).trim();
+    let value = line.slice(idx + 1).trim();
+    value = value.replace(/^["']|["']$/g, "");
+    out[key] = value;
+  }
+  return out;
+}
+
+function readLocalSkillDetail(qs: string): Record<string, unknown> {
+  const params = parseViewerQuery(qs);
+  const rawPath = params.path || "";
+  const skillPath = resolve(expandHomePath(rawPath));
+  if (!rawPath || !skillPath.endsWith(".md") || basename(skillPath).toLowerCase() !== "skill.md") {
+    return { error: "invalid skill path" };
+  }
+  const home = homedir();
+  const allowedPrefixes = [
+    join(home, ".codex", "skills"),
+    join(home, ".agents", "skills"),
+    join(home, ".codex", "plugins", "cache"),
+  ].map((p) => resolve(p) + sep);
+  if (!allowedPrefixes.some((prefix) => skillPath.startsWith(prefix))) return { error: "skill path is outside local skill folders" };
+  let st;
+  let text;
+  try {
+    st = statSync(skillPath);
+    if (!st.isFile()) return { error: "skill file not found" };
+    text = readFileSync(skillPath, "utf8");
+  } catch {
+    return { error: "skill file not found" };
+  }
+  const frontmatter = parseSkillFrontmatter(text);
+  const body = text.replace(/^---\n[\s\S]*?\n---\n?/, "").trim();
+  const headings = Array.from(body.matchAll(/^#{1,3}\s+(.+)$/gm)).map((m) => m[1].trim()).slice(0, 8);
+  return {
+    path: rawPath,
+    absolutePath: skillPath,
+    name: frontmatter.name || basename(dirname(skillPath)),
+    description: frontmatter.description || "",
+    argumentHint: frontmatter["argument-hint"] || "",
+    updatedAt: new Date(st.mtimeMs).toISOString(),
+    size: st.size,
+    headings,
+    preview: body.slice(0, 4000),
+  };
 }
 
 const ALLOWED_ORIGINS = (
@@ -222,6 +561,48 @@ export function startViewerServer(
       }
       res.writeHead(404, { "Content-Type": "text/plain" });
       res.end("favicon not found");
+      return;
+    }
+
+    if (method === "GET" && pathname.startsWith("/agent-avatars/")) {
+      const assetName = basename(decodeURIComponent(pathname));
+      if (!/^[a-z0-9._-]+\.png$/i.test(assetName)) {
+        res.writeHead(400, { "Content-Type": "text/plain" });
+        res.end("invalid avatar asset");
+        return;
+      }
+      const avatar = readViewerAsset(join("agent-avatars", assetName));
+      if (avatar) {
+        res.writeHead(200, {
+          "Content-Type": "image/png",
+          "Cache-Control": "public, max-age=3600",
+        });
+        res.end(avatar);
+        return;
+      }
+      res.writeHead(404, { "Content-Type": "text/plain" });
+      res.end("avatar not found");
+      return;
+    }
+
+    if (method === "GET" && pathname === "/agentmemory/local-codex-sessions") {
+      json(res, 200, readLocalCodexSessions(qs), req);
+      return;
+    }
+
+    if (method === "GET" && pathname === "/agentmemory/local-agent-sessions") {
+      json(res, 200, readLocalAgentSessions(qs), req);
+      return;
+    }
+
+    if (method === "GET" && pathname === "/agentmemory/local-agent-session-events") {
+      json(res, 200, readLocalAgentSessionEvents(qs), req);
+      return;
+    }
+
+    if (method === "GET" && pathname === "/agentmemory/local-skill-detail") {
+      const data = readLocalSkillDetail(qs);
+      json(res, data.error ? 400 : 200, data, req);
       return;
     }
 

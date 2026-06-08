@@ -4,8 +4,8 @@ import { readFileSync } from "node:fs";
 // Viewer Memories tab used to render in KV-insertion order, hiding new
 // entries at the bottom of long lists (#674). loadMemories() now sorts
 // the response newest-first on `createdAt` (fallback `updatedAt`) before
-// renderMemories sees it. Matches the pattern already used by Sessions
-// and Metrics tabs which sort on `startedAt` desc via localeCompare.
+// renderMemories sees it. Matches the pattern used by Sessions, which
+// sorts by the canonical session record time desc via localeCompare.
 describe("viewer Memories tab sorts newest first (#674)", () => {
   const viewer = readFileSync("src/viewer/index.html", "utf-8");
 
@@ -24,9 +24,9 @@ describe("viewer Memories tab sorts newest first (#674)", () => {
     );
   });
 
-  it("Memories sort mirrors the Sessions/Metrics localeCompare descending pattern", () => {
+  it("Memories sort mirrors the Sessions localeCompare descending pattern", () => {
     expect(viewer).toMatch(
-      /sessions\.sort\(function\(a, b\) \{ return \(b\.startedAt \|\| ''\)\.localeCompare\(a\.startedAt \|\| ''\); \}\)/,
+      /items = state\.sessions\.items\.slice\(\)\.sort\(function\(a, b\) \{\s*return \(sessionRecordTime\(b\) \|\| ''\)\.localeCompare\(sessionRecordTime\(a\) \|\| ''\);\s*\}\)/,
     );
   });
 });

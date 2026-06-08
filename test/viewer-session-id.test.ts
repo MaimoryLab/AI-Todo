@@ -183,19 +183,21 @@ describe("viewer session rendering", () => {
     };
 
     expect(() => sandbox.renderDashboard()).not.toThrow();
-    expect(getElement("view-dashboard").innerHTML).toContain("Unknown session");
+    expect(getElement("view-dashboard").innerHTML).toContain("未命名会话");
   });
 
   it("does not throw when timeline and sessions tabs receive sessions missing ids", () => {
     const { sandbox, getElement } = loadViewerSandbox();
     const sessions = [{ status: "active", observationCount: 1, startedAt: "2026-05-13T12:00:00Z" }];
 
+    sandbox.state.timeline.sessions = sessions;
     expect(() => sandbox.renderTimelineToolbar(sessions)).not.toThrow();
-    expect(getElement("view-timeline").innerHTML).toContain("Unknown session");
+    expect(getElement("view-timeline").innerHTML).toContain("未归类");
+    expect(getElement("view-timeline").innerHTML).not.toContain("undefined");
 
     sandbox.state.sessions.items = sessions;
     expect(() => sandbox.renderSessions()).not.toThrow();
-    expect(getElement("view-sessions").innerHTML).toContain("Unknown session");
+    expect(getElement("view-sessions").innerHTML).toContain("未命名会话");
 
     const tabButtons = sandbox.document.querySelectorAll(".tab-bar button");
     expect(tabButtons.length).toBeGreaterThan(0);

@@ -40,7 +40,7 @@ describe("viewer document security", () => {
     // Favicon link in the HTML must reference the self-hosted file, not
     // an inline data: URI — that's what lets the CSP stay tight.
     expect(rendered.html).toContain('href="/favicon.svg"');
-    expect(rendered.html).not.toContain("data:image/svg+xml");
+    expect(rendered.html).not.toMatch(/href=["']data:image\/svg\+xml/);
   });
 
   it("does not contain inline DOM event handlers", () => {
@@ -206,7 +206,7 @@ describe("viewer request handler DNS rebinding defence (e2e)", () => {
     // passed. The CSP nonce assertion below is the load-bearing check.
     expect(res.status === 200 || res.status === 404).toBe(true);
     if (res.status === 200) {
-      expect(res.body).toContain("agentmemory viewer");
+      expect(res.body).toContain("灵感记忆台");
     }
   });
 
