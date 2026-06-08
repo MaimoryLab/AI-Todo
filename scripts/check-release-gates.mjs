@@ -48,11 +48,14 @@ function isPassed(row) {
 const requirePublic = process.argv.includes('--public');
 const manifestPath = 'artifacts/delivery-manifest.json';
 const validationPath = 'docs/browser-extension-ai-validation-cn.md';
+const evidenceSummaryPath = 'artifacts/ai-validation-evidence-summary.json';
 
 assert(existsSync(manifestPath), `Missing ${manifestPath}. Run npm run package:browser-extension first.`);
 assert(existsSync(validationPath), `Missing ${validationPath}.`);
+assert(existsSync(evidenceSummaryPath), `Missing ${evidenceSummaryPath}. Run npm run check:ai-validation-evidence first.`);
 
 const manifest = readJson(manifestPath);
+const evidenceSummary = readJson(evidenceSummaryPath);
 const validation = read(validationPath);
 const rows = parseValidationRows(validation);
 const requiredProducts = ['ChatGPT', 'Claude', 'Gemini', 'Perplexity'];
@@ -63,13 +66,15 @@ const notPassed = requiredRows.filter((row) => !isPassed(row)).map((row) => row.
 
 const localDemoReady = manifest.releaseState?.localDemo === 'ready';
 const externalTestingReady = manifest.releaseState?.externalTesting === 'mostly-ready' || manifest.releaseState?.externalTesting === 'ready';
-const publicReleaseReady = requiredRows.length === requiredProducts.length && passedRows.length === requiredProducts.length;
+const evidenceReady = evidenceSummary.passedCount === requiredProducts.length;
+const publicReleaseReady = requiredRows.length === requiredProducts.length && passedRows.length === requiredProducts.length && evidenceReady;
 
 console.log('Agent Memory Lab release gates');
 console.log(`localDemo: ${localDemoReady ? 'ready' : 'not-ready'}`);
 console.log(`externalTesting: ${externalTestingReady ? manifest.releaseState.externalTesting : 'not-ready'}`);
 console.log(`publicRelease: ${publicReleaseReady ? 'ready' : 'not-ready'}`);
 console.log(`realSiteValidation: ${passedRows.length}/${requiredProducts.length} required products passed`);
+console.log(`realSiteEvidence: ${evidenceSummary.passedCount || 0}/${requiredProducts.length} required products passed`);
 if (missingProducts.length) console.log(`missing rows: ${missingProducts.join(', ')}`);
 if (notPassed.length) console.log(`not passed: ${notPassed.join(', ')}`);
 
@@ -79,7 +84,7 @@ if (!localDemoReady || !externalTestingReady) {
 }
 
 if (requirePublic && !publicReleaseReady) {
-  console.log('Next: complete real AI site validation evidence in docs/browser-extension-ai-validation-cn.md before public release.');
+  console.log('Next: complete real AI site validation rows and evidence JSON before public release.');
   process.exit(1);
 }
 

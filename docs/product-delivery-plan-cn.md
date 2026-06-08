@@ -75,12 +75,14 @@
 - 外部试用指南：`docs/external-tester-guide-cn.md`
 - 发布门槛：`docs/release-gates-cn.md`
 - 真实站点验收记录：`docs/browser-extension-ai-validation-cn.md`
+- 真实站点证据目录：`docs/validation/browser-extension-ai-sites/`
 - 插件 PNG 图标资产：`browser-extension/icons/icon16.png`、`icon32.png`、`icon48.png`、`icon128.png`
 - 本地检查：`npm run check:browser-extension`
 - 试用入口检查：`check:browser-extension` 会确认弹窗显示扩展版本、本地试用状态和外部试用指南入口
 - 保存前审阅草稿检查：`check:browser-extension` 会确认弹窗和同步侧栏都能编辑标题、正文，并通过 `SAVE_CANDIDATE` 进入 Viewer 待审阅队列
 - 一键交付检查：`npm run check:delivery`
 - 发布门槛检查：`npm run check:release-gates`；公开发布前必须通过 `npm run check:release-public`
+- 真实站点证据汇总：`npm run check:ai-validation-evidence`，输出 `artifacts/ai-validation-evidence-summary.json`
 - 免登录插件预览：`npm run preview:browser-extension`
 - 本地预览包：`npm run package:browser-extension`，输出 `artifacts/agent-memory-lab-extension.zip`
 - 交付摘要：`artifacts/delivery-summary.md`，记录版本、提交、产物、发布门槛和检查命令

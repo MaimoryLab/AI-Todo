@@ -32,6 +32,7 @@
 - 外部试用指南说明了启动、加载、预览、反馈诊断 JSON 的流程。
 - 诊断 JSON 包含扩展版本、输入框命中规则、入口锚点、入口位置策略和记忆建议可见状态。
 - AI 站点验收记录区分“本地可验证”和“真实站点待验收”。
+- 真实 AI 站点诊断 JSON 有固定证据目录，并可用 `npm run check:ai-validation-evidence` 汇总。
 
 ## 公开可发布门槛
 
@@ -42,6 +43,7 @@
 - Gemini 真实页面验收。
 - Perplexity 真实页面验收。
 - 真实站点验收记录中要保留诊断 JSON 或截图证据。
+- `artifacts/ai-validation-evidence-summary.json` 中必需产品通过数为 4/4。
 - 至少一组不含私人信息的插件截图或短录屏。
 - 稳定公开隐私政策 URL。
 - Chrome Web Store 权限说明与 `browser-extension/manifest.json` 一致。

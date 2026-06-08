@@ -127,6 +127,20 @@ npm run check:release-public
 docs/browser-extension-ai-validation-cn.md
 ```
 
+诊断 JSON 可以保存到：
+
+```text
+docs/validation/browser-extension-ai-sites/
+```
+
+保存后运行：
+
+```bash
+npm run check:ai-validation-evidence
+```
+
+它会生成 `artifacts/ai-validation-evidence-summary.json`，用于汇总 ChatGPT、Claude、Gemini、Perplexity 是否已经具备公开发布所需的真实页面证据。
+
 ## 反馈时请提供
 
 - 试用日期。
@@ -135,6 +149,7 @@ docs/browser-extension-ai-validation-cn.md
 - 目标站点。
 - 截图或录屏。
 - 同步侧栏复制出来的诊断 JSON。
+- 如果可以，直接提供 `docs/validation/browser-extension-ai-sites/` 下的证据 JSON 文件。
 - 诊断 JSON 里 `editorFound`、`anchorFound`、`placement`、`memoryWidgetVisible` 的状态。
 - 哪一步不符合预期。
 

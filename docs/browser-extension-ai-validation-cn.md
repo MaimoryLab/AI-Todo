@@ -12,8 +12,9 @@
 6. 打开插件同步侧栏，检查“AI 页面状态”。
 7. 检查输入框附近是否出现“记忆建议”提示。
 8. 尝试插入一条记忆到输入框。
-9. 点击“复制诊断”，把 JSON 保存到本表对应记录或 issue。
+9. 点击“复制诊断”，把 JSON 保存到 `docs/validation/browser-extension-ai-sites/`，文件名建议 `YYYY-MM-DD-provider.json`。
 10. 记录截图、日期、浏览器版本和结果。
+11. 运行 `npm run check:ai-validation-evidence` 生成证据汇总。
 
 ## 通过标准
 
@@ -25,6 +26,32 @@
 - 同步侧栏可复制诊断 JSON。
 - 插件没有导致原站点输入框、发送按钮、页面滚动异常。
 
+## 证据目录和汇总命令
+
+真实站点证据目录：`docs/validation/browser-extension-ai-sites/`。
+
+每份诊断 JSON 应保留“复制诊断”的原始结构，并手动补充：
+
+```json
+{
+  "manualValidation": {
+    "memoryInsertPassed": true,
+    "diagnosticsCopied": true,
+    "siteInputStillWorks": true,
+    "browser": "Chrome 版本号",
+    "notes": "无隐私信息的备注"
+  }
+}
+```
+
+汇总命令：
+
+```bash
+npm run check:ai-validation-evidence
+```
+
+该命令会生成 `artifacts/ai-validation-evidence-summary.json`。它不会把待验收状态误判为通过；公开发布仍需 ChatGPT、Claude、Gemini、Perplexity 都有通过证据。
+
 ## 本地可验证项
 
 | 项目 | 命令 / 页面 | 通过标准 | 当前状态 | 证据 |
@@ -34,6 +61,7 @@
 | 插件包检查 | `npm run package:browser-extension` | 生成 `artifacts/agent-memory-lab-extension.zip`，且包含 manifest、content script、service worker、side panel、popup/options、shared files、PNG 图标 | 已通过 | package check: 25 entries |
 | 交付检查 | `npm run check:delivery` | 构建、README 图片引用、插件预览页、插件包检查均通过 | 已通过 | delivery checks ok |
 | 免登录预览页 | `http://localhost:3113/demo/browser-extension.html` | 页面可访问，并含 `Agent Memory Demo`、演示输入框和演示记忆 | 已通过 | `check:delivery` 会启动预览服务并抓取页面 |
+| 真实证据汇总 | `npm run check:ai-validation-evidence` | 读取真实 AI 页面诊断 JSON，输出必需产品通过计数 | 已接入 | `artifacts/ai-validation-evidence-summary.json` |
 
 ## 真实站点验收表
 

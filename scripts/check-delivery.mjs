@@ -61,6 +61,7 @@ const requiredFiles = [
   'scripts/check-browser-extension-demo-interaction.mjs',
   'scripts/check-browser-extension-package.mjs',
   'scripts/check-release-gates.mjs',
+  'scripts/check-ai-validation-evidence.mjs',
   'scripts/check-workbench-status.mjs',
   'scripts/package-browser-extension.mjs',
   'scripts/write-delivery-summary.mjs'
@@ -168,11 +169,13 @@ run(process.execPath, ['scripts/check-browser-extension-fixtures.mjs']);
 run(process.execPath, ['scripts/check-browser-extension-demo-interaction.mjs']);
 run(process.execPath, ['scripts/package-browser-extension.mjs']);
 run(process.execPath, ['scripts/check-browser-extension-package.mjs']);
+run(process.execPath, ['scripts/check-ai-validation-evidence.mjs']);
 run(process.execPath, ['scripts/write-delivery-summary.mjs']);
 run(process.execPath, ['scripts/check-release-gates.mjs']);
 assert(existsSync('artifacts/agent-memory-lab-extension.zip'), 'Browser extension package was not created.');
 assert(existsSync('artifacts/delivery-summary.md'), 'Delivery summary was not created.');
 assert(existsSync('artifacts/delivery-manifest.json'), 'Delivery manifest was not created.');
+assert(existsSync('artifacts/ai-validation-evidence-summary.json'), 'AI validation evidence summary was not created.');
 const deliverySummary = read('artifacts/delivery-summary.md');
 for (const marker of ['Agent Memory Lab Delivery Summary', 'Extension zip', 'Extension zip sha256', 'Delivery manifest', 'Release Gates', 'Real AI Site Validation', 'External tester guide', 'AI validation log']) {
   assert(deliverySummary.includes(marker), `Delivery summary missing marker: ${marker}`);
@@ -192,5 +195,6 @@ assert(deliveryManifest.releaseState?.publicRelease === 'not-ready', 'Delivery m
 assert(deliveryManifest.releaseState.realSiteValidation?.requiredCount === 4, 'Delivery manifest must track four required AI products.');
 assert(Array.isArray(deliveryManifest.releaseState.realSiteValidation.notPassed), 'Delivery manifest must list AI products not yet passed.');
 assert(deliveryManifest.releaseState.realSiteValidation.source === 'docs/browser-extension-ai-validation-cn.md', 'Delivery manifest must cite the AI validation source.');
+assert(deliveryManifest.releaseState.realSiteValidation.evidenceSummary === 'artifacts/ai-validation-evidence-summary.json', 'Delivery manifest must cite AI evidence summary artifact.');
 
 console.log('delivery checks ok');
