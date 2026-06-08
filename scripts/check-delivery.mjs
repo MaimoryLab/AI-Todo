@@ -149,7 +149,7 @@ for (const marker of ['本地预览包', '权限与隐私说明', '插件对标�
 }
 
 const mem0Reference = read('docs/browser-extension-mem0-reference-cn.md');
-for (const marker of ['mem0ai/mem0-chrome-extension', 'supported sites', '输入框附近', '待审阅队列', '真实 AI 站点验收', '插件迭代工作流']) {
+for (const marker of ['mem0ai/mem0-chrome-extension', 'supported sites', '输入框附近', '待审阅队列', '真实 AI 站点验收', '插件迭代工作流', '站点适配层', '输入框入口', '后台协调', '管理界面', '何时拆 adapter', '/agentmemory/review']) {
   assert(mem0Reference.includes(marker), `Mem0 reference doc missing marker: ${marker}`);
 }
 
@@ -222,6 +222,7 @@ run(process.execPath, ['scripts/check-release-gates.mjs']);
 assert(existsSync('artifacts/agent-memory-lab-extension.zip'), 'Browser extension package was not created.');
 assert(existsSync('artifacts/delivery-summary.md'), 'Delivery summary was not created.');
 assert(existsSync('artifacts/delivery-manifest.json'), 'Delivery manifest was not created.');
+assert(existsSync('artifacts/external-tester-handout.md'), 'External tester handout was not created.');
 assert(existsSync('artifacts/ai-validation-evidence-summary.json'), 'AI validation evidence summary was not created.');
 const deliverySummary = read('artifacts/delivery-summary.md');
 for (const marker of ['Agent Memory Lab Delivery Summary', 'Extension zip', 'Extension zip sha256', 'Delivery manifest', 'External Testing Loop', 'Release Gates', 'Real AI Site Validation', 'External tester guide', 'External tester issue template', 'AI validation log']) {
@@ -245,6 +246,7 @@ assert(deliveryManifest.externalTesting?.feedbackTriage?.exists === true, 'Deliv
 assert(deliveryManifest.externalTesting?.evidenceRecorder?.exists === true, 'Delivery manifest must record AI evidence recorder support.');
 assert(deliveryManifest.artifacts?.extensionZip?.exists, 'Delivery manifest must mark extension zip as existing.');
 assert(deliveryManifest.artifacts?.loadInstructions?.exists, 'Delivery manifest must mark zip load instructions as existing.');
+assert(deliveryManifest.artifacts?.externalTesterHandout?.exists === true, 'Delivery manifest must mark external tester handout as existing.');
 assert(deliveryManifest.artifacts.extensionZip.bytes > 0, 'Delivery manifest extension zip size must be positive.');
 assert(/^[a-f0-9]{64}$/.test(deliveryManifest.artifacts.extensionZip.sha256 || ''), 'Delivery manifest extension zip sha256 is invalid.');
 assert(deliveryManifest.releaseState?.publicRelease === 'not-ready', 'Delivery manifest must mark public release as not-ready until real site evidence exists.');
@@ -252,5 +254,10 @@ assert(deliveryManifest.releaseState.realSiteValidation?.requiredCount === 4, 'D
 assert(Array.isArray(deliveryManifest.releaseState.realSiteValidation.notPassed), 'Delivery manifest must list AI products not yet passed.');
 assert(deliveryManifest.releaseState.realSiteValidation.source === 'docs/browser-extension-ai-validation-cn.md', 'Delivery manifest must cite the AI validation source.');
 assert(deliveryManifest.releaseState.realSiteValidation.evidenceSummary === 'artifacts/ai-validation-evidence-summary.json', 'Delivery manifest must cite AI evidence summary artifact.');
+
+const handout = read('artifacts/external-tester-handout.md');
+for (const marker of ['Agent Memory Lab 外部试用说明', 'agent-memory-lab-extension.zip', '先做这 5 步', '真实 AI 页面验收', 'GitHub Issue 模板', '公开发布：not-ready']) {
+  assert(handout.includes(marker), `External tester handout missing marker: ${marker}`);
+}
 
 console.log('delivery checks ok');

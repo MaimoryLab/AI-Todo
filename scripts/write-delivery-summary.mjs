@@ -121,6 +121,10 @@ const deliveryManifest = {
       path: 'dist/viewer/demo/browser-extension.html',
       exists: existsSync('dist/viewer/demo/browser-extension.html')
     },
+    externalTesterHandout: {
+      path: 'artifacts/external-tester-handout.md',
+      exists: true
+    },
     screenshots: {
       dashboard: existsSync('docs/readme-assets/screenshots/dashboard.jpg'),
       skills: existsSync('docs/readme-assets/screenshots/skills.jpg')
@@ -298,7 +302,66 @@ ${extractGateTable(releaseGates)}
 - Feishu source: \`docs/feishu/agentmemory-project-intro-cn.md\`
 `;
 
+const externalHandout = `# Agent Memory Lab 外部试用说明
+
+生成时间：${generatedAt}
+
+这是一份给外部试用者的快速说明。当前版本适合本地试用和反馈，不是 Chrome Web Store 公开发布版。
+
+## 你会拿到什么
+
+- 插件压缩包：\`artifacts/agent-memory-lab-extension.zip\`
+- 插件版本：${manifest.name} ${manifest.version}
+- 当前提交：${commit}${dirty ? '（本地还有未提交改动）' : ''}
+- zip sha256：\`${zipSha256 || 'missing'}\`
+
+## 先做这 5 步
+
+1. 解压 \`artifacts/agent-memory-lab-extension.zip\`。
+2. 打开解压后的 \`browser-extension/LOAD-THIS-FIRST.md\`。
+3. 在 Chrome / Edge 开发者模式加载解压后的 \`browser-extension/\` 文件夹。
+4. 打开 \`http://localhost:3113/demo/browser-extension.html\`，确认输入框旁出现“记忆建议”。
+5. 在弹窗或同步侧栏里编辑草稿的标题、正文、项目、标签和经验候选状态，再加入 Viewer 待审阅。
+
+## 通过时应该看到
+
+- 插件弹窗能显示版本和本地连接状态。
+- 同步侧栏能显示当前页面、候选记忆、候选经验和隐私提示。
+- 记忆建议能出现在 demo 输入框旁，并能插入或复制。
+- 保存内容不会直接写入长期记忆，而是先进入 Viewer 待审阅队列。
+- Viewer 待审阅卡片能看到项目、标签、来源和经验候选状态。
+
+## 真实 AI 页面验收
+
+当前真实站点证据：${aiEvidenceSummary ? `${aiEvidenceSummary.passedCount}/${aiEvidenceSummary.requiredCount}` : '0/4'}。
+
+公开发布前仍需 ChatGPT、Claude、Gemini、Perplexity 都通过真实页面验收。试用这些站点时，请打开同步侧栏，点击“复制诊断”，然后用下面命令记录证据：
+
+\`\`\`bash
+npm run record:ai-validation-evidence -- --clipboard --browser "Chrome 版本号" --notes "无隐私信息的备注"
+\`\`\`
+
+只有你真实确认“插入成功、诊断已复制、原站输入仍正常”以后，才加 \`--pass\`。
+
+## 反馈问题
+
+推荐使用 GitHub Issue 模板：\`.github/ISSUE_TEMPLATE/external-tester-feedback-cn.yml\`。
+
+也可以复制：\`docs/external-feedback-template-cn.md\`。
+
+反馈时请尽量提供：浏览器版本、试用页面、问题步骤、同步侧栏诊断 JSON、截图或录屏。请不要提交私人聊天全文、Cookie、访问令牌、API Key、学校申请材料或任何敏感信息。
+
+## 当前边界
+
+- 本地 demo：ready
+- 外部试用闭环：ready
+- 公开发布：not-ready
+- 未通过的真实 AI 站点：${(aiEvidenceSummary ? aiEvidenceSummary.notPassedRequired : requiredAiProducts).join(', ')}
+`;
+
 writeFileSync('artifacts/delivery-summary.md', summary);
+writeFileSync('artifacts/external-tester-handout.md', externalHandout);
 writeFileSync('artifacts/delivery-manifest.json', `${JSON.stringify(deliveryManifest, null, 2)}\n`);
 console.log('delivery summary: artifacts/delivery-summary.md');
+console.log('external tester handout: artifacts/external-tester-handout.md');
 console.log('delivery manifest: artifacts/delivery-manifest.json');

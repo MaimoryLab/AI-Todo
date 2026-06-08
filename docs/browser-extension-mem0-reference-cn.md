@@ -32,6 +32,55 @@ Agent Memory Lab 要继承这个位置，但不要继承它的全部数据策略
 | 页面诊断 | `diagnostics` + “复制诊断” | AI 网页 DOM 经常变，逐站适配必须可反馈、可复现 |
 | 统一数据类型 | `PageCapture` | 避免 popup、sidepanel、content script 各自拼数据 |
 
+## Mem0 到我们的实现映射
+
+Mem0 的实现方式可以拆成四层：站点适配、输入框入口、后台协调、管理界面。Agent Memory Lab 也按这四层推进，只是数据流改成本地优先和待审阅。
+
+| 层级 | Mem0 做法 | 我们当前做法 | 下一步标准 |
+| --- | --- | --- | --- |
+| 站点适配层 | 每个 AI 产品有独立 content 文件，并由 `src/utils/site_config.ts` 记录 selector | 先用 `browser-extension/shared/site-config.js` 统一维护 provider、editor、anchor、turn、send | 每个 provider 必须写清 host、输入框、锚点、发送按钮和对话轮次；复杂到难维护时拆成 `adapters/<provider>.js` |
+| 输入框入口 | 记忆按钮贴近 ChatGPT/Claude 等输入区 | `content-script.js` 在输入框附近显示“记忆建议” | 入口必须靠近 prompt 编辑区域，不能只藏在弹窗；不能遮挡发送、附件、模型选择按钮 |
+| 后台协调 | background 负责 API、搜索、上下文菜单、消息 | `service-worker.js` 负责页面采集、候选保存、最近记录和本地 API | 所有保存都走 `/agentmemory/review`，不得绕过 Viewer 待审阅队列 |
+| 管理界面 | popup/sidebar 管理记忆和设置 | popup 做快速保存，sidepanel 做上下文、候选草稿、诊断复制 | 保存前必须能改标题、正文、项目、标签、是否经验候选 |
+| 验收证据 | 靠真实站点行为验证 | `manualValidation` + 诊断 JSON + `docs/browser-extension-ai-validation-cn.md` | 每个公开声明支持的 AI 站点都必须有可追踪的真实页面证据 |
+
+## 站点适配准则
+
+以后加一个 AI 网页，不只是把域名加进 manifest。最少要补齐这一组信息：
+
+- `provider`：给用户看的产品名，例如 ChatGPT、Claude、Gemini。
+- `host`：精确域名和常见子域名，避免误插到无关页面。
+- `editor`：用户真正输入 prompt 的 textarea、contenteditable 或富文本容器。
+- `anchor`：插件入口挂载的位置，优先靠近输入框工具栏。
+- `placement`：入口摆放策略，例如 toolbar-end、input-corner 或 floating fallback。
+- `turn`：用户和 AI 回复所在的对话节点，用于后续上下文提取。
+- `send`：发送按钮，用于判断入口是否挡住原站核心操作。
+- `diagnostics`：侧栏必须能暴露 editor、anchor、placement、widget visible 和页面类型。
+
+这就是我们参考 Mem0 的核心：不是复制它的 UI，而是把“每个 AI 产品都要被认真适配”变成插件结构。
+
+## 数据流原则
+
+插件里的每条记忆都按这条线走：
+
+1. 当前页面识别 provider、host、页面类型和输入框位置。
+2. 根据页面和输入内容生成候选记忆或候选经验。
+3. 用户在弹窗或同步侧栏里编辑标题、正文、项目、标签和经验候选状态。
+4. 插件把草稿送到本地 `/agentmemory/review`。
+5. Viewer 展示待审阅卡片，用户确认后才进入长期记忆。
+
+这和 Mem0 的直接云端记忆不同。我们的核心价值是“跨 AI 页面可用”，但长期记忆的写入仍然要可见、可改、可撤回。
+
+## 不做的事情
+
+为了保持本地优先和低理解成本，插件当前不做这些事：
+
+- 不把完整聊天记录自动上传到第三方云端。
+- 不在没有用户动作的情况下直接写入长期记忆。
+- 不用一个万能 selector 假装支持所有 AI 页面。
+- 不把真实站点支持写进公开说明，除非验收表和证据文件都通过。
+- 不在用户输入区放复杂管理面板，只放轻入口和可解释的建议。
+
 ## 我们不能照搬的地方
 
 Agent Memory Lab 的定位和 Mem0 不一样，所以有几件事要反着做。
@@ -49,6 +98,18 @@ Agent Memory Lab 的定位和 Mem0 不一样，所以有几件事要反着做。
 2. 每个 AI 产品都必须有 provider、host、editor、anchor、turn、send 的配置。
 3. 所有保存动作先进入 Viewer 待审阅队列，不直接写长期记忆。
 4. 每次真实网页失配时，用侧栏“复制诊断”补证据，再更新 selector 和验收记录。
+
+## 何时拆 adapter
+
+当前阶段用单一 `content-script.js` 加共享配置，速度快，也方便外部试用。但如果出现下面任一情况，就把对应 provider 拆成独立 adapter：
+
+- 某个站点需要特殊输入事件，普通 `insertText` 或 value 设置不稳定。
+- 某个站点有多种输入区，例如普通聊天、项目、搜索、Canvas 或 Artifact。
+- selector 需要多段 fallback 和 DOM 观察逻辑，已经影响其他站点可读性。
+- 入口位置需要根据模型选择、附件按钮、语音按钮动态调整。
+- 真实站点验收连续两次因为同一 provider 失效。
+
+拆分后仍然要保留共享 schema：provider、editor、anchor、placement、turn、send、diagnostics，避免每个 adapter 自己发明数据格式。
 
 ## 插件迭代工作流
 
