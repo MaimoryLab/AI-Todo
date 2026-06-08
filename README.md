@@ -101,7 +101,7 @@ npm run preview:browser-extension
 http://localhost:3113/demo/browser-extension.html
 ```
 
-插件权限与隐私说明见 [docs/browser-extension-privacy-cn.md](docs/browser-extension-privacy-cn.md)。外部试用指南见 [docs/external-tester-guide-cn.md](docs/external-tester-guide-cn.md)，发布门槛见 [docs/release-gates-cn.md](docs/release-gates-cn.md)。英文隐私政策草稿和商店发布文案见 [docs/browser-extension-privacy-en.md](docs/browser-extension-privacy-en.md) 与 [docs/browser-extension-store-listing-en.md](docs/browser-extension-store-listing-en.md)。如果需要打包给别人本地预览，可以运行 `npm run package:browser-extension`，产物包括 `artifacts/agent-memory-lab-extension.zip` 和 `artifacts/delivery-summary.md`。
+插件权限与隐私说明见 [docs/browser-extension-privacy-cn.md](docs/browser-extension-privacy-cn.md)。外部试用指南见 [docs/external-tester-guide-cn.md](docs/external-tester-guide-cn.md)，发布门槛见 [docs/release-gates-cn.md](docs/release-gates-cn.md)。英文隐私政策草稿和商店发布文案见 [docs/browser-extension-privacy-en.md](docs/browser-extension-privacy-en.md) 与 [docs/browser-extension-store-listing-en.md](docs/browser-extension-store-listing-en.md)。如果需要打包给别人本地预览，可以运行 `npm run package:browser-extension`，产物包括 `artifacts/agent-memory-lab-extension.zip`、`artifacts/delivery-summary.md` 和 `artifacts/delivery-manifest.json`。
 
 然后点击工具栏里的 Agent Memory Lab 图标，打开“同步侧栏”。
 

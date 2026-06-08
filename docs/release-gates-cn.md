@@ -23,7 +23,7 @@
 ## 外部可试用门槛
 
 - 可以生成 `artifacts/agent-memory-lab-extension.zip`。
-- 可以生成 `artifacts/delivery-summary.md`，用于快速查看当前版本、提交、产物和发布状态。
+- 可以生成 `artifacts/delivery-summary.md` 和 `artifacts/delivery-manifest.json`，用于快速查看当前版本、提交、产物、sha256 和发布状态。
 - zip 内容检查通过，不包含 macOS 元数据。
 - 试用者知道两种加载方式：从仓库加载 `browser-extension/`，或从 zip 解压后加载 `browser-extension/`。
 - 插件权限与隐私说明齐全。

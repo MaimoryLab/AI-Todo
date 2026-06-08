@@ -80,6 +80,7 @@
 - 免登录插件预览：`npm run preview:browser-extension`
 - 本地预览包：`npm run package:browser-extension`，输出 `artifacts/agent-memory-lab-extension.zip`
 - 交付摘要：`artifacts/delivery-summary.md`，记录版本、提交、产物、发布门槛和检查命令
+- 交付清单：`artifacts/delivery-manifest.json`，记录版本、提交、zip 大小、sha256 和发布状态
 - 预览包内容检查：`check:browser-extension-package` 会确认 zip 内含 manifest、content script、侧栏、弹窗、设置页、shared 文件和 PNG 图标
 - AI fixture 验收：`check:browser-extension` 会用本地最小页面模型检查 ChatGPT、Claude、Gemini、Perplexity、Grok、DeepSeek 的输入框和对话 selector
 - 本地免登录预览：`http://localhost:3113/demo/browser-extension.html`，用于快速展示输入框旁“记忆建议”、演示记忆、插入/复制

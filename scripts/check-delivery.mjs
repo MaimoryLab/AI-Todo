@@ -157,9 +157,16 @@ run(process.execPath, ['scripts/check-browser-extension-package.mjs']);
 run(process.execPath, ['scripts/write-delivery-summary.mjs']);
 assert(existsSync('artifacts/agent-memory-lab-extension.zip'), 'Browser extension package was not created.');
 assert(existsSync('artifacts/delivery-summary.md'), 'Delivery summary was not created.');
+assert(existsSync('artifacts/delivery-manifest.json'), 'Delivery manifest was not created.');
 const deliverySummary = read('artifacts/delivery-summary.md');
-for (const marker of ['Agent Memory Lab Delivery Summary', 'Extension zip', 'Release Gates', 'External tester guide', 'AI validation log']) {
+for (const marker of ['Agent Memory Lab Delivery Summary', 'Extension zip', 'Extension zip sha256', 'Delivery manifest', 'Release Gates', 'External tester guide', 'AI validation log']) {
   assert(deliverySummary.includes(marker), `Delivery summary missing marker: ${marker}`);
 }
+const deliveryManifest = JSON.parse(read('artifacts/delivery-manifest.json'));
+assert(deliveryManifest.product === 'Agent Memory Lab', 'Delivery manifest product mismatch.');
+assert(deliveryManifest.artifacts?.extensionZip?.exists, 'Delivery manifest must mark extension zip as existing.');
+assert(deliveryManifest.artifacts.extensionZip.bytes > 0, 'Delivery manifest extension zip size must be positive.');
+assert(/^[a-f0-9]{64}$/.test(deliveryManifest.artifacts.extensionZip.sha256 || ''), 'Delivery manifest extension zip sha256 is invalid.');
+assert(deliveryManifest.releaseState?.publicRelease === 'not-ready', 'Delivery manifest must mark public release as not-ready until real site evidence exists.');
 
 console.log('delivery checks ok');
