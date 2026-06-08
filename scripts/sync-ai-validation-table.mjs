@@ -29,13 +29,18 @@ function providerName(value) {
 function evidencePassed(item) {
   const ai = item.data.ai || {};
   const manual = item.data.manualValidation || {};
+  const matched = ai.matchedSelectors || {};
   return !!(
     ai.supportedAiPage &&
     ai.provider &&
     ai.editorFound &&
+    matched.editor &&
     ai.anchorFound &&
+    matched.anchor &&
     ai.memoryWidgetVisible &&
     ai.placement &&
+    matched.send &&
+    matched.turn &&
     ai.checkedAt &&
     pass(manual.memoryInsertPassed) &&
     pass(manual.diagnosticsCopied) &&
@@ -54,19 +59,20 @@ function evidenceRow(product, domain, item) {
   }
   const ai = item.data.ai || {};
   const manual = item.data.manualValidation || {};
+  const matched = ai.matchedSelectors || {};
   const ok = evidencePassed(item);
   const status = ok ? '已通过' : '待修复';
   return [
     `| ${product}`,
     ` \`${domain}\``,
     ` ${providerName(ai.provider) === product ? '已通过' : '待修复'}`,
-    ` ${ai.editorFound ? '已通过' : '待修复'}`,
+    ` ${ai.editorFound && matched.editor ? '已通过' : '待修复'}`,
     ` ${ai.memoryWidgetVisible ? '已通过' : '待修复'}`,
     ` ${pass(manual.memoryInsertPassed) ? '已通过' : '待修复'}`,
     ` ${pass(manual.diagnosticsCopied) ? '已通过' : '待修复'}`,
     ` ${status}`,
     ` ${dateOf(item)}`,
-    ` ${item.file} |`
+    ` ${item.file}${matched.editor || matched.anchor || matched.send || matched.turn ? `；selector: ${[matched.editor, matched.anchor, matched.send, matched.turn].filter(Boolean).join(' / ')}` : ''} |`
   ].join(' |').replace(/\| \|/g, '|');
 }
 

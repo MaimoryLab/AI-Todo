@@ -25,13 +25,18 @@ function normalizeProvider(value) {
 function evidencePassed(item) {
   const ai = item.ai || {};
   const manual = item.manualValidation || {};
+  const matched = ai.matchedSelectors || {};
   return !!(
     ai.supportedAiPage &&
     ai.provider &&
     ai.editorFound &&
+    matched.editor &&
     ai.anchorFound &&
+    matched.anchor &&
     ai.memoryWidgetVisible &&
     ai.placement &&
+    matched.send &&
+    matched.turn &&
     ai.checkedAt &&
     hasPass(manual.memoryInsertPassed) &&
     hasPass(manual.diagnosticsCopied) &&
@@ -57,7 +62,11 @@ const evidence = files.map((file) => {
     checkedAt: data.ai && data.ai.checkedAt ? data.ai.checkedAt : data.generatedAt || '',
     extensionVersion: data.extension && data.extension.version ? data.extension.version : '',
     editorFound: !!(data.ai && data.ai.editorFound),
+    editorSelector: data.ai?.matchedSelectors?.editor || data.ai?.editorSelector || '',
     anchorFound: !!(data.ai && data.ai.anchorFound),
+    anchorSelector: data.ai?.matchedSelectors?.anchor || data.ai?.anchorSelector || '',
+    sendSelector: data.ai?.matchedSelectors?.send || data.ai?.sendSelector || '',
+    turnSelector: data.ai?.matchedSelectors?.turn || data.ai?.turnSelector || '',
     memoryWidgetVisible: !!(data.ai && data.ai.memoryWidgetVisible),
     memoryInsertPassed: hasPass(data.manualValidation && data.manualValidation.memoryInsertPassed),
     diagnosticsCopied: hasPass(data.manualValidation && data.manualValidation.diagnosticsCopied),

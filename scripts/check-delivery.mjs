@@ -173,12 +173,12 @@ for (const marker of ['本地可演示', '外部可试用', '公开可发布', '
 }
 
 const aiValidation = read('docs/browser-extension-ai-validation-cn.md');
-for (const marker of ['ChatGPT', 'Claude', 'Gemini', 'Perplexity', '复制诊断', '通过标准', 'npm run record:ai-validation-evidence', 'anchorFound', 'placement', 'memoryWidgetVisible', 'browser-extension-ai-site-test-cards-cn.md']) {
+for (const marker of ['ChatGPT', 'Claude', 'Gemini', 'Perplexity', '复制诊断', '通过标准', 'npm run record:ai-validation-evidence', 'anchorFound', 'placement', 'memoryWidgetVisible', 'matchedSelectors', 'browser-extension-ai-site-test-cards-cn.md']) {
   assert(aiValidation.includes(marker), `AI validation doc missing marker: ${marker}`);
 }
 
 const evidenceReadme = read('docs/validation/browser-extension-ai-sites/README.md');
-for (const marker of ['npm run record:ai-validation-evidence', '--clipboard', '--file diagnostics.json', '--pass']) {
+for (const marker of ['npm run record:ai-validation-evidence', '--clipboard', '--file diagnostics.json', '--pass', '证据质量门槛', 'matchedSelectors.editor', 'matchedSelectors.anchor', 'matchedSelectors.send', 'matchedSelectors.turn', '可以删掉 prompt 草稿']) {
   assert(evidenceReadme.includes(marker), `AI validation evidence README missing marker: ${marker}`);
 }
 
@@ -201,8 +201,13 @@ for (const marker of ['deliveryArtifactRoot', 'process.cwd()', 'readProjectDoc',
 }
 
 const privacyEn = read('docs/browser-extension-privacy-en.md');
-for (const marker of ['Privacy Policy', 'local-first', 'Data We Process', 'Where Data Goes', 'AI Diagnostics']) {
+for (const marker of ['Privacy Policy', 'local-first', 'Data We Process', 'Where Data Goes', 'AI Diagnostics', 'External testers may redact', 'matchedSelectors.editor/anchor/send/turn']) {
   assert(privacyEn.includes(marker), `English privacy policy missing marker: ${marker}`);
+}
+
+const privacyCn = read('docs/browser-extension-privacy-cn.md');
+for (const marker of ['外部测试诊断脱敏', 'ai.matchedSelectors.editor', 'ai.matchedSelectors.anchor', 'ai.matchedSelectors.send', 'ai.matchedSelectors.turn', '不需要包含 Cookie']) {
+  assert(privacyCn.includes(marker), `Chinese privacy policy missing marker: ${marker}`);
 }
 
 const storeListing = read('docs/browser-extension-store-listing-en.md');

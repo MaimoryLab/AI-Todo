@@ -67,6 +67,8 @@ The side panel can copy diagnostic JSON for supported AI pages. Diagnostics are 
 
 Diagnostic JSON may include page title, URL, host, detected provider, editor-found state, matched selector, prompt length, and recent turn count. It does not intentionally include cookies, passwords, access tokens, or full hidden page source.
 
+External testers may redact private prompt text, conversation snippets, sensitive page titles, and account-related details before submitting diagnostics. For site-adapter validation, keep the non-sensitive structural fields under `ai`, especially `provider`, `editorFound`, `anchorFound`, `memoryWidgetVisible`, `placement`, and `matchedSelectors.editor/anchor/send/turn`, plus the `manualValidation` result. These fields help reproduce selector issues without sharing cookies, tokens, passwords, or full chat content.
+
 ## User Control
 
 Users control what becomes durable memory:

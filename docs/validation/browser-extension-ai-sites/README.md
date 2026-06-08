@@ -52,6 +52,10 @@ YYYY-MM-DD-provider.json
 - `ai.anchorFound`
 - `ai.placement`
 - `ai.memoryWidgetVisible`
+- `ai.matchedSelectors.editor`
+- `ai.matchedSelectors.anchor`
+- `ai.matchedSelectors.send`
+- `ai.matchedSelectors.turn`
 - `ai.checkedAt`
 
 复制诊断会自带 `manualValidation` 模板。请按真实验收结果把它改好：
@@ -69,6 +73,17 @@ YYYY-MM-DD-provider.json
 ```
 
 不要把模板里的 `false` 留着就当通过。`npm run check:ai-validation-evidence` 只有在这三项都为通过时，才会把对应产品计入通过数。
+
+## 证据质量门槛
+
+公开发布需要的是“可复现证据”，不是一句“我这边能用”。因此 ChatGPT、Claude、Gemini、Perplexity 的通过证据必须同时满足：
+
+- `provider`、`editorFound`、`anchorFound`、`memoryWidgetVisible` 都是真实页面结果。
+- `matchedSelectors` 里保留输入框、锚点、发送按钮、会话区域四类命中规则。
+- `manualValidation.memoryInsertPassed`、`manualValidation.diagnosticsCopied`、`manualValidation.siteInputStillWorks` 都为通过。
+- `browser` 和 `notes` 写清楚无隐私的浏览器版本与测试备注。
+
+如果担心隐私，可以删掉 prompt 草稿、会话片段和页面标题中的敏感内容，但不要删掉 `ai` 里的 selector 和布尔状态。selector 证据不会包含 Cookie、Token 或账号密码，却能帮助我们复现和修复站点适配问题。
 
 ## 隐私提醒
 

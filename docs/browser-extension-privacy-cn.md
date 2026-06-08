@@ -72,3 +72,20 @@ Viewer: http://localhost:3113
 - 逐站验收 ChatGPT、Claude、Gemini、Perplexity 的输入框定位与插入事件。
 - 准备 Chrome Web Store 需要的英文隐私政策、截图和权限解释。
 - 如果未来支持云同步，需要单独增加云端数据流向说明和用户授权流程。
+
+## 外部测试诊断脱敏
+
+外部测试者提交 AI 页面诊断时，可以删掉私人 prompt、聊天正文、页面标题里的敏感信息和任何账号相关内容。为了复现站点适配问题，请保留这些非敏感结构字段：
+
+- `ai.provider`
+- `ai.editorFound`
+- `ai.anchorFound`
+- `ai.memoryWidgetVisible`
+- `ai.placement`
+- `ai.matchedSelectors.editor`
+- `ai.matchedSelectors.anchor`
+- `ai.matchedSelectors.send`
+- `ai.matchedSelectors.turn`
+- `manualValidation`
+
+这些字段用于判断输入框、入口锚点、发送按钮和会话区域是否命中，不需要包含 Cookie、Token、账号密码或完整聊天内容。

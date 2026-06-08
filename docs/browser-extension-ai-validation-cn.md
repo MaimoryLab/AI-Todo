@@ -34,6 +34,7 @@ npm run record:ai-validation-evidence -- --clipboard --browser "Chrome 版本号
 - 本地搜索有结果时，可以插入或复制记忆。
 - 同步侧栏可复制诊断 JSON。
 - 插件没有导致原站点输入框、发送按钮、页面滚动异常。
+- 诊断 JSON 保留 `matchedSelectors.editor`、`matchedSelectors.anchor`、`matchedSelectors.send`、`matchedSelectors.turn`，能说明站点适配命中了哪些规则。
 
 ## 证据目录和汇总命令
 
@@ -63,7 +64,7 @@ npm run check:ai-validation-evidence
 npm run sync:ai-validation-table
 ```
 
-第一条命令会把诊断 JSON 保存成标准证据文件。第二条命令会生成 `artifacts/ai-validation-evidence-summary.json`。第三条命令会用证据目录更新本页真实站点验收表。它们不会把待验收状态误判为通过；`memoryInsertPassed`、`diagnosticsCopied`、`siteInputStillWorks` 都为通过时，才会计入真实证据通过数。公开发布仍需 ChatGPT、Claude、Gemini、Perplexity 都有通过证据。
+第一条命令会把诊断 JSON 保存成标准证据文件。第二条命令会生成 `artifacts/ai-validation-evidence-summary.json`。第三条命令会用证据目录更新本页真实站点验收表。它们不会把待验收状态误判为通过；`memoryInsertPassed`、`diagnosticsCopied`、`siteInputStillWorks` 都为通过，并且 `matchedSelectors` 保留输入框、锚点、发送按钮和会话区域的命中规则时，才会计入真实证据通过数。公开发布仍需 ChatGPT、Claude、Gemini、Perplexity 都有通过证据。
 
 ## 本地可验证项
 
@@ -112,6 +113,20 @@ npm run sync:ai-validation-table
     "editorFound": true,
     "editorSelector": "#prompt-textarea",
     "anchorFound": true,
+    "anchorSelector": "[data-testid=\"composer-trailing-actions\"]",
+    "anchorSource": "configured",
+    "sendFound": true,
+    "sendSelector": "button[data-testid=\"send-button\"]",
+    "turnSelector": "[data-message-author-role]",
+    "turnSelectorCount": 4,
+    "matchedSelectors": {
+      "editor": "#prompt-textarea",
+      "anchor": "[data-testid=\"composer-trailing-actions\"]",
+      "anchorSource": "configured",
+      "adjacent": "button[aria-label=\"Dictate button\"]",
+      "send": "button[data-testid=\"send-button\"]",
+      "turn": "[data-message-author-role]"
+    },
     "placement": "toolbar-end",
     "memoryWidgetVisible": true,
     "promptLength": 18,
