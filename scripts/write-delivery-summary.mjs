@@ -150,7 +150,9 @@ const deliveryManifest = {
     aiInputMemoryHint: {
       localDemo: true,
       supportedSitesSource: 'browser-extension/shared/site-config.js',
-      diagnosticsCopy: true
+      diagnosticsCopy: true,
+      sidePanelTestCardsEntry: true,
+      diagnosticValidationGuide: true
     },
     reviewQueue: {
       source: 'browser-extension',
@@ -181,6 +183,14 @@ const deliveryManifest = {
     evidenceRecorder: {
       command: 'npm run record:ai-validation-evidence',
       exists: existsSync('scripts/record-ai-validation-evidence.mjs')
+    },
+    aiSiteTestCards: {
+      path: 'docs/browser-extension-ai-site-test-cards-cn.md',
+      viewerPath: '/docs/browser-extension-ai-site-test-cards-cn.md',
+      zipPath: 'browser-extension/AI-SITE-TEST-CARDS.md',
+      sidePanelEntry: true,
+      diagnosticField: 'validationGuide',
+      exists: existsSync('docs/browser-extension-ai-site-test-cards-cn.md') && existsSync('browser-extension/AI-SITE-TEST-CARDS.md')
     }
   },
   releaseState: {

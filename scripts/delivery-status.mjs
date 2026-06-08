@@ -45,6 +45,7 @@ printStatus('tester entry', !!(core.externalTestingEntry?.popupVersionVisible &&
 printStatus('zip tester checklist', readyFromEntry(external.zipLoadChecklist));
 printStatus('feedback loop', !!(readyFromEntry(external.feedbackTemplate) && readyFromEntry(external.issueTemplate) && readyFromEntry(external.feedbackTriage)));
 printStatus('AI evidence recorder', readyFromEntry(external.evidenceRecorder));
+printStatus('AI site test cards', !!(readyFromEntry(external.aiSiteTestCards) && core.aiInputMemoryHint?.sidePanelTestCardsEntry && core.aiInputMemoryHint?.diagnosticValidationGuide));
 console.log(`real site validation table: ${realSite.passedCount || 0}/${realSite.requiredCount || 4}`);
 console.log(`real site evidence: ${evidence.passedCount || 0}/${evidence.requiredCount || 4}`);
 printStatus('public release', release.publicRelease === 'ready' && evidence.publicReleaseReadyByEvidence);

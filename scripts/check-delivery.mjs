@@ -262,11 +262,16 @@ assert(deliveryManifest.coreExperience?.reviewDraft?.editableProject === true, '
 assert(deliveryManifest.coreExperience?.reviewDraft?.editableTags === true, 'Delivery manifest must record editable tags support.');
 assert(deliveryManifest.coreExperience?.reviewDraft?.editableLessonFlag === true, 'Delivery manifest must record editable lesson flag support.');
 assert(deliveryManifest.coreExperience?.reviewDraft?.savesToReviewQueue === true, 'Delivery manifest must record review queue save behavior.');
+assert(deliveryManifest.coreExperience?.aiInputMemoryHint?.sidePanelTestCardsEntry === true, 'Delivery manifest must record side panel test cards entry.');
+assert(deliveryManifest.coreExperience?.aiInputMemoryHint?.diagnosticValidationGuide === true, 'Delivery manifest must record diagnostic validation guide support.');
 assert(deliveryManifest.externalTesting?.zipLoadChecklist?.exists === true, 'Delivery manifest must record zip load checklist support.');
 assert(deliveryManifest.externalTesting?.feedbackTemplate?.exists === true, 'Delivery manifest must record external feedback template support.');
 assert(deliveryManifest.externalTesting?.issueTemplate?.exists === true, 'Delivery manifest must record external issue template support.');
 assert(deliveryManifest.externalTesting?.feedbackTriage?.exists === true, 'Delivery manifest must record feedback triage support.');
 assert(deliveryManifest.externalTesting?.evidenceRecorder?.exists === true, 'Delivery manifest must record AI evidence recorder support.');
+assert(deliveryManifest.externalTesting?.aiSiteTestCards?.exists === true, 'Delivery manifest must record AI site test cards support.');
+assert(deliveryManifest.externalTesting?.aiSiteTestCards?.viewerPath === '/docs/browser-extension-ai-site-test-cards-cn.md', 'Delivery manifest must record local viewer test cards path.');
+assert(deliveryManifest.externalTesting?.aiSiteTestCards?.diagnosticField === 'validationGuide', 'Delivery manifest must record diagnostic validationGuide field.');
 assert(deliveryManifest.artifacts?.extensionZip?.exists, 'Delivery manifest must mark extension zip as existing.');
 assert(deliveryManifest.artifacts?.loadInstructions?.exists, 'Delivery manifest must mark zip load instructions as existing.');
 assert(deliveryManifest.artifacts?.externalTesterHandout?.exists === true, 'Delivery manifest must mark external tester handout as existing.');
