@@ -68,7 +68,7 @@ Skill 页会扫描本机的 Codex、Agents 和插件 Skill 目录，展示每个
 | Skill 草稿 | 已支持从可沉淀经验生成 SKILL.md 草稿，先预览和复制，不自动改本地 Skill |
 | 记忆库 | 已支持待审阅入口、保存前编辑、浏览器/会话/手动来源筛选 |
 | 插件说明 | 已区分浏览器插件和 Agent/MCP 底层集成 |
-| 插件发布物料 | 已补权限与隐私说明，并可生成本地预览 zip |
+| 插件发布物料 | 已补权限与隐私说明、真实站点验收记录，并可生成本地预览 zip |
 
 ## 5. 浏览器插件 MVP
 
@@ -88,7 +88,7 @@ Skill 页会扫描本机的 Codex、Agents 和插件 Skill 目录，展示每个
 | 连接状态 | 侧栏顶部显示审阅队列是否可用，未连接时提示先启动本地工作台 |
 | 页面类型识别 | 初步识别 AI 对话、GitHub、飞书、Notion、论文 / PDF、插件商店等页面 |
 | 输入框记忆提示 | 在 ChatGPT / Claude / Gemini / Perplexity 等页面输入问题时，提示本地相关记忆，并支持插入/复制 |
-| AI 页面诊断 | 侧栏显示是否识别 AI 产品、是否找到输入框、输入草稿长度和最近对话数量 |
+| AI 页面诊断 | 侧栏显示是否识别 AI 产品、是否找到输入框、输入草稿长度和最近对话数量，并支持复制诊断 JSON |
 | 来源细分 | 浏览器写入会保留 AI 产品来源，Viewer 里可筛选 ChatGPT、Claude、Gemini、Perplexity 等来源 |
 | 右键菜单保存 | 从页面右键快速保存到 Agent Memory Lab |
 | 最近保存记录 | popup 中展示最近保存过的网页线索 |
@@ -115,9 +115,11 @@ Viewer: http://localhost:3113
 npm run check:delivery
 ```
 
-这个命令会构建项目、检查浏览器插件、校验 README 截图和交付文档，并生成本地插件预览包。
+这个命令会构建项目、检查浏览器插件、校验 README 截图和交付文档，并生成本地插件预览包。插件检查已包含本地 AI fixture 验收，会用最小页面模型检查 ChatGPT、Claude、Gemini、Perplexity、Grok、DeepSeek 的输入框和对话 selector。
 
 权限与隐私说明：`docs/browser-extension-privacy-cn.md`
+
+真实站点验收记录：`docs/browser-extension-ai-validation-cn.md`
 
 本地预览包输出：`artifacts/agent-memory-lab-extension.zip`
 
@@ -126,7 +128,7 @@ npm run check:delivery
 | 优先级 | 缺口 | 为什么重要 |
 | --- | --- | --- |
 | P1 | 精准 AI 对话抽取器 | ChatGPT、Claude、Gemini、Perplexity 应继续按站点优化采集方式 |
-| P1 | AI 输入框注入精调 | 已补常见输入框选择器和插入事件，仍需要真实网页逐站验收 |
+| P1 | AI 输入框注入精调 | 已补常见输入框选择器、插入事件、复制诊断和 fixture 检查，仍需要真实网页逐站验收 |
 | P1 | 经验到 Skill 的安装流程 | 已有草稿预览和复制，后续再做明确确认后的本地写入 |
 | P2 | Chrome Web Store 打包 | 需要图标、权限说明、隐私政策、发布截图 |
 
