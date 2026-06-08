@@ -153,6 +153,7 @@ npm run sync:ai-validation-table
 ## 反馈时请提供
 
 可以直接复制 [外部试用反馈模板](external-feedback-template-cn.md) 填写。
+维护者收到反馈后，按 [外部反馈分诊指南](external-feedback-triage-cn.md) 判断问题属于本地连接、站点适配、输入框插入、审阅队列、隐私信任还是交付文档。
 
 - 试用日期。
 - 浏览器名称和版本。

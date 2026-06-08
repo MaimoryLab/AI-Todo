@@ -250,6 +250,7 @@ ${extractGateTable(releaseGates)}
 - README: \`README.md\`
 - External tester guide: \`docs/external-tester-guide-cn.md\`
 - External feedback template: \`docs/external-feedback-template-cn.md\`
+- External feedback triage: \`docs/external-feedback-triage-cn.md\`
 - AI validation log: \`docs/browser-extension-ai-validation-cn.md\`
 - Release gates: \`docs/release-gates-cn.md\`
 - Feishu source: \`docs/feishu/agentmemory-project-intro-cn.md\`

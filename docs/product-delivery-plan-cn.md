@@ -74,6 +74,7 @@
 - 英文商店发布文案草稿：`docs/browser-extension-store-listing-en.md`
 - 外部试用指南：`docs/external-tester-guide-cn.md`
 - 外部试用反馈模板：`docs/external-feedback-template-cn.md`
+- 外部反馈分诊指南：`docs/external-feedback-triage-cn.md`
 - 发布门槛：`docs/release-gates-cn.md`
 - 真实站点验收记录：`docs/browser-extension-ai-validation-cn.md`
 - 真实站点证据目录：`docs/validation/browser-extension-ai-sites/`
@@ -115,6 +116,8 @@
 参考 Mem0 / OpenMemory 的不是视觉，而是工作流结构：跨 ChatGPT、Claude、Gemini、Perplexity 等网页维护 supported sites，把记忆能力放在用户正在输入的位置。Agent Memory Lab 保留这个入口位置，但把数据策略改成本地优先：插件只负责识别页面、召回相关记忆、生成候选；长期写入必须回到 Viewer 审阅后确认。
 
 逐站迭代时，以“复制诊断”为最小反馈单元：先确认 provider、输入框、草稿长度、最近对话数量，再决定是补 selector、调整插入逻辑，还是优化本地搜索召回。
+
+外部反馈统一进入 `docs/external-feedback-triage-cn.md` 的分诊表：先归类本地连接、站点适配、输入事件、审阅队列、隐私信任或交付文档，再决定是否更新插件、selector、证据 JSON、README 或飞书源文档。
 
 ## 预计时间
 

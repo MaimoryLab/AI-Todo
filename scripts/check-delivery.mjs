@@ -40,6 +40,7 @@ const requiredFiles = [
   'docs/product-delivery-plan-cn.md',
   'docs/external-tester-guide-cn.md',
   'docs/external-feedback-template-cn.md',
+  'docs/external-feedback-triage-cn.md',
   'docs/release-gates-cn.md',
   'docs/browser-extension-ai-validation-cn.md',
   'docs/browser-extension-mem0-reference-cn.md',
@@ -111,27 +112,32 @@ for (const marker of ['审阅队列可用', 'AI 页面状态', '记忆建议', '
 }
 
 const testerGuide = read('docs/external-tester-guide-cn.md');
-for (const marker of ['外部试用指南', 'npm run preview:browser-extension', 'npm run check:workbench', 'npm run check:release-gates', '记忆建议', '诊断 JSON', '从仓库试用', '从 zip 试用', 'browser-extension/', '外部试用反馈模板']) {
+for (const marker of ['外部试用指南', 'npm run preview:browser-extension', 'npm run check:workbench', 'npm run check:release-gates', '记忆建议', '诊断 JSON', '从仓库试用', '从 zip 试用', 'browser-extension/', '外部试用反馈模板', '外部反馈分诊指南']) {
   assert(testerGuide.includes(marker), `External tester guide missing marker: ${marker}`);
 }
 
 const feedbackTemplate = read('docs/external-feedback-template-cn.md');
-for (const marker of ['外部试用反馈模板', '基本信息', '试用路径', '问题描述', '诊断信息', 'manualValidation', '影响程度']) {
+for (const marker of ['外部试用反馈模板', '外部反馈分诊指南', '基本信息', '试用路径', '问题描述', '诊断信息', 'manualValidation', '影响程度']) {
   assert(feedbackTemplate.includes(marker), `External feedback template missing marker: ${marker}`);
 }
 
+const feedbackTriage = read('docs/external-feedback-triage-cn.md');
+for (const marker of ['外部反馈分诊指南', 'docs/external-feedback-template-cn.md', 'manualValidation', '站点适配', '输入事件', '审阅队列', '隐私/信任', 'npm run check:browser-extension']) {
+  assert(feedbackTriage.includes(marker), `External feedback triage guide missing marker: ${marker}`);
+}
+
 const plan = read('docs/product-delivery-plan-cn.md');
-for (const marker of ['本地预览包', '权限与隐私说明', '插件对标说明', 'Skill 草稿', 'AI 页面诊断']) {
+for (const marker of ['本地预览包', '权限与隐私说明', '插件对标说明', '外部反馈分诊指南', 'Skill 草稿', 'AI 页面诊断']) {
   assert(plan.includes(marker), `Product delivery plan missing marker: ${marker}`);
 }
 
 const mem0Reference = read('docs/browser-extension-mem0-reference-cn.md');
-for (const marker of ['mem0ai/mem0-chrome-extension', 'supported sites', '输入框附近', '待审阅队列', '真实 AI 站点验收']) {
+for (const marker of ['mem0ai/mem0-chrome-extension', 'supported sites', '输入框附近', '待审阅队列', '真实 AI 站点验收', '插件迭代工作流']) {
   assert(mem0Reference.includes(marker), `Mem0 reference doc missing marker: ${marker}`);
 }
 
 const releaseGates = read('docs/release-gates-cn.md');
-for (const marker of ['本地可演示', '外部可试用', '公开可发布', '未达到', '真实 AI 站点逐站验收', '入口位置策略', 'npm run check:release-public']) {
+for (const marker of ['本地可演示', '外部可试用', '公开可发布', '未达到', '真实 AI 站点逐站验收', '外部反馈分诊指南', '入口位置策略', 'npm run check:release-public']) {
   assert(releaseGates.includes(marker), `Release gates doc missing marker: ${marker}`);
 }
 
