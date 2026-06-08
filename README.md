@@ -24,19 +24,22 @@
 
 ## 一句话工作流
 
-浏览器插件负责捕捉上下文，本地 Viewer 负责审阅和管理，Skill / API / MCP 负责把记忆重新交给 Agent 使用。
+Agent Memory Lab 不是“一个网页剪藏插件 + 一个后台仓库”，而是一套本地记忆产品：浏览器插件是入口，本地工作台是中枢，Skill / API / MCP 是给 Agent 使用记忆的出口。
 
 ```text
-网页 / AI 对话 / 项目会话
-        ↓
-浏览器插件识别页面与候选记忆
-        ↓
-本地工作台审阅、编辑、删除、归类
-        ↓
-沉淀为记忆、经验、待办或 Skill
-        ↓
-下次 Agent 协作时继续使用
+浏览器入口层
+网页、AI 对话、选中文本、链接
+        |
+        v
+本地工作台层
+审阅、编辑、删除、归类、搜索
+        |
+        v
+Agent 复用层
+记忆、经验、行动、Skill、API
 ```
+
+插件和这个仓库的关系可以理解成“前台入口”和“产品本体”：插件负责出现在 ChatGPT、Claude、Gemini、Perplexity 等页面旁边，把当前页面变成可审阅的候选；本地工作台负责保存数据、展示记忆库、管理 Skill、生成交付包和做发布前检查。插件不单独变成另一个产品，也不会绕过工作台直接把内容塞进长期记忆。
 
 ## 5 步试用路线
 
@@ -56,7 +59,7 @@
 npm run status:delivery
 ```
 
-它会汇总插件 zip、核心体验、外部试用状态、真实 AI 站点验收和下一步目标。
+它会汇总插件包、核心体验、外部试用状态、真实 AI 站点验收和下一步目标。
 
 ## 为什么不是普通网页剪藏
 
@@ -80,7 +83,7 @@ Agent Memory Lab 更像“工作记忆层”：它关心这段内容以后怎么
 
 ### 2. 浏览器插件
 
-插件是新的重点入口。它会在浏览器里识别当前页面类型，例如：
+插件是整个产品的浏览器入口层。它会在浏览器里识别当前页面类型，例如：
 
 - ChatGPT、Claude、Gemini、Perplexity、Grok 等 AI 对话页
 - GitHub 项目、Issue、PR
@@ -98,7 +101,7 @@ Agent Memory Lab 更像“工作记忆层”：它关心这段内容以后怎么
 - 在支持的 AI 页面输入问题时，输入框附近会出现“记忆建议”，展示相关记忆并支持插入/复制
 - 选中网页片段或链接后，可用右键菜单送入同一套本地待审阅队列
 
-插件结构参考了 OpenMemory / Mem0 这类跨 AI 产品记忆插件的做法：按 ChatGPT、Claude、Gemini、Perplexity 等 supported sites 维护独立配置，把记忆召回放到输入框附近。不同的是，Agent Memory Lab 不默认把网页内容直接写入长期记忆，而是统一送进本地待审阅队列，用户确认后才沉淀。详细对标见 [浏览器插件对标：Mem0 / OpenMemory 实现参考](docs/browser-extension-mem0-reference-cn.md)。
+插件结构参考了 OpenMemory / Mem0 这类跨 AI 产品记忆插件的做法：按 ChatGPT、Claude、Gemini、Perplexity 等站点维护独立规则，把记忆召回放到输入框附近。不同的是，Agent Memory Lab 不默认把网页内容直接写入长期记忆，而是统一送进本地待审阅队列，用户确认后才沉淀。详细对标见 [浏览器插件对标：Mem0 / OpenMemory 实现参考](docs/browser-extension-mem0-reference-cn.md)。
 
 你确认后，它才会进入长期记忆或经验；不合适的候选可以直接忽略。
 

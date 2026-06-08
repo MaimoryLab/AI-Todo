@@ -2462,6 +2462,40 @@
     .imp-4, .imp-5, .imp-6 { border-color: var(--yellow); color: var(--yellow); }
     .imp-7, .imp-8, .imp-9, .imp-10 { border-color: var(--accent); color: var(--accent); }
 
+    .card-title,
+    .stat-card .label,
+    .badge,
+    .gauge-label,
+    .metric-table th,
+    .cb-indicator,
+    .type-chip,
+    .timeline-date-marker span,
+    .replay-event-kind,
+    .detail-row .dl {
+      text-transform: none !important;
+      letter-spacing: 0 !important;
+    }
+    .gauge-bar,
+    .strength-bar {
+      border-radius: 999px;
+      background: var(--bg-subtle);
+    }
+    .gauge-fill,
+    .strength-bar .fill {
+      border-radius: 999px;
+    }
+    .obs-card,
+    .episode-card,
+    .memory-display-card,
+    .memory-summary,
+    .lesson-card,
+    .action-card {
+      border-radius: 16px !important;
+      background: var(--surface) !important;
+      border-color: var(--border-light) !important;
+      box-shadow: none !important;
+    }
+
     .three-col { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; }
     @media (max-width: 1100px) { .three-col { grid-template-columns: 1fr 1fr; } }
     @media (max-width: 768px) { .three-col { grid-template-columns: 1fr; } }
@@ -4335,6 +4369,15 @@
       if (value === 'mostly-ready') return 'badge-yellow';
       return 'badge-muted';
     }
+    function deliveryStatusLabel(value) {
+      if (value === 'ready') return '已就绪';
+      if (value === 'mostly-ready') return '基本可试';
+      return '等待准备';
+    }
+    function publicReleaseLabel(value) {
+      if (value === 'ready') return '可发布';
+      return '等待证据';
+    }
     function renderDeliveryStatusCard(delivery) {
       if (!delivery) return '';
       if (delivery.available === false) {
@@ -4354,14 +4397,14 @@
       var next = notPassed.length ? notPassed.join('、') : '真实站点已齐';
       var html = '<div class="card" style="margin-bottom:16px;">';
       html += '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:12px;">';
-      html += '<div><div class="card-title" style="margin-bottom:4px;">外部试用状态</div><div style="font-size:12px;color:var(--ink-muted);line-height:1.45;">插件 ' + esc(version) + ' · ' + esc(zipLabel) + ' · 提交 ' + esc(delivery.commit || '-') + '</div></div>';
-      html += '<span class="badge ' + deliveryBadgeClass(external) + '">' + esc(external) + '</span>';
+      html += '<div><div class="card-title" style="margin-bottom:4px;">外部试用状态</div><div style="font-size:12px;color:var(--ink-muted);line-height:1.45;">浏览器入口 ' + esc(version) + ' · ' + esc(zipLabel) + '</div></div>';
+      html += '<span class="badge ' + deliveryBadgeClass(external) + '">' + esc(deliveryStatusLabel(external)) + '</span>';
       html += '</div>';
-      html += '<div style="margin:-2px 0 14px;font-size:13px;color:var(--ink-secondary);line-height:1.55;">插件是浏览器入口层，负责把网页和 AI 对话送入本地审阅；主仓库负责 Viewer、API、记忆库、文档和交付检查。</div>';
+      html += '<div style="margin:-2px 0 14px;font-size:13px;color:var(--ink-secondary);line-height:1.55;">插件是浏览器入口层，负责把网页和 AI 对话送入本地审阅；本地工作台负责记忆库、Skill、文档和交付检查。</div>';
       html += '<div class="stats-grid" style="margin-bottom:12px;">';
-      html += '<div class="stat-card"><div class="label">本地演示</div><div class="value" style="font-size:22px;">' + esc(delivery.localDemo || 'not-ready') + '</div><div class="sub">插件预览页</div></div>';
+      html += '<div class="stat-card"><div class="label">本地演示</div><div class="value" style="font-size:22px;">' + esc(deliveryStatusLabel(delivery.localDemo)) + '</div><div class="sub">插件预览页</div></div>';
       html += '<div class="stat-card"><div class="label">真实 AI 证据</div><div class="value" style="font-size:24px;">' + passed + '/' + required + '</div><div class="sub">公开发布必需</div></div>';
-      html += '<div class="stat-card"><div class="label">公开发布</div><div class="value" style="font-size:22px;">' + esc(publicState) + '</div><div class="sub">需真实站点通过</div></div>';
+      html += '<div class="stat-card"><div class="label">公开发布</div><div class="value" style="font-size:22px;">' + esc(publicReleaseLabel(publicState)) + '</div><div class="sub">需真实站点通过</div></div>';
       html += '</div>';
       html += '<div class="gauge" style="margin-bottom:10px;"><span class="gauge-label">AI 页面</span><div class="gauge-bar"><div class="gauge-fill" style="width:' + pct + '%;background:' + (pct >= 100 ? 'var(--green)' : 'var(--yellow)') + '"></div></div><span class="gauge-value">' + pct + '%</span></div>';
       if (sites.length) {

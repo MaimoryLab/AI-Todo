@@ -112,7 +112,7 @@ assert(browserReadme.includes('docs/browser-extension-privacy-cn.md'), 'Browser 
 assert(browserReadme.includes('docs/browser-extension-mem0-reference-cn.md'), 'Browser extension README must link Mem0 reference doc.');
 assert(browserReadme.includes('docs/browser-extension-ai-site-test-cards-cn.md'), 'Browser extension README must link AI site test cards doc.');
 assert(browserReadme.includes('保存前编辑'), 'Browser extension README must mention edit-before-save flow.');
-assert(browserReadme.includes('插件是入口层，主仓库是工作台层'), 'Browser extension README must explain extension/repo relationship.');
+assert(browserReadme.includes('插件是浏览器入口层，本地工作台是记忆中枢'), 'Browser extension README must explain extension/workbench relationship.');
 assert(browserReadme.includes('复制命令'), 'Browser extension README must mention the copy evidence command flow.');
 for (const marker of ['项目', '标签', '经验候选']) {
   assert(browserReadme.includes(marker), `Browser extension README must mention draft ${marker}.`);
@@ -193,7 +193,7 @@ const viewer = read('src/viewer/index.html');
 for (const marker of ['function reviewProject', 'function reviewTags', 'function reviewSourceLabel', 'payload.asLesson', '经验候选']) {
   assert(viewer.includes(marker), `Viewer review queue missing browser draft metadata marker: ${marker}`);
 }
-for (const marker of ['delivery-status', 'renderDeliveryStatusCard', '外部试用状态', '真实 AI 证据', '待验收', '待修复', '/docs/browser-extension-ai-site-test-cards-cn.md']) {
+for (const marker of ['delivery-status', 'renderDeliveryStatusCard', '外部试用状态', '真实 AI 证据', '基本可试', '等待证据', '插件是浏览器入口层', '待验收', '待修复', '/docs/browser-extension-ai-site-test-cards-cn.md']) {
   assert(viewer.includes(marker), `Viewer dashboard missing delivery status marker: ${marker}`);
 }
 

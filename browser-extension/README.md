@@ -2,9 +2,22 @@
 
 这是 Agent Memory Lab 的浏览器入口，用来把网页、AI 对话和项目文档同步到本地记忆工作台。
 
-它和主仓库的关系很简单：插件是入口层，主仓库是工作台层。插件负责在浏览器里识别页面、显示输入框旁的记忆建议、生成候选和诊断；主仓库负责本地 API、Viewer、审阅队列、记忆库、文档、打包和发布检查。插件不会脱离主仓库单独运行成一个云服务。
+它和 Agent Memory Lab 的关系很简单：插件是浏览器入口层，本地工作台是记忆中枢。插件负责在浏览器里识别页面、显示输入框旁的记忆建议、生成候选和诊断；本地工作台负责 API、Viewer、审阅队列、记忆库、文档、打包和发布检查。插件不会脱离本地工作台单独运行成一个云服务，也不会绕过审阅流程直接写入长期记忆。
 
-插件结构参考 Mem0 / OpenMemory 这类跨 AI 记忆插件：记忆入口放在 AI 输入框附近，站点规则按 supported sites 维护，页面失配时用诊断 JSON 反馈。完整对标说明见 [`docs/browser-extension-mem0-reference-cn.md`](../docs/browser-extension-mem0-reference-cn.md)。
+插件结构参考 Mem0 / OpenMemory 这类跨 AI 记忆插件：记忆入口放在 AI 输入框附近，站点规则按 ChatGPT、Claude、Gemini、Perplexity 等产品分别维护，页面失配时用诊断反馈。完整对标说明见 [`docs/browser-extension-mem0-reference-cn.md`](../docs/browser-extension-mem0-reference-cn.md)。
+
+```text
+AI 页面 / 网页内容
+      |
+      v
+浏览器插件：识别页面、提示记忆、生成候选
+      |
+      v
+本地工作台：审阅候选、管理记忆、沉淀经验
+      |
+      v
+Agent 使用：通过 Skill / API / MCP 取回上下文
+```
 
 它不是普通 Web Clipper。它更像一个本地优先的“上下文中转站”：先识别你正在看的页面，再生成可审阅的记忆候选，送到 Viewer 的“待审阅”队列，最后由你决定哪些内容值得进入长期记忆。
 
