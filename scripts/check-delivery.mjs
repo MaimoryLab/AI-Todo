@@ -84,9 +84,13 @@ for (const file of requiredFiles) {
 }
 
 const readme = read('README.md');
-assert(readme.includes('npm run preview:browser-extension'), 'README must mention browser extension preview command.');
+assert(readme.includes('npm run preview:browser-extension'), 'README must mention browser extension self-check command.');
 assert(readme.includes('npm run build && npm run start'), 'README must mention full workbench start command.');
 assert(readme.includes('npm run check:workbench'), 'README must mention workbench status check command.');
+assert(readme.includes('cd /Users/szn/agentmemory'), 'README must show project directory before npm commands.');
+for (const marker of ['本地可用路径', '真实网页和 AI 页面', '回到 Viewer 的记忆库确认保存', '自检页']) {
+  assert(readme.includes(marker), `README missing usable workflow marker: ${marker}`);
+}
 assert(readme.includes('npm run check:release-gates'), 'README must mention release gates check command.');
 assert(readme.includes('npm run check:release-public'), 'README must mention public release check command.');
 assert(readme.includes('npm run status:delivery'), 'README must mention delivery status command.');
@@ -110,7 +114,8 @@ assert(imageRefs.includes('docs/readme-assets/screenshots/skills.jpg'), 'README 
 const browserReadme = read('browser-extension/README.md');
 assert(browserReadme.includes('npm run package:browser-extension'), 'Browser extension README must mention packaging command.');
 assert(browserReadme.includes('npm run status:delivery'), 'Browser extension README must mention delivery status command.');
-assert(browserReadme.includes('npm run preview:browser-extension'), 'Browser extension README must mention preview command.');
+assert(browserReadme.includes('npm run preview:browser-extension'), 'Browser extension README must mention self-check command.');
+assert(browserReadme.includes('cd /Users/szn/agentmemory'), 'Browser extension README must show project directory before npm commands.');
 assert(browserReadme.includes('docs/browser-extension-privacy-cn.md'), 'Browser extension README must link privacy doc.');
 assert(browserReadme.includes('docs/browser-extension-mem0-reference-cn.md'), 'Browser extension README must link Mem0 reference doc.');
 assert(browserReadme.includes('docs/browser-extension-ai-site-test-cards-cn.md'), 'Browser extension README must link AI site test cards doc.');
@@ -121,10 +126,12 @@ for (const marker of ['项目', '标签', '经验候选']) {
   assert(browserReadme.includes(marker), `Browser extension README must mention draft ${marker}.`);
 }
 assert(browserReadme.includes('同步侧栏'), 'Browser extension README must mention the side panel flow.');
-assert(browserReadme.includes('/demo/browser-extension.html'), 'Browser extension README must mention local demo page.');
+for (const marker of ['本地使用', '真实网页和 AI 页面', '本地自检页', '/demo/browser-extension.html']) {
+  assert(browserReadme.includes(marker), `Browser extension README missing usable flow marker: ${marker}`);
+}
 
 const loadGuide = read('browser-extension/LOAD-THIS-FIRST.md');
-for (const marker of ['五步验收', '项目、标签', '经验候选', 'AI-SITE-TEST-CARDS.md', 'npm run record:ai-validation-evidence', 'external-test-loop-cn.md', 'external-tester-feedback-cn.yml']) {
+for (const marker of ['五步验收', '项目、标签', '经验候选', 'AI-SITE-TEST-CARDS.md', 'cd /Users/szn/agentmemory', 'npm run record:ai-validation-evidence', 'external-test-loop-cn.md', 'external-tester-feedback-cn.yml']) {
   assert(loadGuide.includes(marker), `Zip loading guide missing marker: ${marker}`);
 }
 
@@ -138,17 +145,17 @@ for (const marker of ['ChatGPT', 'Claude', 'Gemini', 'Perplexity', '公开发布
 }
 
 const checklist = read('docs/demo-checklist-cn.md');
-for (const marker of ['审阅队列可用', 'AI 页面状态', '记忆建议', 'Skill 管理台']) {
+for (const marker of ['审阅队列可用', 'AI 页面状态', '记忆建议', 'Skill 管理台', 'cd /Users/szn/agentmemory']) {
   assert(checklist.includes(marker), `Demo checklist missing marker: ${marker}`);
 }
 
 const testerGuide = read('docs/external-tester-guide-cn.md');
-for (const marker of ['外部试用指南', '外部测试闭环', 'npm run preview:browser-extension', 'npm run check:workbench', 'npm run check:release-gates', '记忆建议', '诊断 JSON', '复制命令', '从仓库试用', '从 zip 试用', 'browser-extension/', '外部试用反馈模板', 'external-tester-feedback-cn.yml', '外部反馈分诊指南', 'browser-extension-ai-site-test-cards-cn.md']) {
+for (const marker of ['外部试用指南', '外部测试闭环', 'cd /Users/szn/agentmemory', 'npm run build && npm run start', 'npm run check:workbench', 'npm run check:release-gates', '记忆建议', '诊断 JSON', '复制命令', '从仓库试用', '从 zip 试用', 'browser-extension/', '插件自检页', '/demo/browser-extension.html', '外部试用反馈模板', 'external-tester-feedback-cn.yml', '外部反馈分诊指南', 'browser-extension-ai-site-test-cards-cn.md']) {
   assert(testerGuide.includes(marker), `External tester guide missing marker: ${marker}`);
 }
 
 const testLoop = read('docs/external-test-loop-cn.md');
-for (const marker of ['外部测试闭环', '四步闭环', '先看效果', '加载插件', '测真实页面', '提交反馈', '最少要回收的信息', '交付判断', 'npm run check:ai-validation-evidence']) {
+for (const marker of ['外部测试闭环', '四步闭环', '加载插件', '真实页面使用', '逐站验收', '提交反馈', '最少要回收的信息', '交付判断', 'npm run check:ai-validation-evidence']) {
   assert(testLoop.includes(marker), `External test loop missing marker: ${marker}`);
 }
 
@@ -201,7 +208,7 @@ const viewer = read('src/viewer/index.html');
 for (const marker of ['function reviewProject', 'function reviewTags', 'function reviewSourceLabel', 'payload.asLesson', '经验候选']) {
   assert(viewer.includes(marker), `Viewer review queue missing browser draft metadata marker: ${marker}`);
 }
-for (const marker of ['delivery-status', 'renderDeliveryStatusCard', '外部试用入口', '外部试用指南', '真实页面验收', '真实 AI 证据', '基本可试', '等待证据', '插件是浏览器入口层', '本地工作台是记忆中枢', '待验收', '待修复', '/docs/browser-extension-ai-site-test-cards-cn.md']) {
+for (const marker of ['delivery-status', 'renderDeliveryStatusCard', '外部试用入口', '使用指南', '在真实页面使用', '真实页面验收', '真实 AI 证据', '基本可试', '等待证据', '插件是浏览器入口层', '本地工作台是记忆中枢', '待验收', '待修复', '/docs/browser-extension-ai-site-test-cards-cn.md']) {
   assert(viewer.includes(marker), `Viewer dashboard missing delivery status marker: ${marker}`);
 }
 

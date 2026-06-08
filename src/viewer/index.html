@@ -4402,12 +4402,12 @@
       html += '</div>';
       html += '<div style="margin:-2px 0 14px;font-size:13px;color:var(--ink-secondary);line-height:1.55;">插件是浏览器入口层，负责把网页和 AI 对话送入本地审阅；本地工作台是记忆中枢，负责记忆库、Skill、文档和交付检查。</div>';
       html += '<div class="memory-card-grid" style="grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px;margin-bottom:14px;">';
-      html += '<div class="stat-card" style="padding:12px;"><div class="label">1. 先看效果</div><div style="font-size:13px;color:var(--ink-secondary);line-height:1.45;margin:6px 0 10px;">免登录预览输入框旁的记忆建议。</div><a class="btn" href="/demo/browser-extension.html" target="_blank" rel="noopener">预览插件</a></div>';
-      html += '<div class="stat-card" style="padding:12px;"><div class="label">2. 加载到浏览器</div><div style="font-size:13px;color:var(--ink-secondary);line-height:1.45;margin:6px 0 10px;">用开发者模式加载插件目录或交付包。</div><a class="btn" href="/docs/external-tester-guide-cn.md" target="_blank" rel="noopener">试用指南</a></div>';
-      html += '<div class="stat-card" style="padding:12px;"><div class="label">3. 反馈真实 AI 页面</div><div style="font-size:13px;color:var(--ink-secondary);line-height:1.45;margin:6px 0 10px;">逐站检查 ChatGPT、Claude、Gemini、Perplexity。</div><a class="btn" href="/docs/browser-extension-ai-site-test-cards-cn.md" target="_blank" rel="noopener">验收清单</a></div>';
+      html += '<div class="stat-card" style="padding:12px;"><div class="label">1. 加载到浏览器</div><div style="font-size:13px;color:var(--ink-secondary);line-height:1.45;margin:6px 0 10px;">用开发者模式加载插件目录或交付包。</div><a class="btn" href="/docs/external-tester-guide-cn.md" target="_blank" rel="noopener">使用指南</a></div>';
+      html += '<div class="stat-card" style="padding:12px;"><div class="label">2. 在真实页面使用</div><div style="font-size:13px;color:var(--ink-secondary);line-height:1.45;margin:6px 0 10px;">打开网页或 AI 对话，保存候选并回到记忆库审阅。</div><a class="btn" href="#memories">去记忆库</a></div>';
+      html += '<div class="stat-card" style="padding:12px;"><div class="label">3. 真实 AI 页面验收</div><div style="font-size:13px;color:var(--ink-secondary);line-height:1.45;margin:6px 0 10px;">逐站检查 ChatGPT、Claude、Gemini、Perplexity。</div><a class="btn" href="/docs/browser-extension-ai-site-test-cards-cn.md" target="_blank" rel="noopener">验收清单</a></div>';
       html += '</div>';
       html += '<div class="stats-grid" style="margin-bottom:12px;">';
-      html += '<div class="stat-card"><div class="label">本地演示</div><div class="value" style="font-size:22px;">' + esc(deliveryStatusLabel(delivery.localDemo)) + '</div><div class="sub">插件预览页</div></div>';
+      html += '<div class="stat-card"><div class="label">插件自检</div><div class="value" style="font-size:22px;">' + esc(deliveryStatusLabel(delivery.localDemo)) + '</div><div class="sub">排错用预览页</div></div>';
       html += '<div class="stat-card"><div class="label">真实 AI 证据</div><div class="value" style="font-size:24px;">' + passed + '/' + required + '</div><div class="sub">公开发布必需</div></div>';
       html += '<div class="stat-card"><div class="label">公开发布</div><div class="value" style="font-size:22px;">' + esc(publicReleaseLabel(publicState)) + '</div><div class="sub">需真实站点通过</div></div>';
       html += '</div>';

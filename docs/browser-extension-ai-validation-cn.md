@@ -6,8 +6,8 @@
 
 1. 启动本地 Viewer / API。
 2. 在 Chrome / Edge 开发者模式加载 `browser-extension/`。
-3. 先打开本地免登录预览页 `http://localhost:3113/demo/browser-extension.html`，确认基础插件体验可用。
-4. 打开目标 AI 产品页面并登录。
+3. 打开目标 AI 产品页面并登录。
+4. 如果目标页面没有出现“记忆建议”，再打开本地自检页 `http://localhost:3113/demo/browser-extension.html`，区分是站点适配问题还是插件注入整体异常。
 5. 在输入框输入一个和本地记忆相关的问题，至少 8 个字。
 6. 打开插件同步侧栏，检查“AI 页面状态”。
 7. 检查输入框附近是否出现“记忆建议”提示。
@@ -20,6 +20,7 @@
 复制侧栏诊断后，可以直接从剪贴板保存证据：
 
 ```bash
+cd /Users/szn/agentmemory
 npm run record:ai-validation-evidence -- --clipboard --browser "Chrome 版本号" --notes "无隐私信息的备注"
 ```
 
@@ -59,6 +60,7 @@ npm run record:ai-validation-evidence -- --clipboard --browser "Chrome 版本号
 汇总命令：
 
 ```bash
+cd /Users/szn/agentmemory
 npm run record:ai-validation-evidence -- --file diagnostics.json
 npm run check:ai-validation-evidence
 npm run sync:ai-validation-table

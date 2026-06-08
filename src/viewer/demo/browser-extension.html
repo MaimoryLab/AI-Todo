@@ -9,12 +9,13 @@
   <style>
     :root {
       color-scheme: light;
-      --ink: #161411;
-      --muted: #6f675f;
-      --faint: #9b9288;
-      --line: #ded8cf;
-      --paper: #fffefb;
-      --wash: #f6f2ec;
+      --ink: #0c0a09;
+      --muted: #777169;
+      --faint: #a8a29e;
+      --line: #e7e5e4;
+      --paper: #ffffff;
+      --wash: #f5f5f5;
+      --subtle: #f0efed;
       --black: #11100f;
       --green: #516f58;
     }
@@ -26,9 +27,9 @@
       font: 14px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     }
     main {
-      width: min(980px, calc(100vw - 32px));
+      width: min(1040px, calc(100vw - 32px));
       margin: 0 auto;
-      padding: 28px 0 42px;
+      padding: 34px 0 48px;
     }
     header {
       display: flex;
@@ -39,7 +40,7 @@
     }
     h1 {
       margin: 0;
-      font-size: 27px;
+      font-size: 34px;
       line-height: 1.12;
       letter-spacing: 0;
     }
@@ -55,7 +56,7 @@
       min-height: 30px;
       padding: 0 10px;
       border: 1px solid var(--line);
-      border-radius: 8px;
+      border-radius: 999px;
       background: var(--paper);
       color: var(--green);
       font-size: 12px;
@@ -64,13 +65,13 @@
     }
     .workspace {
       display: grid;
-      grid-template-columns: minmax(0, 1fr) 280px;
-      gap: 14px;
+      grid-template-columns: minmax(0, 1fr) 300px;
+      gap: 16px;
       align-items: start;
     }
     section, aside {
       border: 1px solid var(--line);
-      border-radius: 8px;
+      border-radius: 16px;
       background: var(--paper);
     }
     .chat {
@@ -82,7 +83,7 @@
       align-items: center;
       justify-content: space-between;
       gap: 10px;
-      padding: 13px 14px;
+      padding: 14px 16px;
       border-bottom: 1px solid var(--line);
     }
     .chat-head strong { font-size: 14px; }
@@ -90,18 +91,18 @@
     .messages {
       display: grid;
       gap: 10px;
-      padding: 14px;
+      padding: 16px;
     }
     article {
       max-width: 82%;
       padding: 10px 11px;
       border: 1px solid var(--line);
-      border-radius: 8px;
+      border-radius: 16px;
       background: #fff;
     }
     article[data-message-author-role="user"] {
       justify-self: end;
-      background: #f7f4ef;
+      background: var(--subtle);
     }
     article[data-message-author-role="assistant"] {
       justify-self: start;
@@ -112,21 +113,21 @@
       color: var(--faint);
       font-size: 11px;
       letter-spacing: 0;
-      text-transform: uppercase;
+      text-transform: none;
     }
     article p { margin: 0; }
     form {
       display: grid;
       gap: 10px;
-      margin: 12px 14px 14px;
-      padding-top: 13px;
+      margin: 12px 16px 16px;
+      padding-top: 14px;
       border-top: 1px solid var(--line);
     }
     #agentmemory-demo-input {
       min-height: 92px;
       padding: 12px;
       border: 1px solid var(--line);
-      border-radius: 8px;
+      border-radius: 16px;
       background: #fff;
       outline: none;
       font: inherit;
@@ -144,7 +145,7 @@
       min-height: 34px;
       padding: 0 12px;
       border: 1px solid var(--line);
-      border-radius: 8px;
+      border-radius: 999px;
       background: #fff;
       color: var(--ink);
       font: inherit;
@@ -156,7 +157,7 @@
       color: #fff;
     }
     aside {
-      padding: 12px;
+      padding: 14px;
     }
     aside h2 {
       margin: 0 0 8px;
@@ -172,7 +173,7 @@
     .checklist li {
       padding: 8px;
       border: 1px solid var(--line);
-      border-radius: 8px;
+      border-radius: 16px;
       background: #fff;
       color: var(--muted);
       font-size: 12px;
@@ -193,8 +194,8 @@
   <main>
     <header>
       <div>
-        <h1>插件预览对话</h1>
-        <p class="subtle">这是本地演示页面，用来预览浏览器插件在 AI 输入框旁召回本地记忆的体验。加载插件后，在下方输入框输入问题，观察“记忆建议”提示。</p>
+        <h1>记忆建议预览</h1>
+        <p class="subtle">在这个本地页面里预览浏览器插件的核心体验：当你在 AI 输入框里写问题时，插件会在旁边召回相关记忆，并把保存动作送回本地工作台审阅。</p>
       </div>
       <div class="status">Agent Memory Lab Demo</div>
     </header>
@@ -202,39 +203,39 @@
     <div class="workspace">
       <section class="chat" aria-label="Demo AI conversation">
         <div class="chat-head">
-          <strong>Local AI Assistant</strong>
-          <span>provider: Agent Memory Demo</span>
+          <strong>本地 AI 助手</strong>
+          <span>Agent Memory Demo</span>
         </div>
         <div class="messages">
           <article data-message-author-role="user">
-            <b>User</b>
-            <p>我们要把 Agent Memory Lab 做成能对外交差的产品，不只是一个本地工具。</p>
+            <b>你</b>
+            <p>我最近在整理申请、作品集和 Agent 工具实验，很多偏好和项目背景都散在不同对话里。</p>
           </article>
           <article data-message-author-role="assistant">
-            <b>Assistant</b>
-            <p>重点应该是核心体验、浏览器插件预览、文档闭环、交付检查，以及真实站点验收记录。</p>
+            <b>AI 助手</b>
+            <p>如果这些背景能在输入框附近被召回，我就能更快理解你当前的项目、约束和表达偏好。</p>
           </article>
           <article data-message-author-role="user">
-            <b>User</b>
-            <p>插件要参考 Mem0 / OpenMemory，把记忆入口放在 AI 输入框附近，但长期记忆必须先审阅。</p>
+            <b>你</b>
+            <p>我希望记忆先变成候选，确认后再进入长期记忆，不要自动把网页内容全塞进去。</p>
           </article>
         </div>
         <form>
-          <div id="agentmemory-demo-input" contenteditable="true" role="textbox" aria-label="Demo prompt input">如何继续优化浏览器插件，让它更适合外部用户试用？</div>
+          <div id="agentmemory-demo-input" contenteditable="true" role="textbox" aria-label="Demo prompt input">根据我的项目偏好，帮我继续整理 Agent Memory Lab 的插件体验。</div>
           <div class="form-actions">
-            <button type="button">Attach</button>
-            <button type="button" class="primary">Send</button>
+            <button type="button">附件</button>
+            <button type="button" class="primary">发送</button>
           </div>
         </form>
       </section>
 
       <aside>
-        <h2>验收点</h2>
+        <h2>可以在这里看到</h2>
         <ul class="checklist">
-          <li><strong>输入框识别</strong>侧栏“AI 页面状态”应显示输入框已找到。</li>
-          <li><strong>记忆提示</strong>输入框附近应出现“记忆建议”入口。</li>
-          <li><strong>插入 / 复制</strong>本地搜索有结果时，可以插入或复制记忆。</li>
-          <li><strong>复制诊断</strong>侧栏可复制 provider、selector、草稿长度等诊断。</li>
+          <li><strong>输入框识别</strong>同步侧栏会显示当前页面和输入框状态。</li>
+          <li><strong>记忆建议</strong>加载插件后，输入框附近会出现“记忆建议”入口。</li>
+          <li><strong>插入 / 复制</strong>相关记忆可以插入当前输入框，也可以复制后手动使用。</li>
+          <li><strong>保存前审阅</strong>网页和对话内容会先进入本地工作台的待审阅队列。</li>
         </ul>
       </aside>
     </div>

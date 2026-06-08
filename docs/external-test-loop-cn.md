@@ -1,14 +1,14 @@
 # Agent Memory Lab 外部测试闭环
 
-这份文档用于把一次外部试用收成可复现、可分诊、可继续迭代的反馈。目标不是让测试者理解全部工程结构，而是让他在 10 分钟内看到插件价值，并把真实页面问题反馈回来。
+这份文档用于把一次试用收成可复现、可分诊、可继续迭代的反馈。目标不是让测试者理解全部工程结构，而是让他先在真实网页里用起来，再把真实页面问题反馈回来。
 
 ## 四步闭环
 
 | 步骤 | 测试者要做什么 | 我们需要得到什么 |
 | --- | --- | --- |
-| 1. 先看效果 | 打开 `http://localhost:3113/demo/browser-extension.html`，在输入框里输入问题 | 是否看到“记忆建议”，是否能插入或复制记忆 |
-| 2. 加载插件 | 在 Chrome / Edge 开发者模式加载 `browser-extension/` 或解压后的插件包 | 插件是否能连接本地工作台，弹窗和同步侧栏是否可用 |
-| 3. 测真实页面 | 在 ChatGPT、Claude、Gemini、Perplexity 逐站检查输入框、记忆建议、插入、复制诊断 | 一份脱敏诊断 JSON，或 `docs/validation/browser-extension-ai-sites/` 里的证据文件 |
+| 1. 加载插件 | 在 Chrome / Edge 开发者模式加载 `browser-extension/` 或解压后的插件包 | 插件是否能连接本地工作台，弹窗和同步侧栏是否可用 |
+| 2. 真实页面使用 | 在普通网页、ChatGPT、Claude、Gemini 或 Perplexity 里保存候选内容 | 是否能保存到 Viewer 待审阅队列，是否能看到“记忆建议” |
+| 3. 逐站验收 | 在 ChatGPT、Claude、Gemini、Perplexity 检查输入框、记忆建议、插入、复制诊断 | 一份脱敏诊断 JSON，或 `docs/validation/browser-extension-ai-sites/` 里的证据文件 |
 | 4. 提交反馈 | 使用 `docs/external-feedback-template-cn.md` 或 GitHub Issue 模板 | 问题路径、影响程度、实际现象、诊断 JSON、截图或录屏路径 |
 
 ## 最少要回收的信息
@@ -25,8 +25,8 @@
 
 | 反馈类型 | 看哪里 | 下一步 |
 | --- | --- | --- |
-| 本地 demo 不显示记忆建议 | `npm run check:browser-extension` | 修插件注入或 demo 交互 |
 | 插件未连接本地工作台 | `npm run check:workbench` | 修启动说明、默认地址或连接状态提示 |
+| 真实页面没有记忆建议 | 先看同步侧栏诊断，再用 demo 自检 | 判断是站点适配问题还是插件注入整体异常 |
 | AI 页面识别错 | `ai.provider`、`page.host` | 更新站点配置和 fixture |
 | 输入框或入口位置没找到 | `matchedSelectors.editor`、`matchedSelectors.anchor` | 补 selector 或调整入口位置 |
 | 插入后原站输入异常 | `manualValidation.siteInputStillWorks` | 优先修输入事件，必要时回滚该站点注入策略 |

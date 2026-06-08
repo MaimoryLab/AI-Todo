@@ -45,17 +45,18 @@ Agent 复用层
 
 第一次打开项目时，可以先按这条路线跑通核心体验：
 
-1. 先预览浏览器插件：`npm run preview:browser-extension`，打开 `http://localhost:3113/demo/browser-extension.html`。
+1. 启动完整工作台：`cd /Users/szn/agentmemory && npm run build && npm run start`，打开 `http://localhost:3113/#dashboard`。
 2. 加载浏览器插件：Chrome / Edge → `chrome://extensions` → 开发者模式 → 加载 `browser-extension/`。
-3. 在预览页输入一个问题，查看输入框附近的“记忆建议”。
-4. 启动完整工作台：`npm run build && npm run start`，打开 `http://localhost:3113/#dashboard`。如果不确定服务是否正常，另开终端执行 `npm run check:workbench`。
-5. 在 ChatGPT / Claude / Gemini / Perplexity 页面输入一个问题，检查真实站点是否识别输入框；再用插件把当前网页加入待审阅，回到 Viewer 的记忆库确认保存。
+3. 在 ChatGPT / Claude / Gemini / Perplexity 或普通网页里直接使用插件：打开同步侧栏，查看页面识别、候选记忆和“记忆建议”。
+4. 用插件把当前网页或选中文本加入待审阅，回到 Viewer 的记忆库确认保存。
+5. 如果插件没有出现“记忆建议”或侧栏识别异常，再运行自检页：`cd /Users/szn/agentmemory && npm run preview:browser-extension`，打开 `http://localhost:3113/demo/browser-extension.html`。
 
 也可以按 [演示检查清单](docs/demo-checklist-cn.md) 自查核心体验是否完整。
 
 查看当前交付状态：
 
 ```bash
+cd /Users/szn/agentmemory
 npm run status:delivery
 ```
 
@@ -105,13 +106,16 @@ Agent Memory Lab 更像“工作记忆层”：它关心这段内容以后怎么
 
 你确认后，它才会进入长期记忆或经验；不合适的候选可以直接忽略。
 
-本地预览路径：
+本地可用路径：
 
 ```text
+cd /Users/szn/agentmemory
 Chrome / Edge -> chrome://extensions -> 开发者模式 -> 加载已解压的扩展程序 -> 选择 browser-extension/
-npm run preview:browser-extension
-http://localhost:3113/demo/browser-extension.html
+npm run build && npm run start
+http://localhost:3113/#dashboard
 ```
+
+`npm run preview:browser-extension` 只用于自检插件注入和“记忆建议”入口；日常使用应直接在真实网页和 AI 页面里打开插件。
 
 插件权限与隐私说明见 [docs/browser-extension-privacy-cn.md](docs/browser-extension-privacy-cn.md)。试用指南见 [docs/external-tester-guide-cn.md](docs/external-tester-guide-cn.md)，反馈模板见 [docs/external-feedback-template-cn.md](docs/external-feedback-template-cn.md)，GitHub 结构化反馈入口见 [.github/ISSUE_TEMPLATE/external-tester-feedback-cn.yml](.github/ISSUE_TEMPLATE/external-tester-feedback-cn.yml)，发布门槛见 [docs/release-gates-cn.md](docs/release-gates-cn.md)。英文隐私政策草稿和商店发布文案见 [docs/browser-extension-privacy-en.md](docs/browser-extension-privacy-en.md) 与 [docs/browser-extension-store-listing-en.md](docs/browser-extension-store-listing-en.md)。如果需要生成本地插件包，可以运行 `npm run package:browser-extension`，产物包括 `artifacts/agent-memory-lab-extension.zip`、`artifacts/delivery-summary.md` 和 `artifacts/delivery-manifest.json`。
 
@@ -190,6 +194,7 @@ http://localhost:3113/#dashboard
 检查完整工作台状态：
 
 ```bash
+cd /Users/szn/agentmemory
 npm run check:workbench
 ```
 
@@ -204,6 +209,7 @@ npm run check:release-gates
 快速看交付状态：
 
 ```bash
+cd /Users/szn/agentmemory
 npm run status:delivery
 ```
 

@@ -121,26 +121,26 @@ icons/                  插件图标
 
 写入审阅队列时会保留更细的来源信息，例如 `browser-source:chatgpt`、`browser-page:ai-chat`。用户在 Viewer 记忆库里既可以筛选“浏览器”，也可以进一步筛选 ChatGPT、Claude、Gemini、Perplexity 等来源。
 
-## 本地预览
+## 本地使用
 
-1. 运行 `npm run preview:browser-extension`
+1. 进入项目目录并启动工作台：`cd /Users/szn/agentmemory && npm run build && npm run start`
 2. 打开 Chrome / Edge：`chrome://extensions`
 3. 打开“开发者模式”
 4. 点击“加载已解压的扩展程序”
 5. 选择本目录：`browser-extension`
-6. 打开 `http://localhost:3113/demo/browser-extension.html`
+6. 打开 ChatGPT、Claude、Gemini、Perplexity 或普通网页
 7. 点击浏览器工具栏里的 Agent Memory Lab 图标
-8. 点击“打开同步侧栏”预览完整插件工作流
+8. 打开同步侧栏，保存候选内容或查看输入框旁的“记忆建议”
 
-本地免登录预览页：
+本地自检页：
 
 ```text
 http://localhost:3113/demo/browser-extension.html
 ```
 
-这个页面会模拟一个 AI 对话输入框，并内置几条演示记忆。加载插件后，在输入框输入问题，应能看到“记忆建议”、示例记忆、插入/复制按钮，并可在同步侧栏看到 `Agent Memory Demo` 的 AI 页面状态。它用于快速预览插件体验，不能替代真实 ChatGPT / Claude / Gemini / Perplexity 的逐站验收。
+这个页面只用于排查插件注入和“记忆建议”入口是否正常。真正使用时，应该在真实网页和 AI 页面里打开插件，再回到 Viewer 待审阅队列确认保存。
 
-如果要跑完整工作台和待审阅队列，再运行 `npm run build && npm run start`，默认 API 是 `http://localhost:3111`，Viewer 是 `http://localhost:3113`。如果默认端口已被占用，先确认是否已有 Agent Memory Lab 在运行；必要时停止旧进程后再启动。
+默认 API 是 `http://localhost:3111`，Viewer 是 `http://localhost:3113`。如果默认端口已被占用，先确认是否已有 Agent Memory Lab 在运行；必要时停止旧进程后再启动。
 
 侧栏顶部会显示连接状态：
 
@@ -149,7 +149,7 @@ http://localhost:3113/demo/browser-extension.html
 
 建议试用路线：
 
-1. 打开 `http://localhost:3113/demo/browser-extension.html`，确认本地预览页能显示“记忆建议”入口。
+1. 启动本地工作台并加载插件，在真实网页或 AI 页面确认侧栏可用。
 2. 打开 ChatGPT / Claude / Gemini / Perplexity 任一页面。
 3. 在输入框输入一个和本地项目相关的问题。
 4. 查看输入框附近的“记忆建议”提示，尝试插入或复制相关记忆。
@@ -159,6 +159,7 @@ http://localhost:3113/demo/browser-extension.html
 交付检查：
 
 ```bash
+cd /Users/szn/agentmemory
 npm run check:browser-extension
 npm run package:browser-extension
 npm run status:delivery

@@ -2,13 +2,13 @@
 
 这份指南给第一次试用 Agent Memory Lab 的朋友使用。目标不是让对方理解所有技术细节，而是能在 10 分钟内看到产品核心：本地记忆工作台、浏览器插件、AI 输入框旁的记忆建议，以及保存前审阅。
 
-如果这次试用需要沉淀为可复现反馈，请同时按 [外部测试闭环](external-test-loop-cn.md) 收集结果：先看本地 demo，再加载插件，再测真实 AI 页面，最后提交诊断和问题描述。
+如果这次试用需要沉淀为可复现反馈，请同时按 [外部测试闭环](external-test-loop-cn.md) 收集结果：先加载插件，在真实网页里使用，再提交诊断和问题描述。demo 只作为排错自检。
 
 ## 试用前需要知道
 
 - 这是本地优先产品，记忆默认留在本机。
 - 浏览器插件不会直接写入长期记忆。弹窗和同步侧栏会先给出可编辑草稿，保存后再进入 Viewer 的待审阅队列。
-- 免登录插件预览页可以证明基础交互，但真实 ChatGPT / Claude / Gemini / Perplexity 仍需要逐站验收。
+- 本地 demo 可以帮助排查插件注入是否正常，但不能替代真实 ChatGPT / Claude / Gemini / Perplexity 的逐站验收。
 - 不要用包含 API Key、密码、身份证、银行卡、私人聊天的页面做截图。
 
 ## 试用包包含什么
@@ -17,7 +17,7 @@
 | --- | --- | --- |
 | 中文 README | `README.md` | 快速理解产品定位和启动路径 |
 | 插件目录 | `browser-extension/` | Chrome / Edge 开发者模式加载 |
-| 插件预览页 | `http://localhost:3113/demo/browser-extension.html` | 免登录预览输入框旁记忆建议 |
+| 插件自检页 | `http://localhost:3113/demo/browser-extension.html` | 排查输入框旁记忆建议是否能注入 |
 | 插件压缩包 | `artifacts/agent-memory-lab-extension.zip` | 给别人本地加载或归档 |
 | 交付摘要 | `artifacts/delivery-summary.md` | 查看当前版本、产物、发布门槛和检查命令 |
 | 交付清单 | `artifacts/delivery-manifest.json` | 机器可读的版本、提交、zip 大小、sha256 和真实 AI 站点验收计数 |
@@ -31,10 +31,11 @@
 ## 最短试用路线
 
 1. 打开项目仓库，或拿到别人发来的 `artifacts/agent-memory-lab-extension.zip`。
-2. 运行插件预览：
+2. 进入项目目录并启动完整工作台：
 
 ```bash
-npm run preview:browser-extension
+cd /Users/szn/agentmemory
+npm run build && npm run start
 ```
 
 3. 打开 Chrome / Edge 的扩展管理页。
@@ -47,23 +48,21 @@ npm run preview:browser-extension
 | 从仓库试用 | 选择仓库里的 `browser-extension/` |
 | 从 zip 试用 | 先解压 `artifacts/agent-memory-lab-extension.zip`，阅读 `browser-extension/LOAD-THIS-FIRST.md`，再选择解压出来的 `browser-extension/` |
 
-7. 打开：
+7. 打开 ChatGPT、Claude、Gemini、Perplexity 或普通网页。
+8. 点击浏览器工具栏里的 Agent Memory Lab 图标，打开同步侧栏。
+9. 保存当前网页或选中文本，回到 Viewer 记忆库确认待审阅内容出现。
+10. 如果输入框旁没有“记忆建议”或侧栏识别异常，再打开自检页：
 
 ```text
 http://localhost:3113/demo/browser-extension.html
 ```
 
-8. 在页面输入框里输入和记忆相关的问题。
-9. 检查输入框附近是否出现“记忆建议”。
-10. 点击“插入”或“复制”，确认记忆可以进入当前输入框。
-11. 点击浏览器工具栏里的 Agent Memory Lab 图标，打开同步侧栏。
-12. 检查侧栏是否识别为 `Agent Memory Demo`，并显示输入框已找到。
-
 ## 完整工作台试用路线
 
-如果要试用待审阅队列和记忆库，需要启动完整工作台：
+如果还没有启动待审阅队列和记忆库，需要启动完整工作台：
 
 ```bash
+cd /Users/szn/agentmemory
 npm run build && npm run start
 ```
 
@@ -85,6 +84,7 @@ API: http://localhost:3111
 如果不确定完整工作台是否已经正常运行，可以另开终端检查：
 
 ```bash
+cd /Users/szn/agentmemory
 npm run check:workbench
 ```
 
@@ -93,6 +93,7 @@ npm run check:workbench
 也可以检查当前发布门槛：
 
 ```bash
+cd /Users/szn/agentmemory
 npm run status:delivery
 ```
 
@@ -101,12 +102,14 @@ npm run status:delivery
 也可以继续看发布门槛：
 
 ```bash
+cd /Users/szn/agentmemory
 npm run check:release-gates
 ```
 
 如果准备公开发布，再运行：
 
 ```bash
+cd /Users/szn/agentmemory
 npm run check:release-public
 ```
 
@@ -149,6 +152,7 @@ docs/validation/browser-extension-ai-sites/
 保存后运行：
 
 ```bash
+cd /Users/szn/agentmemory
 npm run record:ai-validation-evidence -- --file diagnostics.json
 npm run check:ai-validation-evidence
 npm run sync:ai-validation-table

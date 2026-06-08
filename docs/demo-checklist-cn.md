@@ -5,10 +5,10 @@
 ## 演示前准备
 
 - GitHub 分支打开：`szn-viewer-ui-iteration`
-- 插件免登录预览可启动：`npm run preview:browser-extension`
+- 插件免登录预览可启动：`cd /Users/szn/agentmemory && npm run preview:browser-extension`
 - 本地插件预览页可访问：`http://localhost:3113/demo/browser-extension.html`
-- 完整工作台可启动：`npm run build && npm run start`，Viewer 默认 `http://localhost:3113/#dashboard`
-- 完整工作台状态检查可运行：`npm run check:workbench`
+- 完整工作台可启动：`cd /Users/szn/agentmemory && npm run build && npm run start`，Viewer 默认 `http://localhost:3113/#dashboard`
+- 完整工作台状态检查可运行：`cd /Users/szn/agentmemory && npm run check:workbench`
 - 浏览器插件已加载：Chrome / Edge → `chrome://extensions` → 加载 `browser-extension/`
 - 插件检查已通过：`npm run check:browser-extension`，包括 AI 页面 fixture 的输入框和对话 selector 检查
 - 若要对外展示插件稳定性，更新 `docs/browser-extension-ai-validation-cn.md` 的真实站点验收记录
