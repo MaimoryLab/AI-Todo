@@ -44,8 +44,8 @@
 
 1. 先预览浏览器插件：`npm run preview:browser-extension`，打开 `http://localhost:3113/demo/browser-extension.html`。
 2. 加载浏览器插件：Chrome / Edge → `chrome://extensions` → 开发者模式 → 加载 `browser-extension/`。
-3. 在预览页输入一个问题，查看输入框附近的“本地记忆”提示。
-4. 启动完整工作台：`npm run build && npm run start`，打开 `http://localhost:3113/#dashboard`。
+3. 在预览页输入一个问题，查看输入框附近的“记忆建议”。
+4. 启动完整工作台：`npm run build && npm run start`，打开 `http://localhost:3113/#dashboard`。如果不确定服务是否正常，另开终端执行 `npm run check:workbench`。
 5. 在 ChatGPT / Claude / Gemini / Perplexity 页面输入一个问题，检查真实站点是否识别输入框；再用插件把当前网页加入待审阅，回到 Viewer 的记忆库确认保存。
 
 演示前可以按 [演示检查清单](docs/demo-checklist-cn.md) 自查。
@@ -166,7 +166,7 @@ npm run build
 ### 3. 启动本地服务
 
 ```bash
-npm run dev
+npm run start
 ```
 
 默认 Viewer 地址：
@@ -174,6 +174,14 @@ npm run dev
 ```text
 http://localhost:3113/#dashboard
 ```
+
+检查完整工作台状态：
+
+```bash
+npm run check:workbench
+```
+
+它会检查 API、Viewer 和插件 demo 页是否可访问，并在端口被其他服务占用时给出下一步提示。
 
 如果使用已发布包，也可以全局运行：
 

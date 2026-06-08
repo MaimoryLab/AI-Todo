@@ -32,7 +32,8 @@
     "eval:longmemeval": "tsx eval/runner/longmemeval.ts",
     "eval:coding-life": "tsx eval/runner/coding-life.ts",
     "preview:browser-extension": "npm run build && node scripts/preview-browser-extension.mjs",
-    "check:browser-extension-package": "node scripts/check-browser-extension-package.mjs"
+    "check:browser-extension-package": "node scripts/check-browser-extension-package.mjs",
+    "check:workbench": "node scripts/check-workbench-status.mjs"
   },
   "keywords": [
     "ai",

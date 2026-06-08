@@ -58,6 +58,7 @@ const requiredFiles = [
   'scripts/check-browser-extension-fixtures.mjs',
   'scripts/check-browser-extension-demo-interaction.mjs',
   'scripts/check-browser-extension-package.mjs',
+  'scripts/check-workbench-status.mjs',
   'scripts/package-browser-extension.mjs'
 ];
 
@@ -68,6 +69,7 @@ for (const file of requiredFiles) {
 const readme = read('README.md');
 assert(readme.includes('npm run preview:browser-extension'), 'README must mention browser extension preview command.');
 assert(readme.includes('npm run build && npm run start'), 'README must mention full workbench start command.');
+assert(readme.includes('npm run check:workbench'), 'README must mention workbench status check command.');
 const imageRefs = [...readme.matchAll(/<img\s+src="([^"]+)"/g)].map((match) => match[1]);
 const allowedImages = new Set([
   'assets/banner.png',
@@ -93,7 +95,7 @@ for (const marker of ['审阅队列可用', 'AI 页面状态', '记忆建议', '
 }
 
 const testerGuide = read('docs/external-tester-guide-cn.md');
-for (const marker of ['外部试用指南', 'npm run preview:browser-extension', '记忆建议', '诊断 JSON', '从仓库试用', '从 zip 试用', 'browser-extension/']) {
+for (const marker of ['外部试用指南', 'npm run preview:browser-extension', 'npm run check:workbench', '记忆建议', '诊断 JSON', '从仓库试用', '从 zip 试用', 'browser-extension/']) {
   assert(testerGuide.includes(marker), `External tester guide missing marker: ${marker}`);
 }
 

@@ -16,6 +16,7 @@
 - README 只放首页和 Skill 管理台两张真实产品截图。
 - 飞书项目介绍和 README 叙事一致。
 - `npm run check:delivery` 通过。
+- `npm run check:workbench` 能给出 API、Viewer 和插件 demo 页的当前状态。
 - 本地免登录插件预览页可打开。
 - 插件交互烟测通过：输入问题后出现“记忆建议”，演示记忆可插入输入框。
 
