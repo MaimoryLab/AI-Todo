@@ -3286,7 +3286,7 @@
 
     var state = {
       activeTab: 'dashboard',
-      dashboard: { loaded: false, health: null, sessions: [], memories: [], graphStats: null, recentAudit: [], lessons: [], crystals: [] },
+      dashboard: { loaded: false, health: null, sessions: [], memories: [], graphStats: null, recentAudit: [], lessons: [], crystals: [], delivery: null },
       dashboardRefresh: { enabled: true, intervalMs: 30000 },
       graph: { loaded: false, nodes: [], edges: [], stats: null, filters: {}, selectedNode: null },
       memories: { loaded: false, items: [], reviewItems: [], search: '', typeFilter: '', sourceFilter: '' },
@@ -4292,7 +4292,8 @@
           apiGet('semantic'),
           apiGet('procedural'),
           apiGet('relations'),
-          apiGet('lessons')
+          apiGet('lessons'),
+          apiGet('delivery-status')
         ]);
         state.dashboard.health = results[0];
         state.dashboard.sessions = ((results[1] && results[1].sessions) || []).filter(function(s) { return !isDemoSession(s); });
@@ -4303,6 +4304,7 @@
         state.dashboard.procedural = (results[6] && results[6].procedures) || (results[6] && results[6].procedural) || [];
         state.dashboard.lessons = (results[8] && results[8].lessons) || [];
         state.dashboard.relations = (results[7] && results[7].relations) || [];
+        state.dashboard.delivery = results[9] || null;
         state.dashboard.loaded = true;
         renderDashboard();
       } catch (err) {
@@ -4326,6 +4328,44 @@
       }
     }
 
+    function deliveryBadgeClass(value) {
+      if (value === 'ready') return 'badge-green';
+      if (value === 'mostly-ready') return 'badge-yellow';
+      return 'badge-muted';
+    }
+    function renderDeliveryStatusCard(delivery) {
+      if (!delivery) return '';
+      if (delivery.available === false) {
+        return '<div class="card" style="margin-bottom:16px;"><div class="card-title">外部试用状态</div><div style="font-size:13px;color:var(--ink-muted);line-height:1.55;">还没有生成交付包。先运行 <code>npm run package:browser-extension</code>，这里会显示插件包和真实 AI 页面证据进度。</div></div>';
+      }
+      var real = delivery.realSiteValidation || {};
+      var passed = Number(real.passedCount || 0);
+      var required = Number(real.requiredCount || 4);
+      var pct = required > 0 ? Math.round((passed / required) * 100) : 0;
+      var external = delivery.externalTesting || 'not-ready';
+      var publicState = delivery.publicRelease || 'not-ready';
+      var notPassed = Array.isArray(real.notPassed) ? real.notPassed : [];
+      var zip = delivery.artifacts && delivery.artifacts.extensionZip ? delivery.artifacts.extensionZip : null;
+      var zipLabel = zip && zip.exists ? '插件包已生成' : '插件包未生成';
+      var version = delivery.extension && delivery.extension.version ? delivery.extension.version : '0.1.0';
+      var next = notPassed.length ? notPassed.join('、') : '真实站点已齐';
+      var html = '<div class="card" style="margin-bottom:16px;">';
+      html += '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:12px;">';
+      html += '<div><div class="card-title" style="margin-bottom:4px;">外部试用状态</div><div style="font-size:12px;color:var(--ink-muted);line-height:1.45;">插件 ' + esc(version) + ' · ' + esc(zipLabel) + ' · 提交 ' + esc(delivery.commit || '-') + '</div></div>';
+      html += '<span class="badge ' + deliveryBadgeClass(external) + '">' + esc(external) + '</span>';
+      html += '</div>';
+      html += '<div class="stats-grid" style="margin-bottom:12px;">';
+      html += '<div class="stat-card"><div class="label">本地演示</div><div class="value" style="font-size:22px;">' + esc(delivery.localDemo || 'not-ready') + '</div><div class="sub">插件预览页</div></div>';
+      html += '<div class="stat-card"><div class="label">真实 AI 证据</div><div class="value" style="font-size:24px;">' + passed + '/' + required + '</div><div class="sub">公开发布必需</div></div>';
+      html += '<div class="stat-card"><div class="label">公开发布</div><div class="value" style="font-size:22px;">' + esc(publicState) + '</div><div class="sub">需真实站点通过</div></div>';
+      html += '</div>';
+      html += '<div class="gauge" style="margin-bottom:10px;"><span class="gauge-label">AI 页面</span><div class="gauge-bar"><div class="gauge-fill" style="width:' + pct + '%;background:' + (pct >= 100 ? 'var(--green)' : 'var(--yellow)') + '"></div></div><span class="gauge-value">' + pct + '%</span></div>';
+      html += '<div style="display:flex;gap:8px;align-items:center;justify-content:space-between;flex-wrap:wrap;">';
+      html += '<div style="font-size:12px;color:var(--ink-muted);">下一步验收：' + esc(next) + '</div>';
+      html += '<div style="display:flex;gap:8px;flex-wrap:wrap;"><a class="btn" href="/demo/browser-extension.html" target="_blank" rel="noopener">预览插件</a><a class="btn" href="https://github.com/sznnnnn/agentmemory-lab/blob/szn-viewer-ui-iteration/docs/browser-extension-ai-site-test-cards-cn.md" target="_blank" rel="noopener">测试卡</a></div>';
+      html += '</div></div>';
+      return html;
+    }
     function renderDashboard() {
       var el = document.getElementById('view-dashboard');
       var d = state.dashboard;
@@ -4381,6 +4421,8 @@
       var savings = estFull > 0 ? Math.round((1 - estInjected / Math.max(estFull, 1)) * 100) : 0;
       if (savings < 0) savings = 0;
       html += '</div>';
+
+      html += renderDeliveryStatusCard(d.delivery);
 
       if (showDebug && (snap.memory || snap.cpu)) {
         html += '<div class="card" style="margin-bottom:16px"><div class="card-title">系统资源</div>';

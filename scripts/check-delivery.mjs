@@ -190,6 +190,14 @@ const viewer = read('src/viewer/index.html');
 for (const marker of ['function reviewProject', 'function reviewTags', 'function reviewSourceLabel', 'payload.asLesson', '经验候选']) {
   assert(viewer.includes(marker), `Viewer review queue missing browser draft metadata marker: ${marker}`);
 }
+for (const marker of ['delivery-status', 'renderDeliveryStatusCard', '外部试用状态', '真实 AI 证据', 'browser-extension-ai-site-test-cards-cn.md']) {
+  assert(viewer.includes(marker), `Viewer dashboard missing delivery status marker: ${marker}`);
+}
+
+const viewerServer = read('src/viewer/server.ts');
+for (const marker of ['readDeliveryStatus', '/agentmemory/delivery-status', 'delivery-manifest.json', 'ai-validation-evidence-summary.json']) {
+  assert(viewerServer.includes(marker), `Viewer server missing delivery status marker: ${marker}`);
+}
 
 const privacyEn = read('docs/browser-extension-privacy-en.md');
 for (const marker of ['Privacy Policy', 'local-first', 'Data We Process', 'Where Data Goes', 'AI Diagnostics']) {

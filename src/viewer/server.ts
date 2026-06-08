@@ -44,6 +44,49 @@ function readViewerAsset(relativePath: string): Buffer | null {
   return null;
 }
 
+function readJsonIfExists(path: string): Record<string, unknown> | null {
+  try {
+    if (!existsSync(path)) return null;
+    return JSON.parse(readFileSync(path, "utf8")) as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+}
+
+function readDeliveryStatus(): Record<string, unknown> {
+  const root = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
+  const manifest = readJsonIfExists(join(root, "artifacts", "delivery-manifest.json"));
+  const evidence = readJsonIfExists(join(root, "artifacts", "ai-validation-evidence-summary.json"));
+  if (!manifest) {
+    return {
+      available: false,
+      message: "delivery artifacts not generated",
+      next: "run npm run package:browser-extension",
+    };
+  }
+  const release = (manifest.releaseState || {}) as Record<string, unknown>;
+  const realSite = (release.realSiteValidation || {}) as Record<string, unknown>;
+  return {
+    available: true,
+    generatedAt: manifest.generatedAt || "",
+    commit: manifest.commit || "",
+    dirty: !!manifest.dirty,
+    extension: manifest.extension || {},
+    artifacts: manifest.artifacts || {},
+    releaseState: release,
+    externalTesting: release.externalTesting || "not-ready",
+    localDemo: release.localDemo || "not-ready",
+    publicRelease: release.publicRelease || "not-ready",
+    realSiteValidation: {
+      passedCount: evidence?.passedCount ?? realSite.passedCount ?? 0,
+      requiredCount: evidence?.requiredCount ?? realSite.requiredCount ?? 4,
+      notPassed: evidence?.notPassedRequired || realSite.notPassed || [],
+      source: realSite.source || "docs/browser-extension-ai-validation-cn.md",
+    },
+    next: "collect real AI page diagnostics, then sync the validation table",
+  };
+}
+
 function parseViewerQuery(qs: string): Record<string, string> {
   const params = new URLSearchParams(qs || "");
   const out: Record<string, string> = {};
@@ -618,6 +661,11 @@ export function startViewerServer(
     if (method === "GET" && pathname === "/agentmemory/local-skill-detail") {
       const data = readLocalSkillDetail(qs);
       json(res, data.error ? 400 : 200, data, req);
+      return;
+    }
+
+    if (method === "GET" && pathname === "/agentmemory/delivery-status") {
+      json(res, 200, readDeliveryStatus(), req);
       return;
     }
 
