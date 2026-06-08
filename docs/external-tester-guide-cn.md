@@ -25,7 +25,7 @@
 
 ## 最短试用路线
 
-1. 打开项目仓库。
+1. 打开项目仓库，或拿到别人发来的 `artifacts/agent-memory-lab-extension.zip`。
 2. 运行插件预览：
 
 ```bash
@@ -35,7 +35,13 @@ npm run preview:browser-extension
 3. 打开 Chrome / Edge 的扩展管理页。
 4. 开启开发者模式。
 5. 选择“加载已解压的扩展程序”。
-6. 选择仓库里的 `browser-extension/` 文件夹。
+6. 选择插件文件夹：
+
+| 来源 | 应该选择哪个文件夹 |
+| --- | --- |
+| 从仓库试用 | 选择仓库里的 `browser-extension/` |
+| 从 zip 试用 | 先解压 `artifacts/agent-memory-lab-extension.zip`，再选择解压出来的 `browser-extension/` |
+
 7. 打开：
 
 ```text

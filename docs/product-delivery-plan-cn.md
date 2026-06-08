@@ -72,6 +72,7 @@
 - 英文隐私政策草稿：`docs/browser-extension-privacy-en.md`
 - 英文商店发布文案草稿：`docs/browser-extension-store-listing-en.md`
 - 外部试用指南：`docs/external-tester-guide-cn.md`
+- 发布门槛：`docs/release-gates-cn.md`
 - 真实站点验收记录：`docs/browser-extension-ai-validation-cn.md`
 - 插件 PNG 图标资产：`browser-extension/icons/icon16.png`、`icon32.png`、`icon48.png`、`icon128.png`
 - 本地检查：`npm run check:browser-extension`
@@ -81,7 +82,7 @@
 - 预览包内容检查：`check:browser-extension-package` 会确认 zip 内含 manifest、content script、侧栏、弹窗、设置页、shared 文件和 PNG 图标
 - AI fixture 验收：`check:browser-extension` 会用本地最小页面模型检查 ChatGPT、Claude、Gemini、Perplexity、Grok、DeepSeek 的输入框和对话 selector
 - 本地免登录预览：`http://localhost:3113/demo/browser-extension.html`，用于快速展示输入框旁“记忆建议”、演示记忆、插入/复制
-- 试用者解压后选择包内 `browser-extension/` 文件夹加载
+- 试用者从仓库加载时选择仓库内 `browser-extension/`；从 zip 试用时先解压，再选择解压出来的 `browser-extension/`
 - AI 站点适配材料：同步侧栏“复制诊断”输出的 JSON，可用于补 selector 和真实网页验收
 - 未来商店发布仍需稳定公开隐私政策 URL、发布截图和逐站真实网页验收
 

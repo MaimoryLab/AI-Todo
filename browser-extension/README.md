@@ -149,7 +149,7 @@ npm run preview:browser-extension
 
 本地 fixture 不是正式站点验收的替代品，只是防回归网。真正发布前仍需在真实 AI 页面打开插件，确认输入框旁提示、插入、复制和侧栏诊断都可用。
 
-把 zip 发给别人本地试用时，解压后选择里面的 `browser-extension/` 文件夹加载。
+把 zip 发给别人本地试用时，先解压 `artifacts/agent-memory-lab-extension.zip`，再在 Chrome / Edge 的“加载已解压的扩展程序”里选择解压出来的 `browser-extension/` 文件夹。
 
 权限和隐私说明见：[`docs/browser-extension-privacy-cn.md`](../docs/browser-extension-privacy-cn.md)。
 

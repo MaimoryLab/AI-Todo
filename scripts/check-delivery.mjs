@@ -39,6 +39,7 @@ const requiredFiles = [
   'docs/demo-checklist-cn.md',
   'docs/product-delivery-plan-cn.md',
   'docs/external-tester-guide-cn.md',
+  'docs/release-gates-cn.md',
   'docs/browser-extension-ai-validation-cn.md',
   'docs/browser-extension-privacy-en.md',
   'docs/browser-extension-store-listing-en.md',
@@ -92,13 +93,18 @@ for (const marker of ['审阅队列可用', 'AI 页面状态', '记忆建议', '
 }
 
 const testerGuide = read('docs/external-tester-guide-cn.md');
-for (const marker of ['外部试用指南', 'npm run preview:browser-extension', '记忆建议', '诊断 JSON', 'browser-extension/']) {
+for (const marker of ['外部试用指南', 'npm run preview:browser-extension', '记忆建议', '诊断 JSON', '从仓库试用', '从 zip 试用', 'browser-extension/']) {
   assert(testerGuide.includes(marker), `External tester guide missing marker: ${marker}`);
 }
 
 const plan = read('docs/product-delivery-plan-cn.md');
 for (const marker of ['本地预览包', '权限与隐私说明', 'Skill 草稿', 'AI 页面诊断']) {
   assert(plan.includes(marker), `Product delivery plan missing marker: ${marker}`);
+}
+
+const releaseGates = read('docs/release-gates-cn.md');
+for (const marker of ['本地可演示', '外部可试用', '公开可发布', '未达到', '真实 AI 站点逐站验收']) {
+  assert(releaseGates.includes(marker), `Release gates doc missing marker: ${marker}`);
 }
 
 const aiValidation = read('docs/browser-extension-ai-validation-cn.md');
