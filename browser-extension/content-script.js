@@ -11,6 +11,20 @@
   let memoryWidget = null;
   let searchTimer = null;
   let latestQuery = '';
+  const DEMO_MEMORIES = [
+    {
+      title: '产品原则：先审阅再沉淀',
+      text: 'Agent Memory Lab 不把网页内容直接写入长期记忆。插件只生成候选和召回建议，长期记忆需要在本地 Viewer 里审阅、编辑、确认。'
+    },
+    {
+      title: '浏览器插件方向',
+      text: '参考 Mem0 / OpenMemory 的跨 AI 输入框记忆入口，但保持本地优先：ChatGPT、Claude、Gemini、Perplexity 等页面只负责召回和送审。'
+    },
+    {
+      title: '交付检查',
+      text: '对外演示前要跑 npm run check:delivery，并确认插件预览页、README、飞书文档、隐私说明、AI 站点验收记录都保持同步。'
+    }
+  ];
 
   function getProviderForHost(hostname) {
     const host = String(hostname || '').toLowerCase();
@@ -258,6 +272,14 @@
     }).filter((item) => item.text || item.title).slice(0, 5);
   }
 
+  function demoSearchResults(query) {
+    const q = String(query || '').toLowerCase();
+    return DEMO_MEMORIES.filter((item) => {
+      const haystack = `${item.title} ${item.text}`.toLowerCase();
+      return !q || q.split(/\s+/).some((part) => part && haystack.includes(part));
+    }).slice(0, 3);
+  }
+
   function renderMemoryResults(results, loading) {
     const provider = getProviderForHost(location.hostname);
     if (!provider) return;
@@ -299,6 +321,10 @@
       return;
     }
     searchTimer = setTimeout(() => {
+      if (provider.id === 'agentmemoryDemo') {
+        renderMemoryResults(demoSearchResults(draft), false);
+        return;
+      }
       renderMemoryResults([], true);
       chrome.runtime.sendMessage({ type: 'SEARCH_MEMORIES', query: draft }, (response) => {
         if (chrome.runtime.lastError || !response || !response.ok) {

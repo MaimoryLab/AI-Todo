@@ -69,6 +69,7 @@
 
 - 先打开 `http://localhost:3113/demo/browser-extension.html` 做免登录预览
 - 同步侧栏识别为 `Agent Memory Demo`，并且输入框为“已找到”
+- 输入框附近出现“本地记忆”入口，面板里能看到演示记忆，并可插入 / 复制
 - 打开 ChatGPT 或 Claude 页面
 - 在输入框输入一个和本地记忆相关的问题
 - 同步侧栏的“AI 页面状态”显示已识别产品，并且输入框为“已找到”

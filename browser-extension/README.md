@@ -118,7 +118,7 @@ icons/                  插件图标
 http://localhost:3113/demo/browser-extension.html
 ```
 
-这个页面会模拟一个 AI 对话输入框。加载插件后，在输入框输入问题，应能看到“本地记忆”提示，并可在同步侧栏看到 `Agent Memory Demo` 的 AI 页面状态。它用于快速预览插件体验，不能替代真实 ChatGPT / Claude / Gemini / Perplexity 的逐站验收。
+这个页面会模拟一个 AI 对话输入框，并内置几条演示记忆。加载插件后，在输入框输入问题，应能看到“本地记忆”提示、示例记忆、插入/复制按钮，并可在同步侧栏看到 `Agent Memory Demo` 的 AI 页面状态。它用于快速预览插件体验，不能替代真实 ChatGPT / Claude / Gemini / Perplexity 的逐站验收。
 
 如果要跑完整工作台和待审阅队列，再运行 `npm run build && npm run start`，默认 API 是 `http://localhost:3111`，Viewer 是 `http://localhost:3113`。如果默认端口已被占用，先确认是否已有 Agent Memory Lab 在运行；必要时停止旧进程后再启动。
 

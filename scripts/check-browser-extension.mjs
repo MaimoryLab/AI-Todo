@@ -41,6 +41,9 @@ for (const size of [16, 32, 48, 128]) {
 
 const contentScript = readFileSync('browser-extension/content-script.js', 'utf8');
 const siteConfig = readFileSync('browser-extension/shared/site-config.js', 'utf8');
+if (!contentScript.includes('DEMO_MEMORIES') || !contentScript.includes("provider.id === 'agentmemoryDemo'")) {
+  throw new Error('Content script must provide local demo memories for the Agent Memory Demo page.');
+}
 const contentProviders = [...contentScript.matchAll(/id:\s*'([^']+)'/g)].map((match) => match[1]);
 const sharedProviders = [...siteConfig.matchAll(/\n\s*([a-z0-9_-]+):\s*\{\s*\n\s*id:\s*'([^']+)'/g)].map((match) => match[2]);
 
