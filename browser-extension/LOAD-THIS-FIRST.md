@@ -74,7 +74,7 @@ npm run preview:browser-extension
 
 ```bash
 cd /Users/szn/agentmemory
-npm run record:ai-validation-evidence -- --clipboard --browser "Chrome 版本号" --notes "无隐私信息的备注"
+npm run wizard:ai-validation-evidence
 ```
 
 只有在你真实确认“插入成功、诊断已复制、原站输入仍正常”以后，才加 `--pass`。

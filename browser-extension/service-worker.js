@@ -1,4 +1,4 @@
-import { createCaptureRecord, createPageCapture, captureToLessonPayload, captureToMemoryPayload, buildBrowserMemoryDraft } from './shared/schema.js';
+import { createCaptureRecord, createPageCapture, captureToLessonPayload, captureToMemoryPayload, buildBrowserLessonDraft, buildBrowserMemoryDraft } from './shared/schema.js';
 import { agentMemoryApi, openViewer } from './shared/api.js';
 
 const RECENT_KEY = 'recentCaptures';
@@ -135,11 +135,12 @@ async function savePageMemory() {
 async function savePageLesson(note) {
   const capture = await collectPage();
   const payload = captureToLessonPayload(capture, note);
+  const draft = buildBrowserLessonDraft(capture);
   const result = await agentMemoryApi('/agentmemory/review', {
     method: 'POST',
     body: JSON.stringify({
       kind: 'lesson',
-      title: capture.page.title,
+      title: draft.title || capture.page.title,
       content: payload.content,
       source: 'browser-extension',
       page: capture.page,
@@ -153,15 +154,15 @@ async function savePageLesson(note) {
 async function saveCandidate(kind, text, title = '', meta = {}) {
   const capture = await collectPage();
   const trimmed = String(text || '').trim();
-  const draft = buildBrowserMemoryDraft(capture);
-  const draftTitle = String(title || '').trim() || draft.title || capture.page.title;
   const requestedKind = kind === 'lesson' || meta.asLesson ? 'lesson' : 'memory';
+  const draft = requestedKind === 'lesson' ? buildBrowserLessonDraft(capture) : buildBrowserMemoryDraft(capture);
+  const draftTitle = String(title || '').trim() || draft.title || capture.page.title;
   if (!trimmed) throw new Error('没有可保存的候选内容');
   if (requestedKind === 'lesson') {
     const payload = applyCandidateMeta(captureToLessonPayload(capture, trimmed), meta, capture, 'lesson');
     const result = await agentMemoryApi('/agentmemory/review', {
       method: 'POST',
-      body: JSON.stringify({ kind: 'lesson', title: draftTitle, content: trimmed, source: 'browser-extension', page: capture.page, payload, meta: payload })
+      body: JSON.stringify({ kind: 'lesson', title: draftTitle, content: payload.content, source: 'browser-extension', page: capture.page, payload, meta: payload })
     });
     await rememberRecent(capture, 'review', result);
     return { capture, result };

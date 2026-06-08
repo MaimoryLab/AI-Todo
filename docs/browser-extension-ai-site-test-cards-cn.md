@@ -9,7 +9,7 @@
 1. 启动本地 Agent Memory Lab Viewer / API。
 2. 在 Chrome 或 Edge 开发者模式加载 `browser-extension/`。
 3. 打开目标 AI 产品页面并登录。
-4. 打开插件同步侧栏，确认能看到版本、本地连接状态、“复制诊断”和“复制命令”。
+4. 打开插件同步侧栏，确认能看到版本、本地连接状态、“复制诊断”和“复制向导”。
 5. 如果真实页面没有出现“记忆建议”，再打开 `http://localhost:3113/demo/browser-extension.html` 做自检，用来区分是站点适配问题还是插件注入整体异常。
 6. 每测完一个真实 AI 页面，都先复制侧栏诊断，再复制侧栏生成的保存命令，把证据保存到 `docs/validation/browser-extension-ai-sites/`。
 
@@ -17,10 +17,10 @@
 
 ```bash
 cd /Users/szn/agentmemory
-npm run record:ai-validation-evidence -- --clipboard --browser "Chrome 版本号" --notes "无隐私信息的备注"
+npm run wizard:ai-validation-evidence
 ```
 
-侧栏里的“复制命令”会按当前 Provider 自动补上 `--provider`，可以直接粘贴到项目终端后再改浏览器版本和备注。
+侧栏里的“复制向导”会按当前 Provider 自动补上 `--provider`，可以直接粘贴到项目终端后按提示确认浏览器版本和备注。
 
 只有真实确认“插入记忆成功、诊断已复制、原站输入仍正常”以后，才可以加 `--pass`。
 

@@ -171,7 +171,7 @@ npm run sync:ai-validation-table
 - 操作系统。
 - 目标站点。
 - 截图或录屏。
-- 同步侧栏复制出来的诊断 JSON，以及侧栏“复制命令”生成的保存命令执行结果。
+- 同步侧栏复制出来的诊断 JSON，以及侧栏“复制向导”生成的保存命令执行结果。
 - 如果可以，直接提供 `docs/validation/browser-extension-ai-sites/` 下的证据 JSON 文件。
 - 复制诊断里的 `manualValidation` 字段需要按真实结果改成 `true` / `false`，不要默认当作通过。
 - 诊断 JSON 里 `editorFound`、`anchorFound`、`placement`、`memoryWidgetVisible` 的状态。

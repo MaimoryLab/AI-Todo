@@ -91,6 +91,12 @@ if (!popupJs.includes('getManifest') || !popupJs.includes('external-tester-guide
 if (!popupJs.includes('buildBrowserMemoryDraft') || !serviceWorker.includes('buildBrowserMemoryDraft') || !sidepanel.includes('buildMemoryDraft')) {
   throw new Error('Browser extension must draft concrete facts before sending review candidates.');
 }
+if (!schema.includes('buildBrowserLessonDraft') || !serviceWorker.includes('buildBrowserLessonDraft') || !sidepanel.includes('buildLessonDraft')) {
+  throw new Error('Browser extension must draft lessons from concrete conversation evidence.');
+}
+for (const marker of ['对话依据', '这段对话还没有足够内容提炼经验', 'ChatGPT\\s*是一款供日常使用']) {
+  if (!schema.includes(marker)) throw new Error(`Shared lesson drafting guard missing ${marker}.`);
+}
 if (!sidepanelHtml.includes('审阅草稿') || !sidepanelHtml.includes('draftContent') || !sidepanelHtml.includes('resetDraft')) {
   throw new Error('Side panel must expose an editable review draft before saving.');
 }
@@ -106,8 +112,8 @@ if (!sidepanel.includes('getDraftMetaFields') || !serviceWorker.includes('normal
 if (!sidepanelHtml.includes('openTestCards') || !sidepanel.includes('AI_SITE_TEST_CARDS_PATH')) {
   throw new Error('Side panel must expose the local AI site test cards entry.');
 }
-if (!sidepanelHtml.includes('copyEvidenceCommand') || !sidepanel.includes('buildEvidenceCommand') || !sidepanel.includes('record:ai-validation-evidence')) {
-  throw new Error('Side panel must expose a copyable AI validation evidence command.');
+if (!sidepanelHtml.includes('copyEvidenceCommand') || !sidepanelHtml.includes('复制向导') || !sidepanel.includes('buildEvidenceCommand') || !sidepanel.includes('wizard:ai-validation-evidence')) {
+  throw new Error('Side panel must expose a copyable AI validation evidence wizard command.');
 }
 if (!sharedApi.includes('path =') || !serviceWorker.includes('message.path')) {
   throw new Error('OPEN_VIEWER must support local viewer document paths.');

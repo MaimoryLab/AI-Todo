@@ -1,5 +1,5 @@
 import { getSettings } from './config.js';
-import { buildBrowserMemoryDraft } from './shared/schema.js';
+import { buildBrowserLessonDraft, buildBrowserMemoryDraft } from './shared/schema.js';
 
 const $ = (id) => document.getElementById(id);
 const EXTERNAL_TESTER_GUIDE_URL = 'https://github.com/sznnnnn/agentmemory-lab/blob/szn-viewer-ui-iteration/docs/external-tester-guide-cn.md';
@@ -186,6 +186,13 @@ $('resetDraft').addEventListener('click', () => {
 $('draftProject').addEventListener('change', () => renderDraftMeta(latestCapture));
 $('draftTags').addEventListener('input', () => renderDraftMeta(latestCapture));
 $('draftAsLesson').addEventListener('change', () => renderDraftMeta(latestCapture));
+$('draftAsLesson').addEventListener('change', () => {
+  if (!$('draftAsLesson').checked || !latestCapture) return;
+  const draft = buildBrowserLessonDraft(latestCapture);
+  $('draftTitle').value = draft.title || '经验候选';
+  $('draftContent').value = draft.content || '';
+  renderDraftMeta(latestCapture);
+});
 
 $('saveLesson').addEventListener('click', async () => {
   const note = $('lessonNote').value.trim();

@@ -23,10 +23,16 @@
 复制同步侧栏诊断后，在仓库根目录运行：
 
 ```bash
-npm run record:ai-validation-evidence -- --clipboard --browser "Chrome 版本号" --notes "无隐私信息的备注"
+npm run wizard:ai-validation-evidence
 ```
 
-只有真实确认“插入记忆成功、诊断已复制、原站输入仍正常”以后，才可以加 `--pass`。
+向导会逐项确认“插入/复制本地记忆是否成功、诊断是否复制、原站输入和发送是否仍正常、浏览器版本、无隐私备注”。
+
+已经真实确认三项都通过时，也可以使用无交互模式：
+
+```bash
+npm run wizard:ai-validation-evidence -- --yes --browser "Chrome 版本号" --notes "无隐私信息的备注"
+```
 
 通过证据里必须能看到 `manualValidation.memoryInsertPassed`、`manualValidation.diagnosticsCopied`、`manualValidation.siteInputStillWorks` 三项都为通过。
 

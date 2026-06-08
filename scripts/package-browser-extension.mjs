@@ -71,9 +71,9 @@ On each real AI page:
 
 1. Open the extension side panel.
 2. Click \`复制诊断\`.
-3. Click \`复制命令\`.
-4. Paste and run the copied command from the repository root.
-5. Add \`--pass\` only after memory insertion, diagnostics copy, and original site input all work.
+3. Click \`复制向导\`.
+4. Paste and run the copied wizard command from the repository root.
+5. Mark the three manual checks as passed only after memory insertion/copy, diagnostics copy, and original site input all work.
 
 Passing evidence must include \`matchedSelectors.editor\`, \`matchedSelectors.anchor\`, \`matchedSelectors.send\`, and \`matchedSelectors.turn\`.
 

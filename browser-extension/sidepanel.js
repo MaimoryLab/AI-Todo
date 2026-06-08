@@ -108,7 +108,7 @@ function providerArg(value) {
 function buildEvidenceCommand(capture) {
   const diagnostics = capture && capture.diagnostics ? capture.diagnostics : {};
   const provider = diagnostics.provider || (capture && capture.conversation && capture.conversation.provider) || '';
-  return `npm run record:ai-validation-evidence -- --clipboard${providerArg(provider)} --browser "Chrome 版本号" --notes "无隐私信息的备注"`;
+  return `npm run wizard:ai-validation-evidence -- --clipboard${providerArg(provider)}`;
 }
 
 function setConnectionState(state, text) {
@@ -197,6 +197,37 @@ function cleanDraftText(value) {
   return String(value || '').replace(/\s+/g, ' ').trim();
 }
 
+function truncateText(text, limit = 180) {
+  const value = cleanDraftText(text);
+  return value.length > limit ? `${value.slice(0, limit)}...` : value;
+}
+
+function isUsefulFact(text) {
+  if (!text || text.length < 6) return false;
+  if (/^https?:\/\//i.test(text)) return false;
+  if (/^(摘要|来源|URL|页面结构|网页记忆线索|浏览器候选记忆|浏览器候选经验|在\s*ChatGPT\s*中继续跟进)[:：]?/.test(text)) return false;
+  if (/ChatGPT\s*是一款供日常使用的\s*AI\s*聊天机器人/i.test(text)) return false;
+  return /(我|我的|我们|用户|希望|想要|需要|正在|计划|偏好|喜欢|不喜欢|不要|应该|必须|学习|备考|项目|产品|设计|插件|记忆|Skill|飞书|GitHub|雅思|IELTS)/i.test(text);
+}
+
+function splitFactSentences(text) {
+  return String(text || '')
+    .split(/[。！？!?\n]+/)
+    .map(cleanDraftText)
+    .filter(isUsefulFact)
+    .filter((item) => item.length <= 220);
+}
+
+function uniqueTexts(items) {
+  const seen = new Set();
+  return items.map(cleanDraftText).filter(Boolean).filter((item) => {
+    const key = item.toLowerCase();
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
 function buildSourceNote(page) {
   const title = String(page.title || '当前页面').trim();
   const url = String(page.url || '').trim();
@@ -212,6 +243,50 @@ function buildMemoryDraft(capture) {
   return {
     title: fact.length > 42 ? `${fact.slice(0, 42)}...` : fact,
     content: [`候选事实：${fact}`, buildSourceNote(page), `来源类型：${provider}`].filter(Boolean).join('\n')
+  };
+}
+
+function makeLessonFromEvidence(primary = '') {
+  const text = cleanDraftText(primary);
+  if (!text) return '';
+  if (/(不要|不需要|看不懂|难以理解|太奇怪|太丑|加载.*慢|没懂)/.test(text)) return `界面经验：遇到用户反馈“${truncateText(text, 90)}”时，优先减少解释性/内部化元素，并把功能改成可直接理解的具体结果。`;
+  if (/(自动|自己更新|基于.*聊天|对话记录|具体对话|提炼)/.test(text)) return '记忆经验：候选记忆和经验必须来自具体对话内容，先呈现可复用事实或结论，再把来源保留为上下文依据。';
+  if (/(颜色|圆角|风格|卡片|排版|版式|icon|图标)/i.test(text)) return '设计经验：视觉调整要沿用既定风格，把颜色、圆角、图标和卡片层级统一到同一套界面语言里。';
+  if (/(插件|浏览器|extension|网页|同步)/i.test(text)) return '产品经验：浏览器插件应作为网页到本地工作台的入口，保存具体事实并进入审阅，而不是只保存页面链接。';
+  return `可沉淀经验：${truncateText(text, 160)}`;
+}
+
+function buildLessonDraft(capture, selectedText = '') {
+  const page = capture && capture.page ? capture.page : {};
+  const conversation = capture && capture.conversation ? capture.conversation : {};
+  const turns = Array.isArray(conversation.turns) ? conversation.turns : [];
+  const userTurns = turns.filter((turn) => turn && turn.role === 'user').map((turn) => turn.text);
+  const assistantTurns = turns.filter((turn) => turn && turn.role === 'assistant').map((turn) => turn.text);
+  const evidence = uniqueTexts([
+    ...splitFactSentences(page.selection),
+    ...userTurns.flatMap(splitFactSentences),
+    ...splitFactSentences(conversation.promptDraft),
+    ...assistantTurns.flatMap(splitFactSentences)
+  ]).slice(0, 3);
+  const selected = isUsefulFact(selectedText) ? selectedText : '';
+  const primary = selected || evidence[0] || '';
+  if (!primary) {
+    return {
+      title: '需要具体对话后再提炼',
+      content: '这段页面还没有读到足够的具体对话，暂时不能沉淀成经验。请先选择一段真实对话，或手动补充一句可复用结论。'
+    };
+  }
+  const lesson = selected && /^(界面经验|记忆经验|设计经验|产品经验|可沉淀经验)[:：]/.test(selected) ? selected : makeLessonFromEvidence(primary);
+  const lines = turns.slice(-4).map((turn) => {
+    const role = turn.role === 'assistant' ? 'AI' : turn.role === 'user' ? '用户' : '对话';
+    const text = truncateText(turn.text || '', 220);
+    return text ? `${role}：${text}` : '';
+  }).filter(Boolean);
+  const evidenceText = lines.length ? lines.join('\n') : evidence.map((item) => `用户：${item}`).join('\n');
+  const source = conversation.provider || page.typeLabel || page.host || '浏览器';
+  return {
+    title: lesson.replace(/^(界面经验|记忆经验|设计经验|产品经验|可沉淀经验)[:：]/, '').slice(0, 42),
+    content: [`经验：${lesson}`, evidenceText ? `对话依据：\n${evidenceText}` : '', `来源类型：${source}`].filter(Boolean).join('\n')
   };
 }
 
@@ -365,10 +440,12 @@ document.addEventListener('click', async (event) => {
   if (!target) return;
   const kind = target.dataset.draftKind || 'memory';
   const page = latestCapture && latestCapture.page ? latestCapture.page : {};
+  const selectedText = target.dataset.draftText || '';
+  const lessonDraft = kind === 'lesson' ? buildLessonDraft(latestCapture, selectedText) : null;
   setDraft({
     kind,
-    title: page.title || (kind === 'lesson' ? '经验候选' : '记忆候选'),
-    content: target.dataset.draftText || '',
+    title: lessonDraft ? lessonDraft.title : page.title || (kind === 'lesson' ? '经验候选' : '记忆候选'),
+    content: lessonDraft ? lessonDraft.content : selectedText,
     meta: buildDraftMetaFields(latestCapture, kind)
   });
   setMessage('已填入审阅草稿');
@@ -387,7 +464,7 @@ $('copyDiagnostics').addEventListener('click', async () => {
 $('copyEvidenceCommand').addEventListener('click', async () => {
   try {
     await copyText(buildEvidenceCommand(latestCapture));
-    setMessage('已复制证据保存命令', 'ok');
+    setMessage('已复制证据向导命令', 'ok');
   } catch (err) {
     setMessage(err.message || '复制失败', 'error');
   }

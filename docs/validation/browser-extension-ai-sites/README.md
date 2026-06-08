@@ -30,7 +30,7 @@ npm run wizard:ai-validation-evidence -- --file diagnostics.json
 npm run wizard:ai-validation-evidence -- --file diagnostics.json --yes --browser "Chrome 版本号" --notes "无隐私信息的备注"
 ```
 
-也可以直接用命令行参数保存：
+旧的记录命令仍可用于排查兼容性，但默认优先使用上面的向导。也可以直接用命令行参数保存：
 
 ```bash
 npm run record:ai-validation-evidence -- --clipboard

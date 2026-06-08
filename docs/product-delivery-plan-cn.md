@@ -81,7 +81,7 @@
 - 真实站点验收记录：`docs/browser-extension-ai-validation-cn.md`
 - 真实站点测试卡：`docs/browser-extension-ai-site-test-cards-cn.md`，把 ChatGPT、Claude、Gemini、Perplexity 拆成外部试用任务
 - 真实站点证据目录：`docs/validation/browser-extension-ai-sites/`
-- 真实站点证据记录命令：`npm run record:ai-validation-evidence`
+- 真实站点证据记录命令：`npm run wizard:ai-validation-evidence`
 - 插件 PNG 图标资产：`browser-extension/icons/icon16.png`、`icon32.png`、`icon48.png`、`icon128.png`
 - 本地检查：`npm run check:browser-extension`
 - 试用入口检查：`check:browser-extension` 会确认弹窗显示扩展版本、本地工作台状态和使用指南入口

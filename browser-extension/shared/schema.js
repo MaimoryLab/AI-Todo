@@ -100,7 +100,8 @@ function cleanCandidateText(value) {
 function isUsefulFact(text) {
   if (!text || text.length < 6) return false;
   if (/^https?:\/\//i.test(text)) return false;
-  if (/^(摘要|来源|URL|页面结构|网页记忆线索|浏览器候选记忆)[:：]/.test(text)) return false;
+  if (/^(摘要|来源|URL|页面结构|网页记忆线索|浏览器候选记忆|浏览器候选经验|在\s*ChatGPT\s*中继续跟进)[:：]?/.test(text)) return false;
+  if (/ChatGPT\s*是一款供日常使用的\s*AI\s*聊天机器人/i.test(text)) return false;
   return /(我|我的|我们|用户|希望|想要|需要|正在|计划|偏好|喜欢|不喜欢|不要|应该|必须|学习|备考|项目|产品|设计|插件|记忆|Skill|飞书|GitHub|雅思|IELTS)/i.test(text);
 }
 
@@ -125,6 +126,57 @@ function uniqueCandidates(items) {
     });
 }
 
+function truncateText(text, limit = 180) {
+  const value = cleanCandidateText(text);
+  return value.length > limit ? `${value.slice(0, limit)}...` : value;
+}
+
+function conversationLinesFromPage(page = {}) {
+  const turns = Array.isArray(page.turns) ? page.turns : [];
+  return turns
+    .map((turn) => {
+      const role = turn && turn.role === 'assistant' ? 'AI' : turn && turn.role === 'user' ? '用户' : '对话';
+      const text = truncateText(turn && turn.text ? turn.text : '', 220);
+      return text ? `${role}：${text}` : '';
+    })
+    .filter(Boolean);
+}
+
+function lessonEvidenceFromPage(page = {}) {
+  const turns = Array.isArray(page.turns) ? page.turns : [];
+  const userTurns = turns.filter((turn) => turn && turn.role === 'user').map((turn) => turn.text);
+  const assistantTurns = turns.filter((turn) => turn && turn.role === 'assistant').map((turn) => turn.text);
+  const evidence = uniqueCandidates([
+    ...splitFactSentences(page.selection),
+    ...userTurns.flatMap(splitFactSentences),
+    ...splitFactSentences(page.promptDraft),
+    ...assistantTurns.flatMap(splitFactSentences)
+  ]);
+  const conversation = conversationLinesFromPage(page).slice(-4);
+  return {
+    evidence: evidence.slice(0, 3),
+    conversation
+  };
+}
+
+function makeLessonFromEvidence(primary = '') {
+  const text = cleanCandidateText(primary);
+  if (!text) return '';
+  if (/(不要|不需要|看不懂|难以理解|太奇怪|太丑|加载.*慢|没懂)/.test(text)) {
+    return `界面经验：遇到用户反馈“${truncateText(text, 90)}”时，优先减少解释性/内部化元素，并把功能改成可直接理解的具体结果。`;
+  }
+  if (/(自动|自己更新|基于.*聊天|对话记录|具体对话|提炼)/.test(text)) {
+    return `记忆经验：候选记忆和经验必须来自具体对话内容，先呈现可复用事实或结论，再把来源保留为上下文依据。`;
+  }
+  if (/(颜色|圆角|风格|卡片|排版|版式|icon|图标)/i.test(text)) {
+    return `设计经验：视觉调整要沿用既定风格，把颜色、圆角、图标和卡片层级统一到同一套界面语言里。`;
+  }
+  if (/(插件|浏览器|extension|网页|同步)/i.test(text)) {
+    return `产品经验：浏览器插件应作为网页到本地工作台的入口，保存具体事实并进入审阅，而不是只保存页面链接。`;
+  }
+  return `可沉淀经验：${truncateText(text, 160)}`;
+}
+
 function buildSourceNote(page) {
   const title = String(page.title || '当前页面').trim();
   const url = String(page.url || '').trim();
@@ -144,6 +196,37 @@ export function buildBrowserMemoryDraft(capture) {
     content: [`候选事实：${fact}`, source, `来源类型：${provider}`].filter(Boolean).join('\n'),
     fact,
     source
+  };
+}
+
+export function buildBrowserLessonDraft(capture) {
+  const page = capture && capture.page ? capture.page : {};
+  const conversation = capture && capture.conversation ? capture.conversation : {};
+  const pageForEvidence = {
+    ...page,
+    turns: Array.isArray(conversation.turns) ? conversation.turns : [],
+    promptDraft: conversation.promptDraft || page.promptDraft || ''
+  };
+  const candidates = capture && capture.candidates && Array.isArray(capture.candidates.lessons) ? capture.candidates.lessons : [];
+  const first = candidates.find((item) => isUsefulFact(item)) || '';
+  const { evidence, conversation: lines } = lessonEvidenceFromPage(pageForEvidence);
+  const primary = first || evidence[0] || '';
+  if (!primary) {
+    return {
+      title: '需要具体对话后再提炼',
+      content: '这段页面还没有读到足够的具体对话，暂时不能沉淀成经验。请先选择一段真实对话，或手动补充一句可复用结论。',
+      lesson: '',
+      evidence: ''
+    };
+  }
+  const lesson = makeLessonFromEvidence(primary);
+  const evidenceText = lines.length ? lines.join('\n') : evidence.map((item) => `用户：${item}`).join('\n');
+  const provider = conversation.provider || page.typeLabel || page.host || '浏览器';
+  return {
+    title: lesson.replace(/^(界面经验|记忆经验|设计经验|产品经验|可沉淀经验)[:：]/, '').slice(0, 42),
+    content: [`经验：${lesson}`, evidenceText ? `对话依据：\n${evidenceText}` : '', `来源类型：${provider}`].filter(Boolean).join('\n'),
+    lesson,
+    evidence: evidenceText
   };
 }
 
@@ -169,7 +252,11 @@ function buildMemoryCandidates(page, normalized) {
 
 function buildLessonCandidates(page, normalized) {
   const type = detectPageType({ ...page, ...normalized });
-  if (type === 'ai-chat') return ['把这段 AI 对话沉淀成可复用偏好、项目背景或下一步行动'];
+  const { evidence } = lessonEvidenceFromPage(page);
+  if (type === 'ai-chat') {
+    return evidence.length ? evidence.map(makeLessonFromEvidence).filter(Boolean).slice(0, 3) : ['这段对话还没有足够内容提炼经验，请选择具体对话或补充一句经验'];
+  }
+  if (evidence.length) return evidence.map(makeLessonFromEvidence).filter(Boolean).slice(0, 3);
   if (type === 'github') return ['记录这个开源项目的结构、功能模块或可借鉴交互'];
   if (type === 'feishu' || type === 'notion') return ['从这份文档提炼项目介绍、需求或决策记录'];
   if (type === 'paper') return ['把论文观点整理成研究线索或设计依据'];
@@ -212,9 +299,11 @@ export function captureToMemoryPayload(capture) {
 
 export function captureToLessonPayload(capture, note) {
   const page = capture.page;
+  const draft = buildBrowserLessonDraft(capture);
+  const content = cleanCandidateText(note) || draft.content;
   return {
-    content: note || `从网页 ${page.title} 提炼一条可复用经验`,
-    context: `${page.title}\n${page.url}`,
+    content,
+    context: draft.evidence || `${page.title}\n${page.url}`,
     tags: ['browser', 'web-context'],
     project: 'browser',
     sourceKind: capture.conversation && capture.conversation.provider ? capture.conversation.provider : page.typeLabel || '浏览器',
