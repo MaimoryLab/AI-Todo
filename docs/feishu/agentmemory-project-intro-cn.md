@@ -112,10 +112,10 @@ Viewer: http://localhost:3113
 交付检查：
 
 ```bash
-npm run check:browser-extension
-npm run package:browser-extension
-npm run build
+npm run check:delivery
 ```
+
+这个命令会构建项目、检查浏览器插件、校验 README 截图和交付文档，并生成本地插件预览包。
 
 权限与隐私说明：`docs/browser-extension-privacy-cn.md`
 

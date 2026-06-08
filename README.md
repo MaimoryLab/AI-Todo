@@ -224,7 +224,10 @@ Agent Memory Lab 默认本地优先。记忆、会话、索引和插件设置都
 ```bash
 npm test
 npm run build
+npm run check:delivery
 ```
+
+`check:delivery` 会构建项目、检查浏览器插件、校验 README 截图和交付文档，并生成本地插件预览包。
 
 本轮常用轻量验证：
 

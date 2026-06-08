@@ -66,6 +66,7 @@
 
 - 权限与隐私说明：`docs/browser-extension-privacy-cn.md`
 - 本地检查：`npm run check:browser-extension`
+- 一键交付检查：`npm run check:delivery`
 - 本地预览包：`npm run package:browser-extension`，输出 `artifacts/agent-memory-lab-extension.zip`
 - 试用者解压后选择包内 `browser-extension/` 文件夹加载
 - 未来商店发布仍需英文隐私政策、发布截图和逐站真实网页验收
