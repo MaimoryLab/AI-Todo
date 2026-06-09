@@ -156,6 +156,8 @@ function readDeliveryArtifact(relativePath: string): { body: Buffer; contentType
     ["agent-memory-lab-extension.zip", "application/zip"],
     ["delivery-summary.md", "text/markdown; charset=utf-8"],
     ["external-tester-handout.md", "text/markdown; charset=utf-8"],
+    ["external-feedback-template-cn.md", "text/markdown; charset=utf-8"],
+    ["external-feedback-triage-cn.md", "text/markdown; charset=utf-8"],
     ["delivery-manifest.json", "application/json; charset=utf-8"],
     ["ai-validation-run/tester-pack-cn.md", "text/markdown; charset=utf-8"],
   ]);
@@ -164,8 +166,10 @@ function readDeliveryArtifact(relativePath: string): { body: Buffer; contentType
   if (!contentType) return null;
   const root = deliveryArtifactRoot();
   const artifactsDir = resolve(root, "artifacts");
-  const target = resolve(artifactsDir, normalized);
-  if (target !== artifactsDir && !target.startsWith(`${artifactsDir}${sep}`)) return null;
+  const docsDir = resolve(root, "docs");
+  const targetRoot = normalized.startsWith("external-feedback-") ? docsDir : artifactsDir;
+  const target = resolve(targetRoot, normalized);
+  if (target !== targetRoot && !target.startsWith(`${targetRoot}${sep}`)) return null;
   try {
     if (!existsSync(target)) return null;
     return { body: readFileSync(target), contentType, downloadName: basename(target) };

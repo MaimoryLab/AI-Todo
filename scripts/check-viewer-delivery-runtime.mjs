@@ -61,6 +61,12 @@ try {
   const handout = await fetchText(base, '/artifacts/external-tester-handout.md');
   assert(handout.text.includes('外部试用说明'), 'External tester handout artifact must be served.');
 
+  const feedbackTemplate = await fetchText(base, '/artifacts/external-feedback-template-cn.md');
+  assert(feedbackTemplate.text.includes('外部试用反馈模板'), 'External feedback template artifact must be served.');
+
+  const feedbackTriage = await fetchText(base, '/artifacts/external-feedback-triage-cn.md');
+  assert(feedbackTriage.text.includes('外部反馈分诊指南'), 'External feedback triage artifact must be served.');
+
   const denied = await fetch(`${base}/artifacts/%252e%252e/package.json`);
   assert(denied.status === 404, 'Viewer artifact route must not expose paths outside the safe artifact list.');
 
