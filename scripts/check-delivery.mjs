@@ -182,17 +182,17 @@ for (const marker of ['外部测试闭环', '四步闭环', '加载插件', '真
 }
 
 const issueTemplate = read('.github/ISSUE_TEMPLATE/external-tester-feedback-cn.yml');
-for (const marker of ['外部试用反馈', '试用路径', 'diagnostics', 'manualValidation', 'memoryInsertPassed', 'siteInputStillWorks', '我已确认反馈内容不包含敏感信息']) {
+for (const marker of ['外部试用反馈', '试用路径', 'diagnostics', 'manualValidation', 'memoryInsertPassed', 'siteInputStillWorks', '我已确认反馈内容不包含敏感信息', 'turnCount', 'matchedSelectors', '真实对话', '输入框草稿']) {
   assert(issueTemplate.includes(marker), `External tester issue template missing marker: ${marker}`);
 }
 
 const feedbackTemplate = read('docs/external-feedback-template-cn.md');
-for (const marker of ['外部试用反馈模板', '外部反馈分诊指南', '基本信息', '试用路径', '问题描述', '诊断信息', 'manualValidation', '影响程度']) {
+for (const marker of ['外部试用反馈模板', '外部反馈分诊指南', '基本信息', '试用路径', '问题描述', '诊断信息', 'manualValidation', '影响程度', 'turnCount', 'matchedSelectors.turn', '具体对话', '输入框草稿']) {
   assert(feedbackTemplate.includes(marker), `External feedback template missing marker: ${marker}`);
 }
 
 const feedbackTriage = read('docs/external-feedback-triage-cn.md');
-for (const marker of ['外部反馈分诊指南', 'docs/external-feedback-template-cn.md', 'manualValidation', '站点适配', '输入事件', '审阅队列', '隐私/信任', 'npm run check:browser-extension']) {
+for (const marker of ['外部反馈分诊指南', 'docs/external-feedback-template-cn.md', 'manualValidation', '站点适配', '输入事件', '审阅队列', '隐私/信任', 'npm run check:browser-extension', 'turnCount', 'matchedSelectors.turn', '会话抽取']) {
   assert(feedbackTriage.includes(marker), `External feedback triage guide missing marker: ${marker}`);
 }
 

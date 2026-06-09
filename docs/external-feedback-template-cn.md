@@ -19,6 +19,9 @@
 - 试用页面：本地 demo / ChatGPT / Claude / Gemini / Perplexity / Grok / DeepSeek / 其他
 - 页面 URL：
 - 你输入的问题或任务类型：
+- 页面里是否已有至少一轮真实对话：是 / 否
+- 诊断 JSON 里的 `turnCount`：
+- 待审阅候选是否来自具体对话或用户选中文本：是 / 否 / 不确定
 - 是否看到“记忆建议”：是 / 否
 - 是否成功插入或复制记忆：是 / 否
 - 是否成功把网页加入待审阅：是 / 否
@@ -41,7 +44,12 @@
   "product": "Agent Memory Lab Browser Extension",
   "extension": {},
   "page": {},
-  "ai": {},
+  "ai": {
+    "turnCount": 0,
+    "matchedSelectors": {
+      "turn": ""
+    }
+  },
   "manualValidation": {
     "memoryInsertPassed": false,
     "diagnosticsCopied": true,
@@ -51,6 +59,8 @@
   }
 }
 ```
+
+如果反馈来自真实 AI 页面，请保留 `turnCount` 和 `matchedSelectors.turn`，用来判断插件是否真的命中了会话区域。不要粘贴完整聊天正文；也不要把页面标题、链接、导航文案或输入框草稿当作记忆来源。
 
 ## 截图或录屏
 

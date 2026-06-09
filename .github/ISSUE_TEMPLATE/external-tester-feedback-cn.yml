@@ -63,11 +63,16 @@ body:
     id: diagnostics
     attributes:
       label: 诊断 JSON 或证据文件名
-      description: 可以粘贴同步侧栏“复制诊断”的 JSON，或写 `docs/validation/browser-extension-ai-sites/YYYY-MM-DD-provider.json`。请先删掉隐私内容。
+      description: 可以粘贴同步侧栏“复制诊断”的 JSON，或写 `docs/validation/browser-extension-ai-sites/YYYY-MM-DD-provider.json`。AI 页面问题请保留 `turnCount` 和 `matchedSelectors.turn`，但先删掉隐私内容。
       render: json
       placeholder: |
         {
-          "ai": {},
+          "ai": {
+            "turnCount": 0,
+            "matchedSelectors": {
+              "turn": ""
+            }
+          },
           "manualValidation": {
             "memoryInsertPassed": false,
             "diagnosticsCopied": true,
@@ -83,6 +88,7 @@ body:
         - label: 我已确认反馈内容不包含敏感信息。
           required: true
         - label: 如果这是 AI 页面问题，我已尝试复制同步侧栏诊断 JSON。
+        - label: 如果这是 AI 页面问题，我已确认页面里至少有一轮真实对话，候选记忆不是页面标题、链接或输入框草稿。
         - label: 如果这是插入问题，我已确认原站输入框和发送按钮是否仍然正常。
 
   - type: dropdown

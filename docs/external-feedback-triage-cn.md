@@ -19,6 +19,7 @@
 | AI 页面 provider 识别错 | `ai.provider`、`page.host` | 站点适配 | 更新 `shared/site-config.js` 和内容脚本站点表 |
 | 输入框未找到 | `ai.editorFound`、`ai.editorSelector` | 站点 selector | 补 `editorSelectors`，增加 fixture |
 | 入口锚点未找到 | `ai.anchorFound`、`ai.placement` | 入口位置 | 补 `anchorSelectors` 或调整 placement |
+| 只有页面标题/链接，没有具体对话记忆 | `ai.turnCount`、`matchedSelectors.turn`、候选草稿来源 | 会话抽取 | 补 `turnSelectors`，确认 `turnCount > 0` 后再算真实站点通过 |
 | 有入口但挡住原站按钮 | 截图/录屏、`ai.placement` | 交互位置 | 调整 placement 或样式 |
 | 插入记忆失败 | `manualValidation.memoryInsertPassed`、目标站点 | 输入事件 | 修插入逻辑和 input/change 事件触发 |
 | 原站输入/发送异常 | `manualValidation.siteInputStillWorks` | 站点兼容 | 优先回滚相关站点注入策略 |
@@ -33,7 +34,7 @@
 | --- | --- | --- |
 | P0 | 插件无法加载、demo 无法预览、审阅队列无法保存 | 立即修，修完跑 `npm run check:delivery` |
 | P0 | 公开发布必需站点出现原站输入/发送异常 | 立即修，未修前不得标记站点通过 |
-| P1 | 必需站点 provider/input/anchor 任何一项失败 | 更新 selector，补真实证据 |
+| P1 | 必需站点 provider/input/anchor/turn 任何一项失败，或 `turnCount` 为 0 | 更新 selector，补真实证据 |
 | P1 | 保存前草稿不清楚、用户不知道保存到哪个项目或带了什么标签 | 优化弹窗/侧栏草稿元信息 |
 | P2 | 文档措辞、截图、非必需站点适配 | 排入下一版 |
 
