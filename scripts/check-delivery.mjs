@@ -263,6 +263,9 @@ for (const marker of ['function actionAttentionText', 'function actionDescriptio
   assert(viewer.includes(marker), `Viewer actions page missing non-technical action marker: ${marker}`);
 }
 assert(!viewer.includes('function priorityLabel'), 'Viewer actions page must not render priority as a user-facing field.');
+for (const marker of ['先看本机能力', '再整理经验', '最后生成草稿', '人工确认后复制到本地 Skill 目录']) {
+  assert(viewer.includes(marker), `Viewer skill page missing workflow marker: ${marker}`);
+}
 
 const viewerServer = read('src/viewer/server.ts');
 for (const marker of ['deliveryArtifactRoot', 'process.cwd()', 'readProjectDoc', '/docs/browser-extension-ai-site-test-cards-cn.md', 'text/markdown', 'readDeliveryStatus', 'readDeliveryArtifact', '/artifacts/', 'agent-memory-lab-extension.zip', 'external-tester-handout.md', 'external-feedback-template-cn.md', 'external-feedback-triage-cn.md', 'tester-pack-cn.md', '/agentmemory/delivery-status', 'delivery-manifest.json', 'ai-validation-evidence-summary.json', 'requiredProducts', 'sites', '未录入真实页面证据']) {
