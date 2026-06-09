@@ -4,6 +4,7 @@ import { spawnSync } from 'node:child_process';
 const COMPANY_REMOTE = 'company';
 const COMPANY_URL = 'https://github.com/novitalabs/agentmemory-lab.git';
 const REQUIRED_BRANCH = 'szn-viewer-ui-iteration';
+const DELIVERY_PR_BRANCH = process.env.AGENTMEMORY_COMPANY_PR_BRANCH || 'codex/diagnostic-privacy-20260609';
 
 function runGit(args, options = {}) {
   const result = spawnSync('git', args, { encoding: 'utf8' });
@@ -42,13 +43,16 @@ const head = runGit(['rev-parse', 'HEAD']);
 const shortHead = runGit(['rev-parse', '--short', 'HEAD']);
 const remoteUrl = runGit(['remote', 'get-url', COMPANY_REMOTE]);
 const remoteRef = runGit(['ls-remote', COMPANY_REMOTE, `refs/heads/${branch}`], { optional: true });
+const prRef = runGit(['ls-remote', COMPANY_REMOTE, `refs/heads/${DELIVERY_PR_BRANCH}`], { optional: true });
 const manifest = readJson(manifestPath);
 const evidence = readJson(evidencePath);
 const artifactCommit = manifest.git?.commit || '';
+const deliveredDirectly = remoteRef.startsWith(head);
+const deliveredByPr = prRef.startsWith(head);
 
 assert(branch === REQUIRED_BRANCH, `Expected branch ${REQUIRED_BRANCH}, got ${branch || 'unknown'}.`);
 assert(remoteUrl === COMPANY_URL, `Remote ${COMPANY_REMOTE} must point to ${COMPANY_URL}, got ${remoteUrl || 'missing'}.`);
-assert(remoteRef.startsWith(head), `Company remote ${COMPANY_REMOTE}/${branch} does not contain current commit ${shortHead}. Push first.`);
+assert(deliveredDirectly || deliveredByPr, `Company remote does not contain current commit ${shortHead}. Push to ${COMPANY_REMOTE}/${branch} or PR branch ${COMPANY_REMOTE}/${DELIVERY_PR_BRANCH}.`);
 assert(artifactCommit === shortHead, `Delivery artifact commit is ${artifactCommit || 'missing'}, expected ${shortHead}. Run npm run package:browser-extension.`);
 assert(!hasTrackedChanges(), 'Tracked changes are pending. Commit or discard them before company delivery.');
 
@@ -67,5 +71,6 @@ console.log('company delivery checks ok');
 console.log(`branch: ${branch}`);
 console.log(`commit: ${shortHead}`);
 console.log(`remote: ${COMPANY_REMOTE} ${COMPANY_URL}`);
+console.log(`delivery path: ${deliveredDirectly ? `${COMPANY_REMOTE}/${branch}` : `${COMPANY_REMOTE}/${DELIVERY_PR_BRANCH} pull request`}`);
 console.log(`external testing: ${release.externalTesting}`);
 console.log(`public release: ${release.publicRelease || 'not-ready'} (${evidence.passedCount || 0}/${evidence.requiredCount || 4} real AI evidence)`);

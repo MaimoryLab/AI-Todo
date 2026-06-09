@@ -7,9 +7,10 @@
 ```text
 repo: https://github.com/novitalabs/agentmemory-lab
 branch: szn-viewer-ui-iteration
+current PR: https://github.com/novitalabs/agentmemory-lab/pull/3
 ```
 
-这个分支是当前工作入口。浏览器插件、Viewer、中文 README、外部试用文档和交付检查都以这个分支为准。
+这个分支是当前工作入口。公司仓库的目标分支受保护，不能直接推送；交付改动先推到 PR 分支，再通过 PR 合并。浏览器插件、Viewer、中文 README、外部试用文档和交付检查都以这个分支为准。
 
 ## 当前可交付范围
 
@@ -83,7 +84,7 @@ npm run check:company-delivery
 - 插件语法、站点配置、审阅草稿、具体对话记忆草稿、本地 demo 交互。
 - README、截图、文档、插件包、交付状态、发布门槛。
 - 当前提交对应的真实 AI 站点验收清单。
-- 公司远端是否包含当前提交，插件包是否对齐当前提交。
+- 公司远端是否包含当前提交：已合并时看目标分支，未合并时看交付 PR 分支；同时检查插件包是否对齐当前提交。
 
 ## 真实 AI 站点验收
 
