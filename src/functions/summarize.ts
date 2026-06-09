@@ -206,6 +206,92 @@ function parseSummaryXml(
   };
 }
 
+function uniqueList(values: Array<string | undefined>, limit: number): string[] {
+  const seen = new Set<string>();
+  const result: string[] = [];
+  for (const value of values) {
+    const text = String(value || "").trim();
+    if (!text || seen.has(text)) continue;
+    seen.add(text);
+    result.push(text);
+    if (result.length >= limit) break;
+  }
+  return result;
+}
+
+function buildLocalSummary(
+  session: Session,
+  observations: CompressedObservation[],
+  reason: string,
+): SessionSummary {
+  const sorted = observations
+    .slice()
+    .sort((a, b) => String(a.timestamp || "").localeCompare(String(b.timestamp || "")));
+  const focus = sorted.filter((o) => ["decision", "task", "error", "conversation", "file_edit", "file_write"].includes(o.type));
+  const source = focus.length ? focus : sorted;
+  const first = source[0];
+  const title = session.firstPrompt || first?.title || session.project || "本地会话摘要";
+  const narrativeParts = source
+    .slice(0, 8)
+    .map((o) => {
+      const body = String(o.narrative || o.facts?.join("；") || o.title || "").trim();
+      return body ? `${o.title}: ${body}` : o.title;
+    })
+    .filter(Boolean);
+  const narrative = narrativeParts.length
+    ? `本地摘要：${narrativeParts.join("\n")}`
+    : "本地摘要：这段会话已有记录，但缺少可用于展开的正文。";
+  const decisions = uniqueList(
+    source
+      .filter((o) => ["decision", "task", "error", "conversation"].includes(o.type))
+      .flatMap((o) => [o.title, ...(o.facts || [])]),
+    8,
+  );
+  const concepts = uniqueList(source.flatMap((o) => o.concepts || []), 12);
+  const filesModified = uniqueList(
+    source
+      .filter((o) => ["file_edit", "file_write", "file_read"].includes(o.type))
+      .flatMap((o) => o.files || []),
+    12,
+  );
+
+  return {
+    sessionId: session.id,
+    project: session.project,
+    createdAt: new Date().toISOString(),
+    title: title.slice(0, 120),
+    narrative: `${narrative}\n\n生成方式：本地规则兜底（${reason}）。`,
+    keyDecisions: decisions.length ? decisions : uniqueList(source.map((o) => o.title), 6),
+    filesModified,
+    concepts,
+    observationCount: observations.length,
+  };
+}
+
+async function saveLocalSummary(
+  kv: StateKV,
+  session: Session,
+  observations: CompressedObservation[],
+  reason: string,
+): Promise<{ success: true; summary: SessionSummary; qualityScore: number; fallback: true; reason: string }> {
+  const summary = buildLocalSummary(session, observations, reason);
+  const qualityScore = scoreSummary({
+    title: summary.title,
+    narrative: summary.narrative,
+    keyDecisions: summary.keyDecisions,
+    filesModified: summary.filesModified,
+    concepts: summary.concepts,
+  });
+  await kv.set(KV.summaries, session.id, summary);
+  await safeAudit(kv, "compress", "mem::summarize", [session.id], {
+    title: summary.title,
+    observationCount: observations.length,
+    fallback: true,
+    reason,
+  });
+  return { success: true, summary, qualityScore, fallback: true, reason };
+}
+
 export function registerSummarizeFunction(
   sdk: ISdk,
   kv: StateKV,
@@ -244,12 +330,7 @@ export function registerSummarizeFunction(
         logger.info("Summarize skipped — no LLM provider configured", {
           sessionId,
         });
-        return {
-          success: false,
-          error: "no_provider",
-          reason:
-            "No LLM provider key set; Summarize is a no-op. Set ANTHROPIC_API_KEY (or GEMINI/OPENROUTER/MINIMAX) in ~/.agentmemory/.env to enable.",
-        };
+        return saveLocalSummary(kv, session, compressed, "no_provider");
       }
 
       try {
@@ -271,7 +352,7 @@ export function registerSummarizeFunction(
             chunks,
             observationCount: compressed.length,
           });
-          return { success: false, error: "empty_provider_response" };
+          return saveLocalSummary(kv, session, compressed, "empty_provider_response");
         }
         const summary = parseSummaryXml(
           response,
@@ -288,7 +369,7 @@ export function registerSummarizeFunction(
           logger.warn("Failed to parse summary XML", {
             sessionId,
           });
-          return { success: false, error: "parse_failed" };
+          return saveLocalSummary(kv, session, compressed, "parse_failed");
         }
 
         const summaryForValidation = {
@@ -313,7 +394,7 @@ export function registerSummarizeFunction(
             sessionId,
             errors: validation.result.errors,
           });
-          return { success: false, error: "validation_failed" };
+          return saveLocalSummary(kv, session, compressed, "validation_failed");
         }
 
         const qualityScore = scoreSummary(summaryForValidation);
@@ -353,7 +434,7 @@ export function registerSummarizeFunction(
           sessionId,
           error: msg,
         });
-        return { success: false, error: msg };
+        return saveLocalSummary(kv, session, compressed, msg || "provider_error");
       }
     },
   );

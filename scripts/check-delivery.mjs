@@ -262,9 +262,20 @@ for (const marker of ['delivery-status', 'renderDeliveryStatusCard', '浏览器�
 for (const marker of ['function actionAttentionText', 'function actionDescriptionText', 'function actionSourceText', '继续推进', '制作 30 秒 README 演示', '留学申请 Skill', '待跟进', '正在推进', '需要处理', '已完成', '来自 ']) {
   assert(viewer.includes(marker), `Viewer actions page missing non-technical action marker: ${marker}`);
 }
+for (const marker of ['已生成本地摘要', 'summarizeErrorLabel', '摘要服务未响应', '暂无可摘要内容']) {
+  assert(viewer.includes(marker), `Viewer session summary flow missing fallback marker: ${marker}`);
+}
+for (const marker of ['session-detail-top', 'session-detail-bottom', '跳到底部', '回到顶部', 'session-jump']) {
+  assert(viewer.includes(marker), `Viewer long session detail missing navigation marker: ${marker}`);
+}
 assert(!viewer.includes('function priorityLabel'), 'Viewer actions page must not render priority as a user-facing field.');
 for (const marker of ['先看本机能力', '再整理经验', '最后生成草稿', '人工确认后复制到本地 Skill 目录']) {
   assert(viewer.includes(marker), `Viewer skill page missing workflow marker: ${marker}`);
+}
+
+const summarizeSource = read('src/functions/summarize.ts');
+for (const marker of ['buildLocalSummary', 'saveLocalSummary', 'fallback: true', 'no_provider', 'empty_provider_response', 'parse_failed', 'validation_failed']) {
+  assert(summarizeSource.includes(marker), `Session summarize function missing local fallback marker: ${marker}`);
 }
 
 const viewerServer = read('src/viewer/server.ts');
@@ -330,6 +341,7 @@ run(process.execPath, ['scripts/check-browser-extension-review-draft.mjs']);
 run(process.execPath, ['scripts/check-browser-extension-diagnostics-privacy.mjs']);
 run(process.execPath, ['scripts/check-browser-extension-fixtures.mjs']);
 run(process.execPath, ['scripts/check-browser-extension-demo-interaction.mjs']);
+run(process.execPath, ['--import', 'tsx', 'scripts/check-summarize-fallback.mjs']);
 run(process.execPath, ['scripts/record-ai-validation-evidence.mjs', '--file', 'scripts/fixtures/ai-validation-diagnostic.json', '--out', 'artifacts/example-ai-validation-evidence.json', '--force']);
 run(process.execPath, ['scripts/prepare-ai-validation-run.mjs']);
 run(process.execPath, ['scripts/package-browser-extension.mjs']);

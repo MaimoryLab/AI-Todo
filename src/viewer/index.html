@@ -6568,7 +6568,7 @@
       var detailTitle = sessionTitleText(s);
       var preview = sessionBodyPreview({ summary: s.summary, latestPrompt: firstPromptFromObs, firstPrompt: s.firstPrompt }, detailTitle) || firstPromptFromObs || s.summary || s.firstPrompt || '';
 
-      var html = '<div class="detail-panel">';
+      var html = '<div class="detail-panel" id="session-detail-top">';
       html += '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px;">';
       html += '<div><h3 style="margin:0;">会话时间线</h3><div style="font-size:12px;color:var(--ink-muted);margin-top:4px;">' + esc(projectDisplayName(sessionProjectKey(s))) + ' · ' + esc(shortDateTime(sessionRecordTime(s))) + '</div></div>';
       html += statusIconMarkup(s.status, sessionStatusLabel(s.status));
@@ -6586,7 +6586,12 @@
       html += '</div>';
 
       var timelineObs = obs.slice().sort(function(a, b) { return (a.timestamp || '').localeCompare(b.timestamp || ''); });
-      html += '<div class="card" style="margin-bottom:12px;"><div class="card-title">完整过程 · ' + timelineObs.length + ' 条</div>';
+      var isLongTimeline = timelineObs.length > 80;
+      html += '<div class="card" style="margin-bottom:12px;"><div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;"><div><div class="card-title">完整过程 · ' + timelineObs.length + ' 条</div>';
+      if (isLongTimeline) html += '<div style="font-size:12px;color:var(--ink-muted);margin-top:4px;">记录很多，可以先跳到底部看最近进展。</div>';
+      html += '</div>';
+      if (isLongTimeline) html += '<button class="btn" data-action="session-jump" data-target="bottom">跳到底部</button>';
+      html += '</div>';
       if (timelineObs.length === 0) {
         html += '<div style="font-size:13px;color:var(--ink-faint);margin-top:8px;">这段会话还没有可展示的过程记录。</div>';
       } else {
@@ -6601,6 +6606,7 @@
           html += '</div></div>';
         });
         html += '</div>';
+        if (isLongTimeline) html += '<div id="session-detail-bottom" style="display:flex;justify-content:flex-end;margin-top:10px;"><button class="btn" data-action="session-jump" data-target="top">回到顶部</button></div>';
       }
       html += '</div>';
 
@@ -6672,10 +6678,35 @@
       if (!btn) return;
       btn.textContent = '生成中...';
       btn.disabled = true;
-      var result = await apiPost('summarize', { sessionId: id });
-      state.lessons.loaded = false;
-      btn.textContent = result && result.success ? '已生成摘要' : '生成失败';
-      setTimeout(function() { btn.textContent = '生成摘要'; btn.disabled = false; }, 2200);
+      try {
+        var result = await apiPost('summarize', { sessionId: id });
+        state.lessons.loaded = false;
+        if (result && result.success) {
+          btn.textContent = result.fallback ? '已生成本地摘要' : '已生成摘要';
+          btn.title = result.fallback ? '没有可用模型时，已用本地规则从会话记录生成摘要。' : '';
+        } else {
+          btn.textContent = summarizeErrorLabel(result && (result.reason || result.error));
+          btn.title = summarizeErrorHint(result && (result.reason || result.error));
+        }
+      } catch (err) {
+        btn.textContent = '摘要服务未响应';
+        btn.title = '本地工作台没有连上摘要接口，请确认 Agent Memory Lab worker 正在运行。';
+      }
+      setTimeout(function() { btn.textContent = '生成摘要'; btn.disabled = false; }, 2600);
+    }
+
+    function summarizeErrorLabel(error) {
+      if (error === 'no_observations') return '暂无可摘要内容';
+      if (error === 'session_not_found') return '会话不存在';
+      if (error === 'no_provider') return '缺少模型配置';
+      return '生成失败';
+    }
+
+    function summarizeErrorHint(error) {
+      if (error === 'no_observations') return '这段会话还没有可整理的记录。';
+      if (error === 'session_not_found') return '本地数据里没有找到这段会话。';
+      if (error === 'no_provider') return '未配置模型时会使用本地规则摘要；如果仍失败，请检查本地 worker 日志。';
+      return String(error || '摘要生成失败，请稍后重试。');
     }
 
     function skillDraftSlug(text) {
@@ -8037,9 +8068,15 @@
 	        renderObservations();
 	        return;
 	      }
-	      if (action === 'select-session') {
+      if (action === 'select-session') {
         var sessionId = target.getAttribute('data-session-id');
         if (sessionId) selectSession(sessionId);
+        return;
+      }
+      if (action === 'session-jump') {
+        var jumpTarget = target.getAttribute('data-target') === 'bottom' ? 'session-detail-bottom' : 'session-detail-top';
+        var jumpEl = document.getElementById(jumpTarget);
+        if (jumpEl) jumpEl.scrollIntoView({ behavior: 'smooth', block: target.getAttribute('data-target') === 'bottom' ? 'end' : 'start' });
         return;
       }
       if (action === 'end-session') {
