@@ -45,7 +45,7 @@
     "sync:ai-validation-table": "node scripts/sync-ai-validation-table.mjs --write",
     "check:ai-validation-table": "node scripts/sync-ai-validation-table.mjs --check",
     "status:delivery": "node scripts/delivery-status.mjs",
-    "check:company-delivery": "node scripts/check-company-delivery.mjs"
+    "check:remote-delivery": "node scripts/check-remote-delivery.mjs"
   },
   "keywords": [
     "ai",

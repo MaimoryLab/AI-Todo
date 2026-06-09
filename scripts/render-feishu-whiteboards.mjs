@@ -72,7 +72,7 @@ const structure = shell({
     ${card({ x: 480, y: 180, w: 330, h: 220, title: 'browser-extension', body: ['Chrome 插件 MVP', 'popup / sidepanel / content script', '统一 PageCapture 数据'], accent: '#ff6b35' })}
     ${card({ x: 870, y: 180, w: 330, h: 220, title: 'docs / feishu', body: ['README 图文版', '飞书项目说明源稿', '隐私、验收、交付文档'], accent: '#8b5cf6' })}
     ${card({ x: 1260, y: 180, w: 250, h: 220, title: 'scripts', body: ['打包插件', '交付检查', '真实站点证据检查'], accent: '#2563eb' })}
-    ${card({ x: 220, y: 570, w: 360, h: 210, title: '公司仓库 PR', body: ['novitalabs/agentmemory-lab', '受保护分支必须走 PR', '当前交付进入审核流'], accent: '#111827' })}
+    ${card({ x: 220, y: 570, w: 360, h: 210, title: '远端交付 PR', body: ['novitalabs/agentmemory-lab', '受保护分支必须走 PR', '当前交付进入审核流'], accent: '#111827' })}
     ${card({ x: 700, y: 570, w: 360, h: 210, title: '试用可交付', body: ['本地 Viewer', '插件 zip', '外测说明和反馈模板'], accent: '#f59e0b' })}
     ${card({ x: 1180, y: 570, w: 300, h: 210, title: '公开发布门槛', body: ['真实 AI 站点 4/4', 'ChatGPT / Claude', 'Gemini / Perplexity'], accent: '#dc2626' })}
     ${arrow(420, 290, 480, 290, '连接')}

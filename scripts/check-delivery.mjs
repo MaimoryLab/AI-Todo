@@ -38,7 +38,7 @@ const requiredFiles = [
   'browser-extension/README.md',
   'docs/demo-checklist-cn.md',
   'docs/product-delivery-plan-cn.md',
-  'docs/company-handoff-cn.md',
+  'docs/project-delivery-guide-cn.md',
   'docs/external-tester-guide-cn.md',
   'docs/external-feedback-template-cn.md',
   'docs/external-feedback-triage-cn.md',
@@ -70,7 +70,7 @@ const requiredFiles = [
   'scripts/check-browser-extension-fixtures.mjs',
   'scripts/check-browser-extension-demo-interaction.mjs',
   'scripts/check-browser-extension-package.mjs',
-  'scripts/check-company-delivery.mjs',
+  'scripts/check-remote-delivery.mjs',
   'scripts/check-release-gates.mjs',
   'scripts/record-ai-validation-evidence.mjs',
   'scripts/wizard-ai-validation-evidence.mjs',
@@ -122,9 +122,9 @@ assert(imageRefs.includes('docs/readme-assets/screenshots/dashboard.jpg'), 'READ
 assert(imageRefs.includes('docs/readme-assets/screenshots/skills.jpg'), 'README must include skills screenshot.');
 
 const browserReadme = read('browser-extension/README.md');
-const companyHandoff = read('docs/company-handoff-cn.md');
-for (const marker of ['公司接手说明', 'szn-viewer-ui-iteration', 'npm run check:company-delivery', 'ChatGPT', 'Claude', 'Gemini', 'Perplexity', '当前不能承诺']) {
-  assert(companyHandoff.includes(marker), `Company handoff doc missing marker: ${marker}`);
+const deliveryGuide = read('docs/project-delivery-guide-cn.md');
+for (const marker of ['项目交付说明', 'szn-viewer-ui-iteration', 'npm run check:remote-delivery', 'ChatGPT', 'Claude', 'Gemini', 'Perplexity', '当前不能承诺']) {
+  assert(deliveryGuide.includes(marker), `Project delivery guide missing marker: ${marker}`);
 }
 assert(existsSync('iii-config.local-memory.yaml'), 'Local memory config must exist.');
 const localMemoryConfig = read('iii-config.local-memory.yaml');
