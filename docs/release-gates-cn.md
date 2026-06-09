@@ -47,7 +47,8 @@
 - Claude 真实页面验收。
 - Gemini 真实页面验收。
 - Perplexity 真实页面验收。
-- 真实站点验收记录中要保留诊断 JSON 或截图证据。
+- 真实站点验收记录中要保留诊断 JSON 或截图证据；诊断 JSON 必须包含 `turnCount > 0` 和会话区域 selector。
+- 记忆候选必须来自具体对话或用户选中的文字，页面标题、链接、导航文案或输入框草稿不能计入公开发布通过证据。
 - `artifacts/ai-validation-evidence-summary.json` 中必需产品通过数为 4/4。
 - 至少一组不含私人信息的插件截图或短录屏。
 - 稳定公开隐私政策 URL。

@@ -158,11 +158,11 @@ for (const marker of ['五步验收', '保存范围、分类备注', '经验候�
 }
 
 const siteCards = read('docs/browser-extension-ai-site-test-cards-cn.md');
-for (const marker of ['真实 AI 站点测试卡', 'ChatGPT', 'Claude', 'Gemini', 'Perplexity', '复制检查步骤', 'manualValidation.memoryInsertPassed', 'manualValidation.diagnosticsCopied', 'manualValidation.siteInputStillWorks', 'npm run wizard:ai-validation-evidence', 'npm run prepare:ai-validation']) {
+for (const marker of ['真实 AI 站点测试卡', 'ChatGPT', 'Claude', 'Gemini', 'Perplexity', '复制检查步骤', 'manualValidation.memoryInsertPassed', 'manualValidation.diagnosticsCopied', 'manualValidation.siteInputStillWorks', 'npm run wizard:ai-validation-evidence', 'npm run prepare:ai-validation', 'turnCount > 0', 'matchedSelectors.turn', '用户选中的文字', '输入框草稿']) {
   assert(siteCards.includes(marker), `AI site test cards missing marker: ${marker}`);
 }
 const zipSiteCards = read('browser-extension/AI-SITE-TEST-CARDS.md');
-for (const marker of ['ChatGPT', 'Claude', 'Gemini', 'Perplexity', '公开发布', 'npm run wizard:ai-validation-evidence']) {
+for (const marker of ['ChatGPT', 'Claude', 'Gemini', 'Perplexity', '公开发布', 'npm run wizard:ai-validation-evidence', 'turnCount > 0', 'matchedSelectors.turn', '用户选中的文字', '输入框草稿']) {
   assert(zipSiteCards.includes(marker), `Zip AI site test cards missing marker: ${marker}`);
 }
 
@@ -172,12 +172,12 @@ for (const marker of ['审阅队列可用', 'AI 页面状态', '记忆建议', '
 }
 
 const testerGuide = read('docs/external-tester-guide-cn.md');
-for (const marker of ['外部试用指南', '外部测试闭环', 'cd agentmemory-lab', 'npm run build && npm run start', 'npm run check:workbench', 'npm run check:release-gates', '记忆建议', '诊断 JSON', '复制检查步骤', '从仓库试用', '从 zip 试用', 'browser-extension/', '插件自检页', '/demo/browser-extension.html', 'Viewer 首页', '下载插件包', '验收一页纸', 'quickstart-cn.md', '反馈模板', '分诊指南', '外部试用反馈模板', 'external-tester-feedback-cn.yml', '外部反馈分诊指南', 'browser-extension-ai-site-test-cards-cn.md', 'npm run make:ai-validation-tester-pack', 'tester-pack-cn.md']) {
+for (const marker of ['外部试用指南', '外部测试闭环', 'cd agentmemory-lab', 'npm run build && npm run start', 'npm run check:workbench', 'npm run check:release-gates', '记忆建议', '诊断 JSON', '复制检查步骤', '从仓库试用', '从 zip 试用', 'browser-extension/', '插件自检页', '/demo/browser-extension.html', 'Viewer 首页', '下载插件包', '验收一页纸', 'quickstart-cn.md', '反馈模板', '分诊指南', '外部试用反馈模板', 'external-tester-feedback-cn.yml', '外部反馈分诊指南', 'browser-extension-ai-site-test-cards-cn.md', 'npm run make:ai-validation-tester-pack', 'tester-pack-cn.md', 'turnCount', 'matchedSelectors.turn', '用户选中的文字', '输入框草稿']) {
   assert(testerGuide.includes(marker), `External tester guide missing marker: ${marker}`);
 }
 
 const testLoop = read('docs/external-test-loop-cn.md');
-for (const marker of ['外部测试闭环', '四步闭环', '加载插件', '真实页面使用', '逐站验收', '提交反馈', '最少要回收的信息', '交付判断', 'npm run check:ai-validation-evidence']) {
+for (const marker of ['外部测试闭环', '四步闭环', '加载插件', '真实页面使用', '逐站验收', '提交反馈', '最少要回收的信息', '交付判断', 'npm run check:ai-validation-evidence', 'turnCount > 0', '会话区域 selector', '输入框草稿']) {
   assert(testLoop.includes(marker), `External test loop missing marker: ${marker}`);
 }
 
@@ -207,7 +207,7 @@ for (const marker of ['mem0ai/mem0-chrome-extension', 'supported sites', '输入
 }
 
 const releaseGates = read('docs/release-gates-cn.md');
-for (const marker of ['本地可演示', '外部可试用', '公开可发布', '未达到', '真实 AI 站点逐站验收', 'GitHub 外部试用 Issue 模板', '外部反馈分诊指南', '入口位置策略', '保存范围', '分类备注', '经验候选', 'npm run check:release-public', 'npm run make:ai-validation-tester-pack']) {
+for (const marker of ['本地可演示', '外部可试用', '公开可发布', '未达到', '真实 AI 站点逐站验收', 'GitHub 外部试用 Issue 模板', '外部反馈分诊指南', '入口位置策略', '保存范围', '分类备注', '经验候选', 'npm run check:release-public', 'npm run make:ai-validation-tester-pack', 'turnCount > 0', '会话区域 selector', '输入框草稿']) {
   assert(releaseGates.includes(marker), `Release gates doc missing marker: ${marker}`);
 }
 
@@ -217,7 +217,7 @@ for (const marker of ['ChatGPT', 'Claude', 'Gemini', 'Perplexity', '复制问题
 }
 
 const evidenceReadme = read('docs/validation/browser-extension-ai-sites/README.md');
-for (const marker of ['npm run wizard:ai-validation-evidence', '--clipboard', '--file diagnostics.json', '--pass', '证据质量门槛', 'matchedSelectors.editor', 'matchedSelectors.anchor', 'matchedSelectors.send', 'matchedSelectors.turn', '诊断默认不包含 prompt 草稿']) {
+for (const marker of ['npm run wizard:ai-validation-evidence', '--clipboard', '--file diagnostics.json', '--pass', '证据质量门槛', 'matchedSelectors.editor', 'matchedSelectors.anchor', 'matchedSelectors.send', 'matchedSelectors.turn', 'turnCount > 0', '用户选中的文字', '输入框草稿', '诊断默认不包含 prompt 草稿']) {
   assert(evidenceReadme.includes(marker), `AI validation evidence README missing marker: ${marker}`);
 }
 

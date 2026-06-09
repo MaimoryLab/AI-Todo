@@ -10,8 +10,9 @@
 2. 在 Chrome 或 Edge 开发者模式加载 `browser-extension/`。
 3. 打开目标 AI 产品页面并登录。
 4. 打开插件同步侧栏，确认能看到版本、本地连接状态、“复制问题信息”和“复制检查步骤”。
-5. 如果真实页面没有出现“记忆建议”，再打开 `启动输出里的 Viewer 地址 + /demo/browser-extension.html` 做自检，用来区分是站点适配问题还是插件注入整体异常。
-6. 每测完一个真实 AI 页面，都先复制侧栏诊断，再复制侧栏生成的保存命令，把证据保存到 `docs/validation/browser-extension-ai-sites/`。
+5. 在目标站点输入一个真实问题并等待 AI 回复，页面里至少要有一轮真实对话。
+6. 如果真实页面没有出现“记忆建议”，再打开 `启动输出里的 Viewer 地址 + /demo/browser-extension.html` 做自检，用来区分是站点适配问题还是插件注入整体异常。
+7. 每测完一个真实 AI 页面，都先复制侧栏诊断，再复制侧栏生成的保存命令，把证据保存到 `docs/validation/browser-extension-ai-sites/`。
 
 开始逐站验收前，建议先生成本次验收清单：
 
@@ -42,6 +43,8 @@ npm run wizard:ai-validation-evidence
 - 点击建议后可以插入或复制记忆。
 - 同步侧栏可以复制问题信息 JSON。
 - 原站输入、发送、滚动、模型选择和附件按钮没有异常。
+- 诊断 JSON 的 `turnCount > 0`，并且 `matchedSelectors.turn` 能说明插件命中了真实会话区域。
+- 待审阅候选来自具体对话或用户选中的文字；页面介绍、URL、导航文案或输入框草稿不能算通过。
 - 诊断 JSON 的 `manualValidation.memoryInsertPassed`、`manualValidation.diagnosticsCopied`、`manualValidation.siteInputStillWorks` 都为通过。
 - 诊断 JSON 里有 `matchedSelectors.editor`、`matchedSelectors.anchor`、`matchedSelectors.send`、`matchedSelectors.turn`，方便复现站点适配问题。
 

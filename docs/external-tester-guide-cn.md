@@ -150,6 +150,8 @@ npm run make:ai-validation-tester-pack
 - 记忆可以插入或复制。
 - 同步侧栏可以复制问题信息 JSON，也可以复制保存证据的终端命令。
 - 原站点输入、发送、滚动没有异常。
+- 页面里至少有一轮真实对话，诊断 JSON 的 `turnCount > 0`。
+- 待审阅候选来自具体对话或用户选中的文字；页面介绍、URL、导航文案或输入框草稿不能算通过。
 
 验收结果写入：
 
@@ -188,7 +190,7 @@ npm run sync:ai-validation-table
 - 同步侧栏复制出来的诊断 JSON，以及侧栏“复制检查步骤”生成的保存命令执行结果。
 - 如果可以，直接提供 `docs/validation/browser-extension-ai-sites/` 下的证据 JSON 文件。
 - 复制问题信息里的 `manualValidation` 字段需要按真实结果改成 `true` / `false`，不要默认当作通过。
-- 诊断 JSON 里 `editorFound`、`anchorFound`、`placement`、`memoryWidgetVisible` 的状态。
+- 诊断 JSON 里 `editorFound`、`anchorFound`、`placement`、`memoryWidgetVisible`、`turnCount` 和 `matchedSelectors.turn` 的状态。
 - 哪一步不符合预期。
 
 ## 当前不能承诺

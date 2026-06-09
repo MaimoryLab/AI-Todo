@@ -39,4 +39,4 @@
 - 外部可试用：zip 包、加载说明、反馈模板、分诊指南和交付摘要齐全。
 - 公开可发布：ChatGPT、Claude、Gemini、Perplexity 都有真实页面通过证据，并且隐私政策、商店截图和发布文案准备好。
 
-当前公开发布不能只靠本地 fixture 通过。真实 AI 页面证据必须来自测试者实际页面，并能通过 `npm run check:ai-validation-evidence` 汇总。
+当前公开发布不能只靠本地 fixture 通过。真实 AI 页面证据必须来自测试者实际页面，并能通过 `npm run check:ai-validation-evidence` 汇总。每份通过证据还必须包含 `turnCount > 0` 和会话区域 selector，证明插件抓到的是具体对话；页面标题、链接、导航文案或输入框草稿不能算作记忆来源。

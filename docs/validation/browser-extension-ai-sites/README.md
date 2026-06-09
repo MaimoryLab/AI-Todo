@@ -5,10 +5,11 @@
 ## 怎么保存证据
 
 1. 在目标 AI 页面打开 Agent Memory Lab 同步侧栏。
-2. 输入一个真实问题，确认输入框旁出现“记忆建议”。
-3. 尝试插入或复制一条本地记忆。
-4. 点击侧栏里的“复制问题信息”。
-5. 用命令把诊断 JSON 保存成标准证据文件。
+2. 输入一个真实问题并等待 AI 回复，确保页面里已经出现至少一轮真实对话。
+3. 确认输入框旁出现“记忆建议”，并且待审阅候选来自具体对话或用户选中的文字，不是页面标题、链接或输入框草稿。
+4. 尝试插入或复制一条本地记忆。
+5. 点击侧栏里的“复制问题信息”。
+6. 用命令把诊断 JSON 保存成标准证据文件。
 
 从剪贴板保存：
 
@@ -76,6 +77,7 @@ YYYY-MM-DD-provider.json
 - `ai.matchedSelectors.anchor`
 - `ai.matchedSelectors.send`
 - `ai.matchedSelectors.turn`
+- `ai.turnCount`
 - `ai.checkedAt`
 
 复制问题信息会自带 `manualValidation` 模板。请按真实验收结果把它改好：
@@ -100,6 +102,8 @@ YYYY-MM-DD-provider.json
 
 - `provider`、`editorFound`、`anchorFound`、`memoryWidgetVisible` 都是真实页面结果。
 - `matchedSelectors` 里保留输入框、锚点、发送按钮、会话区域四类命中规则。
+- `turnCount > 0`，证明插件确实命中了真实会话区域，而不是只识别到输入框或页面壳。
+- 待审阅候选来自具体对话或用户选中的文字；页面介绍、URL、导航文案或输入框草稿不能计入通过。
 - `manualValidation.memoryInsertPassed`、`manualValidation.diagnosticsCopied`、`manualValidation.siteInputStillWorks` 都为通过。
 - `browser` 和 `notes` 写清楚无隐私的浏览器版本与测试备注。
 

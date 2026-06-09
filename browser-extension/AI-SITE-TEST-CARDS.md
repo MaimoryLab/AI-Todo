@@ -17,6 +17,8 @@
 - 点击建议后可以插入或复制记忆。
 - 同步侧栏可以复制诊断 JSON。
 - 原站输入、发送、滚动、模型选择和附件按钮没有异常。
+- 页面里至少有一轮真实对话，诊断 JSON 的 `turnCount > 0`。
+- 待审阅候选来自具体对话或用户选中的文字，不是页面标题、链接、导航文案或输入框草稿。
 
 ## 保存证据
 
@@ -34,7 +36,7 @@ npm run wizard:ai-validation-evidence
 npm run wizard:ai-validation-evidence -- --yes --browser "Chrome 版本号" --notes "无隐私信息的备注"
 ```
 
-通过证据里必须能看到 `manualValidation.memoryInsertPassed`、`manualValidation.diagnosticsCopied`、`manualValidation.siteInputStillWorks` 三项都为通过。
+通过证据里必须能看到 `manualValidation.memoryInsertPassed`、`manualValidation.diagnosticsCopied`、`manualValidation.siteInputStillWorks` 三项都为通过，同时 `matchedSelectors.turn` 和 `turnCount > 0` 能证明插件确实命中了真实会话区域。
 
 ## 当前边界
 
