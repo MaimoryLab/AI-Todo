@@ -40,6 +40,7 @@
     "record:ai-validation-evidence": "node scripts/record-ai-validation-evidence.mjs",
     "wizard:ai-validation-evidence": "node scripts/wizard-ai-validation-evidence.mjs",
     "prepare:ai-validation": "node scripts/prepare-ai-validation-run.mjs",
+    "make:ai-validation-tester-pack": "node scripts/make-ai-validation-tester-pack.mjs",
     "check:ai-validation-evidence": "node scripts/check-ai-validation-evidence.mjs",
     "sync:ai-validation-table": "node scripts/sync-ai-validation-table.mjs --write",
     "check:ai-validation-table": "node scripts/sync-ai-validation-table.mjs --check",

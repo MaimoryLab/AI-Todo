@@ -37,6 +37,7 @@
 - 诊断 JSON 包含扩展版本、输入框命中规则、入口锚点、入口位置策略和记忆建议可见状态。
 - AI 站点验收记录区分“本地可验证”和“真实站点待验收”。
 - 真实 AI 站点诊断 JSON 有固定证据目录，并可用 `npm run check:ai-validation-evidence` 汇总。
+- 可以生成 `artifacts/ai-validation-run/tester-pack-cn.md`，让外测者按同一套站点、prompt、隐私边界和证据命令执行。
 
 ## 公开可发布门槛
 
@@ -71,6 +72,13 @@ npm run status:delivery
 
 ```bash
 npm run check:release-gates
+```
+
+准备真实 AI 站点外测包：
+
+```bash
+npm run prepare:ai-validation
+npm run make:ai-validation-tester-pack
 ```
 
 公开发布前必须额外通过：

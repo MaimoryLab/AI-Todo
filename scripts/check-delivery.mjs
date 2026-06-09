@@ -75,6 +75,7 @@ const requiredFiles = [
   'scripts/record-ai-validation-evidence.mjs',
   'scripts/wizard-ai-validation-evidence.mjs',
   'scripts/prepare-ai-validation-run.mjs',
+  'scripts/make-ai-validation-tester-pack.mjs',
   'scripts/check-ai-validation-evidence.mjs',
   'scripts/sync-ai-validation-table.mjs',
   'scripts/delivery-status.mjs',
@@ -165,7 +166,7 @@ for (const marker of ['审阅队列可用', 'AI 页面状态', '记忆建议', '
 }
 
 const testerGuide = read('docs/external-tester-guide-cn.md');
-for (const marker of ['外部试用指南', '外部测试闭环', 'cd agentmemory-lab', 'npm run build && npm run start', 'npm run check:workbench', 'npm run check:release-gates', '记忆建议', '诊断 JSON', '复制检查步骤', '从仓库试用', '从 zip 试用', 'browser-extension/', '插件自检页', '/demo/browser-extension.html', '外部试用反馈模板', 'external-tester-feedback-cn.yml', '外部反馈分诊指南', 'browser-extension-ai-site-test-cards-cn.md']) {
+for (const marker of ['外部试用指南', '外部测试闭环', 'cd agentmemory-lab', 'npm run build && npm run start', 'npm run check:workbench', 'npm run check:release-gates', '记忆建议', '诊断 JSON', '复制检查步骤', '从仓库试用', '从 zip 试用', 'browser-extension/', '插件自检页', '/demo/browser-extension.html', '外部试用反馈模板', 'external-tester-feedback-cn.yml', '外部反馈分诊指南', 'browser-extension-ai-site-test-cards-cn.md', 'npm run make:ai-validation-tester-pack', 'tester-pack-cn.md']) {
   assert(testerGuide.includes(marker), `External tester guide missing marker: ${marker}`);
 }
 
@@ -200,7 +201,7 @@ for (const marker of ['mem0ai/mem0-chrome-extension', 'supported sites', '输入
 }
 
 const releaseGates = read('docs/release-gates-cn.md');
-for (const marker of ['本地可演示', '外部可试用', '公开可发布', '未达到', '真实 AI 站点逐站验收', 'GitHub 外部试用 Issue 模板', '外部反馈分诊指南', '入口位置策略', '保存范围', '分类备注', '经验候选', 'npm run check:release-public']) {
+for (const marker of ['本地可演示', '外部可试用', '公开可发布', '未达到', '真实 AI 站点逐站验收', 'GitHub 外部试用 Issue 模板', '外部反馈分诊指南', '入口位置策略', '保存范围', '分类备注', '经验候选', 'npm run check:release-public', 'npm run make:ai-validation-tester-pack']) {
   assert(releaseGates.includes(marker), `Release gates doc missing marker: ${marker}`);
 }
 
@@ -304,11 +305,13 @@ run(process.execPath, ['scripts/check-browser-extension-diagnostics-privacy.mjs'
 run(process.execPath, ['scripts/check-browser-extension-fixtures.mjs']);
 run(process.execPath, ['scripts/check-browser-extension-demo-interaction.mjs']);
 run(process.execPath, ['scripts/record-ai-validation-evidence.mjs', '--file', 'scripts/fixtures/ai-validation-diagnostic.json', '--out', 'artifacts/example-ai-validation-evidence.json', '--force']);
+run(process.execPath, ['scripts/prepare-ai-validation-run.mjs']);
 run(process.execPath, ['scripts/package-browser-extension.mjs']);
 run(process.execPath, ['scripts/check-browser-extension-package.mjs']);
 run(process.execPath, ['scripts/check-ai-validation-evidence.mjs']);
 run(process.execPath, ['scripts/sync-ai-validation-table.mjs', '--check']);
 run(process.execPath, ['scripts/write-delivery-summary.mjs']);
+run(process.execPath, ['scripts/make-ai-validation-tester-pack.mjs']);
 run(process.execPath, ['scripts/delivery-status.mjs']);
 run(process.execPath, ['--import', 'tsx', 'scripts/check-viewer-delivery-runtime.mjs']);
 run(process.execPath, ['scripts/check-release-gates.mjs']);
@@ -318,6 +321,7 @@ assert(existsSync('artifacts/delivery-manifest.json'), 'Delivery manifest was no
 assert(existsSync('artifacts/external-tester-handout.md'), 'External tester handout was not created.');
 assert(existsSync('artifacts/release-notes.md'), 'Release notes were not created.');
 assert(existsSync('artifacts/ai-validation-evidence-summary.json'), 'AI validation evidence summary was not created.');
+assert(existsSync('artifacts/ai-validation-run/tester-pack-cn.md'), 'AI validation tester pack was not created.');
 const deliverySummary = read('artifacts/delivery-summary.md');
 for (const marker of ['Agent Memory Lab Delivery Summary', 'Extension zip', 'Extension zip sha256', 'Delivery manifest', 'External Testing Loop', 'Release Gates', 'Real AI Site Validation', 'External tester guide', 'External tester issue template', 'AI validation log']) {
   assert(deliverySummary.includes(marker), `Delivery summary missing marker: ${marker}`);
@@ -362,6 +366,11 @@ assert(deliveryManifest.releaseState.realSiteValidation.evidenceSummary === 'art
 const handout = read('artifacts/external-tester-handout.md');
 for (const marker of ['Agent Memory Lab 外部试用说明', 'agent-memory-lab-extension.zip', '先做这 5 步', '真实 AI 页面验收', 'GitHub Issue 模板', '公开发布：not-ready']) {
   assert(handout.includes(marker), `External tester handout missing marker: ${marker}`);
+}
+
+const testerPack = read('artifacts/ai-validation-run/tester-pack-cn.md');
+for (const marker of ['真实 AI 站点外测包', 'ChatGPT', 'Claude', 'Gemini', 'Perplexity', '不能替代', 'prompt 草稿', 'npm run wizard:ai-validation-evidence', 'manualValidation']) {
+  assert(testerPack.includes(marker), `AI validation tester pack missing marker: ${marker}`);
 }
 
 const releaseNotes = read('artifacts/release-notes.md');

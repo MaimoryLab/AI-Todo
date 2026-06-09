@@ -76,6 +76,7 @@ npm run check:delivery
 npm run package:browser-extension
 npm run status:delivery
 npm run prepare:ai-validation
+npm run make:ai-validation-tester-pack
 npm run check:company-delivery
 ```
 
@@ -84,6 +85,7 @@ npm run check:company-delivery
 - 插件语法、站点配置、审阅草稿、具体对话记忆草稿、本地 demo 交互。
 - README、截图、文档、插件包、交付状态、发布门槛。
 - 当前提交对应的真实 AI 站点验收清单。
+- 给外测者的一页式真实 AI 站点验收包。
 - 公司远端是否包含当前提交：已合并时看目标分支，未合并时看交付 PR 分支；同时检查插件包是否对齐当前提交。
 
 ## 真实 AI 站点验收

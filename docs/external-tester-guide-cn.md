@@ -24,6 +24,7 @@
 | 演示检查清单 | `docs/demo-checklist-cn.md` | 演示前自查 |
 | AI 站点验收记录 | `docs/browser-extension-ai-validation-cn.md` | 记录真实 AI 网页适配结果 |
 | AI 站点测试卡 | `docs/browser-extension-ai-site-test-cards-cn.md` | 按 ChatGPT、Claude、Gemini、Perplexity 拆分真实页面验收任务 |
+| AI 站点外测包 | `artifacts/ai-validation-run/tester-pack-cn.md` | 给测试者的一页式真实站点验收包，包含 4 个必测站点、prompt、隐私边界和证据命令 |
 | 隐私说明 | `docs/browser-extension-privacy-cn.md` | 解释插件权限和数据边界 |
 
 本地交付检查还包含一个免登录交互烟测：它会模拟插件内容脚本在预览页创建“记忆建议”、渲染演示记忆，并确认插入按钮能把记忆写进输入框。这个检查不能替代真实 AI 网页验收，但能证明演示页的核心交互没有退化。
@@ -127,6 +128,16 @@ npm run check:release-public
 - DeepSeek: `chat.deepseek.com`
 
 逐站操作请按 `docs/browser-extension-ai-site-test-cards-cn.md` 执行。它把 ChatGPT、Claude、Gemini、Perplexity 四个公开发布必测站点拆成测试卡，并说明每个站点要观察输入框、发送按钮、模型选择和附件入口是否被插件影响。
+
+给测试者发包前，可以先生成一页式外测包：
+
+```bash
+cd agentmemory-lab
+npm run prepare:ai-validation
+npm run make:ai-validation-tester-pack
+```
+
+生成物在 `artifacts/ai-validation-run/tester-pack-cn.md`。它会按当前提交列出 ChatGPT、Claude、Gemini、Perplexity 的建议 prompt、证据文件名、保存命令和隐私边界，适合直接贴到飞书或发给测试者。
 
 每个站点至少确认：
 
