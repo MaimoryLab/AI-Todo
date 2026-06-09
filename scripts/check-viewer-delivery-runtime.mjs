@@ -53,6 +53,17 @@ try {
   const demo = await fetchText(base, '/demo/browser-extension.html');
   assert(demo.text.includes('Agent Memory Demo'), 'Browser extension demo route must remain available.');
 
+  const zip = await fetch(`${base}/artifacts/agent-memory-lab-extension.zip`, { headers: { Accept: '*/*' } });
+  assert(zip.ok, `Extension zip download returned HTTP ${zip.status}.`);
+  assert((zip.headers.get('content-type') || '').includes('application/zip'), 'Extension zip must be served as application/zip.');
+  assert((await zip.arrayBuffer()).byteLength > 1000, 'Extension zip download must not be empty.');
+
+  const handout = await fetchText(base, '/artifacts/external-tester-handout.md');
+  assert(handout.text.includes('外部试用说明'), 'External tester handout artifact must be served.');
+
+  const denied = await fetch(`${base}/artifacts/%252e%252e/package.json`);
+  assert(denied.status === 404, 'Viewer artifact route must not expose paths outside the safe artifact list.');
+
   console.log('viewer delivery runtime checks ok');
 } finally {
   await new Promise((resolve) => server.close(resolve));

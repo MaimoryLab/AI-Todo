@@ -151,6 +151,29 @@ function readDeliveryStatus(): Record<string, unknown> {
   };
 }
 
+function readDeliveryArtifact(relativePath: string): { body: Buffer; contentType: string; downloadName: string } | null {
+  const safeArtifacts = new Map<string, string>([
+    ["agent-memory-lab-extension.zip", "application/zip"],
+    ["delivery-summary.md", "text/markdown; charset=utf-8"],
+    ["external-tester-handout.md", "text/markdown; charset=utf-8"],
+    ["delivery-manifest.json", "application/json; charset=utf-8"],
+    ["ai-validation-run/tester-pack-cn.md", "text/markdown; charset=utf-8"],
+  ]);
+  const normalized = relativePath.replace(/^\/+/, "");
+  const contentType = safeArtifacts.get(normalized);
+  if (!contentType) return null;
+  const root = deliveryArtifactRoot();
+  const artifactsDir = resolve(root, "artifacts");
+  const target = resolve(artifactsDir, normalized);
+  if (target !== artifactsDir && !target.startsWith(`${artifactsDir}${sep}`)) return null;
+  try {
+    if (!existsSync(target)) return null;
+    return { body: readFileSync(target), contentType, downloadName: basename(target) };
+  } catch {
+    return null;
+  }
+}
+
 function parseViewerQuery(qs: string): Record<string, string> {
   const params = new URLSearchParams(qs || "");
   const out: Record<string, string> = {};
@@ -698,6 +721,22 @@ export function startViewerServer(
       }
       res.writeHead(404, { "Content-Type": "text/plain" });
       res.end("doc not found");
+      return;
+    }
+
+    if ((method === "GET" || method === "HEAD") && pathname.startsWith("/artifacts/")) {
+      const artifact = readDeliveryArtifact(decodeURIComponent(pathname.slice("/artifacts/".length)));
+      if (artifact) {
+        res.writeHead(200, {
+          "Content-Type": artifact.contentType,
+          "Content-Disposition": `attachment; filename=\"${artifact.downloadName.replace(/\"/g, "")}\"`,
+          "Cache-Control": "no-cache",
+        });
+        res.end(method === "HEAD" ? undefined : artifact.body);
+        return;
+      }
+      res.writeHead(404, { "Content-Type": "text/plain" });
+      res.end("artifact not found");
       return;
     }
 

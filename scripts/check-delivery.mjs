@@ -257,7 +257,7 @@ for (const marker of ['delivery-status', 'renderDeliveryStatusCard', '浏览器�
 }
 
 const viewerServer = read('src/viewer/server.ts');
-for (const marker of ['deliveryArtifactRoot', 'process.cwd()', 'readProjectDoc', '/docs/browser-extension-ai-site-test-cards-cn.md', 'text/markdown', 'readDeliveryStatus', '/agentmemory/delivery-status', 'delivery-manifest.json', 'ai-validation-evidence-summary.json', 'requiredProducts', 'sites', '未录入真实页面证据']) {
+for (const marker of ['deliveryArtifactRoot', 'process.cwd()', 'readProjectDoc', '/docs/browser-extension-ai-site-test-cards-cn.md', 'text/markdown', 'readDeliveryStatus', 'readDeliveryArtifact', '/artifacts/', 'agent-memory-lab-extension.zip', 'external-tester-handout.md', 'tester-pack-cn.md', '/agentmemory/delivery-status', 'delivery-manifest.json', 'ai-validation-evidence-summary.json', 'requiredProducts', 'sites', '未录入真实页面证据']) {
   assert(viewerServer.includes(marker), `Viewer server missing delivery status marker: ${marker}`);
 }
 
