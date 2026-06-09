@@ -374,7 +374,7 @@ const externalHandout = `# Agent Memory Lab 外部试用说明
 ## 你会拿到什么
 
 - 插件压缩包：\`artifacts/agent-memory-lab-extension.zip\`
-- Viewer 首页入口：打开“浏览器记忆入口”，可直接下载插件包、外测手册、AI 验收包、反馈模板和分诊指南
+- Viewer 首页入口：打开“浏览器记忆入口”，可直接下载插件包、外测手册、验收一页纸、AI 验收包、反馈模板和分诊指南
 - 插件版本：${manifest.name} ${manifest.version}
 - 当前提交：${commit}${dirty ? '（本地还有未提交改动）' : ''}
 - zip sha256：\`${zipSha256 || 'missing'}\`
@@ -449,6 +449,7 @@ const releaseNotes = `# Agent Memory Lab ${manifest.version} Release Notes
 ## 本版新增和已就绪能力
 
 - Viewer 总览可以显示外部试用状态、插件包状态、真实 AI 证据进度和测试卡入口。
+- Viewer 总览提供真实 AI 站点验收一页纸，外测者可以先按短清单执行，再看完整 AI 验收包。
 - 插件弹窗和同步侧栏都支持保存前编辑审阅草稿。
 - 草稿可编辑标题、正文、保存范围、分类备注，并可标记为可沉淀经验。
 - 浏览器插件保存内容默认进入 Viewer 待审阅队列，不直接写入长期记忆。
