@@ -255,6 +255,10 @@ for (const marker of ['recordBrowserSessionFromReview', 'browserSessionId', 'bro
 for (const marker of ['delivery-status', 'renderDeliveryStatusCard', '浏览器记忆入口', '打开预览', '安装说明', '测试卡', '查看待审阅', '不要把链接当记忆', '真实 AI 证据', '等待证据', '待验收', '待修复', '/docs/browser-extension-ai-site-test-cards-cn.md']) {
   assert(viewer.includes(marker), `Viewer dashboard missing delivery status marker: ${marker}`);
 }
+for (const marker of ['function actionAttentionText', 'function actionDescriptionText', 'function actionSourceText', '继续推进', '制作 30 秒 README 演示', '留学申请 Skill', '待跟进', '正在推进', '需要处理', '已完成', '来自 ']) {
+  assert(viewer.includes(marker), `Viewer actions page missing non-technical action marker: ${marker}`);
+}
+assert(!viewer.includes('function priorityLabel'), 'Viewer actions page must not render priority as a user-facing field.');
 
 const viewerServer = read('src/viewer/server.ts');
 for (const marker of ['deliveryArtifactRoot', 'process.cwd()', 'readProjectDoc', '/docs/browser-extension-ai-site-test-cards-cn.md', 'text/markdown', 'readDeliveryStatus', 'readDeliveryArtifact', '/artifacts/', 'agent-memory-lab-extension.zip', 'external-tester-handout.md', 'external-feedback-template-cn.md', 'external-feedback-triage-cn.md', 'tester-pack-cn.md', '/agentmemory/delivery-status', 'delivery-manifest.json', 'ai-validation-evidence-summary.json', 'requiredProducts', 'sites', '未录入真实页面证据']) {
