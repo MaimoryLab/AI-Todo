@@ -23,7 +23,7 @@
     "start:local-memory": "AGENTMEMORY_III_CONFIG=./iii-config.local-memory.yaml node dist/cli.mjs",
     "migrate": "node dist/functions/migrate.js",
     "test": "vitest run --exclude test/integration.test.ts",
-    "check:browser-extension": "node scripts/check-browser-extension.mjs && node scripts/check-browser-extension-site-config-sync.mjs && node scripts/check-browser-extension-review-draft.mjs && node scripts/check-browser-extension-fixtures.mjs && node scripts/check-browser-extension-demo-interaction.mjs",
+    "check:browser-extension": "node scripts/check-browser-extension.mjs && node scripts/check-browser-extension-site-config-sync.mjs && node scripts/check-browser-extension-review-draft.mjs && node scripts/check-browser-extension-memory-drafts.mjs && node scripts/check-browser-extension-fixtures.mjs && node scripts/check-browser-extension-demo-interaction.mjs",
     "package:browser-extension": "npm run check:browser-extension && node scripts/package-browser-extension.mjs && npm run check:browser-extension-package && npm run check:ai-validation-evidence && node scripts/write-delivery-summary.mjs",
     "check:delivery": "npm run build && node scripts/check-delivery.mjs",
     "test:watch": "vitest --exclude test/integration.test.ts",
