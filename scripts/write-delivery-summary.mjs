@@ -308,6 +308,14 @@ Generated: ${generatedAt}
 
 ${extractGateTable(releaseGates)}
 
+## Reviewer Checklist
+
+- Open the Viewer dashboard and confirm the browser entry card exposes: extension zip, external handout, AI tester pack, feedback template, and triage guide.
+- Open \`/demo/browser-extension.html\` and confirm the local memory hint demo still shows “记忆建议”.
+- Load \`browser-extension/\` in Chrome / Edge developer mode, then confirm popup and side panel both keep the editable review draft before saving.
+- Review \`docs/feishu/agentmemory-project-intro-cn.md\` and the three whiteboard sources under \`docs/feishu/whiteboards/\` for product narrative consistency.
+- Do not mark public release ready until \`npm run check:release-public\` passes with ChatGPT, Claude, Gemini, and Perplexity evidence at 4/4.
+
 ## Real AI Site Validation
 
 | Item | Value |

@@ -339,7 +339,7 @@ assert(existsSync('artifacts/release-notes.md'), 'Release notes were not created
 assert(existsSync('artifacts/ai-validation-evidence-summary.json'), 'AI validation evidence summary was not created.');
 assert(existsSync('artifacts/ai-validation-run/tester-pack-cn.md'), 'AI validation tester pack was not created.');
 const deliverySummary = read('artifacts/delivery-summary.md');
-for (const marker of ['Agent Memory Lab Delivery Summary', 'Extension zip', 'Extension zip sha256', 'Delivery manifest', 'External Testing Loop', 'Release Gates', 'Real AI Site Validation', 'External tester guide', 'External tester issue template', 'AI validation log', 'AI validation tester pack']) {
+for (const marker of ['Agent Memory Lab Delivery Summary', 'Extension zip', 'Extension zip sha256', 'Delivery manifest', 'External Testing Loop', 'Release Gates', 'Reviewer Checklist', 'feedback template', 'triage guide', 'check:release-public', 'Real AI Site Validation', 'External tester guide', 'External tester issue template', 'AI validation log', 'AI validation tester pack']) {
   assert(deliverySummary.includes(marker), `Delivery summary missing marker: ${marker}`);
 }
 const deliveryManifest = JSON.parse(read('artifacts/delivery-manifest.json'));

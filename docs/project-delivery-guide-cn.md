@@ -128,7 +128,8 @@ npm run sync:ai-validation-table
 - 飞书文档：<https://my.feishu.cn/docx/Ys7qdCP3mo1KOtxpVZuc8nPCnZI>
 - 飞书文档源稿：`docs/feishu/agentmemory-project-intro-cn.md`
 - 飞书白板源稿：`docs/feishu/whiteboards/workflow.mmd`、`docs/feishu/whiteboards/workbench-workflow.mmd`、`docs/feishu/whiteboards/structure.mmd`
-- 飞书白板 token：产品工作流 `VIRrwMaNxhiDgebb6Jdc2joSnyd`；本地工作台工作流 `U0TNwUKUShVYNEbog66ciGntnLT`；仓库结构 `R7wiwQTrMhv6hib5U6fcbr8Gn0f`
+- 飞书白板 token：产品工作流 `SVjZwMwvXhOpxrbTCy7cLH9TnhC`；本地工作台工作流 `UiY9wZbpShh73CbRl8kcPbgcn9g`；仓库结构 `CbOlww8M9hIzJDblujBcHGb3nVd`
+- 注意：覆盖更新飞书文档正文会重新生成白板块；更新正文后需要用最新 token 重新写入三张可编辑白板。
 
 ## 维护建议
 
