@@ -166,12 +166,13 @@ function memoryEvidenceFromPage(page = {}) {
   const turns = Array.isArray(page.turns) ? page.turns : [];
   const userTurns = turns.filter((turn) => turn && turn.role === 'user').map((turn) => turn.text);
   const assistantTurns = turns.filter((turn) => turn && turn.role === 'assistant').map((turn) => turn.text);
+  const isAiPage = !!page.aiProvider || detectPageType(page) === 'ai-chat';
   return uniqueCandidates([
     ...conversationSummaryFacts(turns),
     ...splitFactSentences(page.selection),
     ...userTurns.flatMap(splitFactSentences),
     ...assistantTurns.flatMap(splitFactSentences),
-    ...splitFactSentences(page.promptDraft)
+    ...(isAiPage ? [] : splitFactSentences(page.promptDraft))
   ]).slice(0, 4);
 }
 
@@ -295,15 +296,16 @@ function buildMemoryCandidates(page, normalized) {
   const turns = Array.isArray(page.turns) ? page.turns : [];
   const userTurns = turns.filter((turn) => turn && turn.role === 'user').map((turn) => turn.text);
   const assistantTurns = turns.filter((turn) => turn && turn.role === 'assistant').map((turn) => turn.text);
+  const hasConversation = turns.some((turn) => turn && turn.text && String(turn.text).trim().length >= 12);
   const candidates = uniqueCandidates([
     ...conversationSummaryFacts(turns),
     ...splitFactSentences(page.selection),
     ...userTurns.flatMap(splitFactSentences),
     ...assistantTurns.flatMap(splitFactSentences),
-    ...splitFactSentences(page.promptDraft)
+    ...(provider ? [] : splitFactSentences(page.promptDraft))
   ]);
   if (provider) {
-    if (!candidates.length && page.promptDraft) candidates.push(`用户在 ${provider} 中正在处理：${cleanCandidateText(page.promptDraft).slice(0, 180)}`);
+    if (!hasConversation && !splitFactSentences(page.selection).length) return [];
   }
   if (page.selection && !candidates.length) candidates.push(cleanCandidateText(page.selection).slice(0, 180));
   if (type === 'github') candidates.push(`GitHub 项目线索：${String(page.title || '').trim()}`);

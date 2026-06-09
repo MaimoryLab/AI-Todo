@@ -54,4 +54,27 @@ try {
 }
 assert(threw, 'Empty AI pages must be blocked before entering the memory review payload.');
 
+const promptOnlyConversation = createPageCapture({
+  title: '了解用户背景',
+  url: 'https://chatgpt.com/c/prompt-only',
+  host: 'chatgpt.com',
+  aiProvider: 'ChatGPT',
+  description: 'ChatGPT 是一款供日常使用的 AI 聊天机器人。',
+  promptDraft: '记住我正在做 Agent Memory Lab 的浏览器插件记忆同步。',
+  turns: []
+});
+
+assert(promptOnlyConversation.candidates.memories.length === 0, 'AI prompt drafts alone must not become memory candidates.');
+const promptOnlyDraft = buildBrowserMemoryDraft(promptOnlyConversation);
+assert(promptOnlyDraft.content === '', 'AI prompt drafts alone must not become long-term memory content.');
+assert(promptOnlyDraft.emptyReason, 'Prompt-only AI pages should ask for concrete conversation or selection.');
+
+let promptOnlyThrew = false;
+try {
+  captureToMemoryPayload(promptOnlyConversation);
+} catch (err) {
+  promptOnlyThrew = /具体对话|具体记忆|保存/.test(String(err && err.message ? err.message : err));
+}
+assert(promptOnlyThrew, 'Prompt-only AI pages must be blocked before entering review.');
+
 console.log('browser extension memory draft checks ok');

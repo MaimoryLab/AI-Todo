@@ -247,12 +247,13 @@ function buildMemoryDraft(capture) {
   const turns = Array.isArray(conversation.turns) ? conversation.turns : [];
   const userTurns = turns.filter((turn) => turn && turn.role === 'user').map((turn) => turn.text);
   const assistantTurns = turns.filter((turn) => turn && turn.role === 'assistant').map((turn) => turn.text);
+  const isAiPage = !!conversation.provider || page.type === 'ai-chat';
   const evidence = uniqueTexts([
     ...conversationSummaryFacts(turns),
     ...splitFactSentences(page.selection),
     ...userTurns.flatMap(splitFactSentences),
     ...assistantTurns.flatMap(splitFactSentences),
-    ...splitFactSentences(conversation.promptDraft)
+    ...(isAiPage ? [] : splitFactSentences(conversation.promptDraft))
   ]);
   const fact = cleanDraftText(evidence[0] || memories.find((item) => isUsefulFact(item)) || '');
   if (!fact) {
