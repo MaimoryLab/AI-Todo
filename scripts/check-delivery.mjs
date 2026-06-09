@@ -251,7 +251,7 @@ for (const marker of ['deliveryArtifactRoot', 'process.cwd()', 'readProjectDoc',
 }
 
 const deliveryStatusScript = read('scripts/delivery-status.mjs');
-for (const marker of ['current commit', 'artifact commit', 'stale; rerun npm run package:browser-extension']) {
+for (const marker of ['current commit', 'artifact commit', 'stale; rerun npm run package:browser-extension', 'AI tester pack']) {
   assert(deliveryStatusScript.includes(marker), `Delivery status script missing freshness marker: ${marker}`);
 }
 
@@ -323,7 +323,7 @@ assert(existsSync('artifacts/release-notes.md'), 'Release notes were not created
 assert(existsSync('artifacts/ai-validation-evidence-summary.json'), 'AI validation evidence summary was not created.');
 assert(existsSync('artifacts/ai-validation-run/tester-pack-cn.md'), 'AI validation tester pack was not created.');
 const deliverySummary = read('artifacts/delivery-summary.md');
-for (const marker of ['Agent Memory Lab Delivery Summary', 'Extension zip', 'Extension zip sha256', 'Delivery manifest', 'External Testing Loop', 'Release Gates', 'Real AI Site Validation', 'External tester guide', 'External tester issue template', 'AI validation log']) {
+for (const marker of ['Agent Memory Lab Delivery Summary', 'Extension zip', 'Extension zip sha256', 'Delivery manifest', 'External Testing Loop', 'Release Gates', 'Real AI Site Validation', 'External tester guide', 'External tester issue template', 'AI validation log', 'AI validation tester pack']) {
   assert(deliverySummary.includes(marker), `Delivery summary missing marker: ${marker}`);
 }
 const deliveryManifest = JSON.parse(read('artifacts/delivery-manifest.json'));
@@ -344,12 +344,14 @@ assert(deliveryManifest.externalTesting?.feedbackTemplate?.exists === true, 'Del
 assert(deliveryManifest.externalTesting?.issueTemplate?.exists === true, 'Delivery manifest must record external issue template support.');
 assert(deliveryManifest.externalTesting?.feedbackTriage?.exists === true, 'Delivery manifest must record feedback triage support.');
 assert(deliveryManifest.externalTesting?.evidenceRecorder?.exists === true, 'Delivery manifest must record AI evidence recorder support.');
+assert(deliveryManifest.externalTesting?.aiValidationTesterPack?.exists === true, 'Delivery manifest must record AI validation tester pack support.');
 assert(deliveryManifest.externalTesting?.aiSiteTestCards?.exists === true, 'Delivery manifest must record AI site test cards support.');
 assert(deliveryManifest.externalTesting?.aiSiteTestCards?.viewerPath === '/docs/browser-extension-ai-site-test-cards-cn.md', 'Delivery manifest must record local viewer test cards path.');
 assert(deliveryManifest.externalTesting?.aiSiteTestCards?.diagnosticField === 'validationGuide', 'Delivery manifest must record diagnostic validationGuide field.');
 assert(deliveryManifest.artifacts?.extensionZip?.exists, 'Delivery manifest must mark extension zip as existing.');
 assert(deliveryManifest.artifacts?.loadInstructions?.exists, 'Delivery manifest must mark zip load instructions as existing.');
 assert(deliveryManifest.artifacts?.externalTesterHandout?.exists === true, 'Delivery manifest must mark external tester handout as existing.');
+assert(deliveryManifest.artifacts?.aiValidationTesterPack?.path === 'artifacts/ai-validation-run/tester-pack-cn.md', 'Delivery manifest must mark AI validation tester pack artifact.');
 assert(deliveryManifest.artifacts?.releaseNotes?.exists === true, 'Delivery manifest must mark release notes as existing.');
 assert(deliveryManifest.artifacts?.githubReleaseDraft?.exists === true, 'Delivery manifest must mark GitHub release draft as existing.');
 assert(deliveryManifest.coreExperience?.aiInputMemoryHint?.mem0Reference?.documentedIn === 'docs/browser-extension-mem0-reference-cn.md', 'Delivery manifest must record Mem0 reference documentation.');
