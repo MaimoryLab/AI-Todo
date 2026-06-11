@@ -888,6 +888,47 @@ export function registerApiTriggers(
     config: { api_path: "/agentmemory/sessions", http_method: "GET" },
   });
 
+  sdk.registerFunction("api::session::highlights",
+    async (req: ApiRequest): Promise<Response> => {
+      const authErr = checkAuth(req, secret);
+      if (authErr) return authErr;
+      const sessionId = asNonEmptyString(req.query_params?.["sessionId"]);
+      if (!sessionId) {
+        return { status_code: 400, body: { error: "sessionId is required" } };
+      }
+      const parsedMaxItems = parseOptionalPositiveInt(req.query_params?.["maxItems"]);
+      if (parsedMaxItems === null || (parsedMaxItems !== undefined && parsedMaxItems > 200)) {
+        return {
+          status_code: 400,
+          body: { error: "maxItems must be a positive integer no greater than 200" },
+        };
+      }
+      const payload: { sessionId: string; maxItems?: number } = { sessionId };
+      if (parsedMaxItems !== undefined) payload.maxItems = parsedMaxItems;
+      const result = await sdk.trigger({
+        function_id: "mem::session-highlights",
+        payload,
+      });
+      const statusCode =
+        result &&
+        typeof result === "object" &&
+        (result as { success?: unknown; error?: unknown }).success === false &&
+        (result as { error?: unknown }).error === "session_not_found"
+          ? 404
+          : 200;
+      return { status_code: statusCode, body: result };
+    },
+  );
+  sdk.registerTrigger({
+    type: "http",
+    function_id: "api::session::highlights",
+    config: {
+      api_path: "/agentmemory/session/highlights",
+      http_method: "GET",
+      middleware_function_ids: ["middleware::api-auth"],
+    },
+  });
+
   sdk.registerFunction("api::observations",
     async (req: ApiRequest): Promise<Response> => {
       const authErr = checkAuth(req, secret);

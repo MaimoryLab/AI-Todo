@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { parseJsonlText } from "../src/replay/jsonl-parser.js";
 import { projectTimeline } from "../src/replay/timeline.js";
+import { buildSyntheticCompression } from "../src/functions/compress-synthetic.js";
 
 const fx = (name: string) =>
   readFileSync(join(__dirname, "fixtures/jsonl", name), "utf-8");
@@ -143,3 +144,15 @@ describe("projectTimeline", () => {
   });
 });
 
+describe("buildSyntheticCompression replay coverage", () => {
+  it("preserves assistant responses in the zero-LLM narrative", () => {
+    const parsed = parseJsonlText(fx("basic.jsonl"));
+    const response = parsed.observations.find((o) => o.assistantResponse);
+    expect(response).toBeDefined();
+
+    const compressed = buildSyntheticCompression(response!);
+
+    expect(compressed.type).toBe("conversation");
+    expect(compressed.narrative).toContain("Looking into it now.");
+  });
+});

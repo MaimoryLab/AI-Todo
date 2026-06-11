@@ -3327,7 +3327,7 @@
       graph: { loaded: false, nodes: [], edges: [], stats: null, filters: {}, selectedNode: null },
       memories: { loaded: false, items: [], reviewItems: [], search: '', typeFilter: '', sourceFilter: '' },
 	      timeline: { loaded: false, observations: [], sessionId: '', projectKey: '', sessions: [], minImportance: 0, page: 0, pageSize: 50, mode: 'episodes', episodeFilter: 'all', expandedEpisodes: {} },
-      sessions: { loaded: false, items: [], selectedId: null, warnings: [] },
+      sessions: { loaded: false, items: [], selectedId: null, warnings: [], highlightsById: {}, detailSectionsById: {}, detailCacheById: {}, stale: false, requestSeq: 0, detailRequestSeq: 0 },
       audit: { loaded: false, entries: [], opFilter: '' },
       activity: { loaded: false, observations: [], sessions: [], typeFilter: '', loadingPhase: '', warnings: [] },
       lessons: { loaded: false, items: [], search: '', skillSearch: '', skillRootFilter: 'all', mode: 'explicit', projects: [] },
@@ -4776,11 +4776,37 @@
       state.dashboard.loaded = false;
       loadDashboard();
     }
-    function refreshActiveTab() {
+    function isViewingSessionDetail() {
+      return state.activeTab === 'sessions' && !!state.sessions.selectedId;
+    }
+    function shouldDeferSessionsRefresh(reason) {
+      return isViewingSessionDetail() && ['timer', 'poll', 'ws', 'visibility'].indexOf(reason || '') >= 0;
+    }
+    function sessionStaleNoticeMarkup() {
+      if (!state.sessions.stale || !state.sessions.selectedId) return '';
+      return '<div class="activity-status-card activity-status-warning" style="margin-bottom:12px;"><div class="activity-status-main"><span class="activity-status-dot"></span><span>有新记录，当前详情暂未自动刷新。</span></div><button class="btn btn-primary" data-action="refresh-sessions">刷新会话</button></div>';
+    }
+    function renderSessionsStaleNotice() {
+      var host = document.getElementById('sessions-stale-notice');
+      if (host) host.innerHTML = sessionStaleNoticeMarkup();
+    }
+    function markSessionsStale() {
+      state.sessions.stale = true;
+      if (state.activeTab === 'sessions') renderSessionsStaleNotice();
+    }
+    function refreshActiveTab(reason) {
+      reason = reason || 'manual';
       switch (state.activeTab) {
         case 'dashboard': state.dashboard.loaded = false; loadDashboard(); break;
         case 'memories': state.memories.loaded = false; loadMemories(); break;
-        case 'sessions': state.sessions.loaded = false; loadSessions(); break;
+        case 'sessions':
+          if (shouldDeferSessionsRefresh(reason)) {
+            markSessionsStale();
+          } else {
+            state.sessions.loaded = false;
+            loadSessions({ showLoading: reason === 'manual', reason: reason });
+          }
+          break;
         case 'lessons': state.lessons.loaded = false; loadLessons(); break;
         case 'actions': state.actions.loaded = false; loadActions(); break;
         case 'activity': state.activity.loaded = false; loadActivity(); break;
@@ -4813,7 +4839,7 @@
       if (!state.dashboardRefresh.enabled) return;
       dashboardTimer = setInterval(function() {
         if (pollTimer) return;
-        refreshActiveTab();
+        if (state.activeTab === 'dashboard') refreshActiveTab('timer');
       }, state.dashboardRefresh.intervalMs || 30000);
     }
 
@@ -6394,17 +6420,26 @@
       el.innerHTML = html;
     }
 
-    async function loadSessions() {
+    async function loadSessions(options) {
+      options = options || {};
+      var reason = options.reason || 'manual';
+      var showLoading = options.showLoading !== false;
+      var requestSeq = (state.sessions.requestSeq || 0) + 1;
+      state.sessions.requestSeq = requestSeq;
       var el = document.getElementById('view-sessions');
-      el.innerHTML = '<div class="loading">加载会话中...</div>';
+      if (showLoading || !state.sessions.loaded) el.innerHTML = '<div class="loading">加载会话中...</div>';
       var results = await Promise.all([
         settledData('工作台会话', { sessions: [] }, function() { return apiGet('sessions'); }),
         settledData('本地会话', [], function() { return loadLocalCodexSessions(120); }),
         settledData('浏览器对话', { items: [] }, function() { return apiGet('review?limit=200'); })
       ]);
+      if (state.sessions.requestSeq !== requestSeq) return;
       state.sessions.warnings = results.filter(function(r) { return r.failed; }).map(function(r) { return r.label; });
       var browserSessions = browserReviewSessions((results[2].data && results[2].data.items) || []);
       state.sessions.items = mergeSessions(((results[0].data && results[0].data.sessions) || []).concat(browserSessions), results[1].data || []).filter(function(s) { return !isDemoSession(s); });
+      pruneSessionHighlightCache(state.sessions.items);
+      pruneSessionDetailCache(state.sessions.items);
+      if (reason === 'manual') state.sessions.stale = false;
       state.sessions.loaded = true;
       renderSessions();
     }
@@ -6417,6 +6452,7 @@
 
       var html = '<div class="session-list">';
       html += renderDataWarnings(state.sessions.warnings, 'refresh-sessions');
+      html += '<div id="sessions-stale-notice">' + sessionStaleNoticeMarkup() + '</div>';
       if (items.length === 0) {
         html += '<div class="empty-state"><div class="empty-icon">&#128466;</div><p>' + (state.sessions.warnings && state.sessions.warnings.length ? '暂时没有读到会话，请确认本地服务已启动后重试。' : '暂无会话') + '</p>';
         if (state.sessions.warnings && state.sessions.warnings.length) html += '<div style="margin-top:10px;"><button class="btn btn-primary" data-action="refresh-sessions">重试加载</button></div>';
@@ -6466,23 +6502,165 @@
       }, 80);
     }
 
-    async function renderSessionDetail() {
+    var SESSION_HIGHLIGHT_LABELS = {
+      goal: '用户',
+      agent_output: 'Agent',
+      tool: '工具',
+      mcp: 'MCP',
+      command: '命令',
+      failure: '失败',
+      validation: '验证',
+      file: '文件',
+      artifact: '产物',
+      skill: 'Skill',
+      todo: '待办',
+      follow_up: '后续'
+    };
+
+    function sessionHighlightCacheKey(s) {
+      if (!s) return '';
+      return [
+        sessionId(s),
+        s.status || '',
+        s.observationCount || 0,
+        s.updatedAt || '',
+        s.endedAt || '',
+        s.startedAt || ''
+      ].join('|');
+    }
+
+    function pruneSessionHighlightCache(items) {
+      var keep = {};
+      (items || []).forEach(function(s) {
+        var id = sessionId(s);
+        if (id) keep[id] = sessionHighlightCacheKey(s);
+      });
+      Object.keys(state.sessions.highlightsById || {}).forEach(function(id) {
+        if (!keep[id] || state.sessions.highlightsById[id].cacheKey !== keep[id]) {
+          delete state.sessions.highlightsById[id];
+        }
+      });
+    }
+
+    function pruneSessionDetailCache(items) {
+      var keep = {};
+      (items || []).forEach(function(s) {
+        var id = sessionId(s);
+        if (id) keep[id] = sessionHighlightCacheKey(s);
+      });
+      Object.keys(state.sessions.detailCacheById || {}).forEach(function(id) {
+        if (!keep[id] || state.sessions.detailCacheById[id].cacheKey !== keep[id]) {
+          delete state.sessions.detailCacheById[id];
+        }
+      });
+    }
+
+    function sessionDetailSections(id) {
+      if (!state.sessions.detailSectionsById) state.sessions.detailSectionsById = {};
+      if (!state.sessions.detailSectionsById[id]) {
+        state.sessions.detailSectionsById[id] = { highlights: true, process: false };
+      }
+      return state.sessions.detailSectionsById[id];
+    }
+
+    function renderSessionSectionTitle(sessionIdValue, section, title, expanded) {
+      return '<div class="card-title" style="display:flex;justify-content:space-between;align-items:center;gap:10px;">' +
+        '<span>' + esc(title) + '</span>' +
+        '<button type="button" class="btn" style="padding:4px 8px;font-size:11px;" data-action="toggle-session-detail-section" data-session-id="' + esc(sessionIdValue) + '" data-section="' + esc(section) + '" aria-expanded="' + (expanded ? 'true' : 'false') + '">' + (expanded ? '收起' : '展开') + '</button>' +
+      '</div>';
+    }
+
+    function toggleSessionDetailSection(id, section) {
+      if (!id || (section !== 'highlights' && section !== 'process')) return;
+      var sections = sessionDetailSections(id);
+      sections[section] = !sections[section];
+      renderSessionDetail({ useCacheOnly: true });
+    }
+
+    async function getSessionHighlights(id, sessionRecord) {
+      if (!id) return { ok: false, highlights: [] };
+      var cacheKey = sessionHighlightCacheKey(sessionRecord);
+      var cached = state.sessions.highlightsById[id];
+      if (cached && cached.cacheKey === cacheKey) return cached;
+      var result = await apiGet('session/highlights?sessionId=' + encodeURIComponent(id) + '&maxItems=12');
+      var view = result && result.success === true && Array.isArray(result.highlights)
+        ? { ok: true, highlights: result.highlights, cacheKey: cacheKey }
+        : { ok: false, highlights: [], cacheKey: cacheKey };
+      state.sessions.highlightsById[id] = view;
+      return view;
+    }
+
+    function sessionDialogueHighlights(view) {
+      return (Array.isArray(view && view.highlights) ? view.highlights : []).filter(function(item) {
+        return item && (item.category === 'goal' || item.category === 'agent_output');
+      });
+    }
+
+    function renderSessionHighlights(sessionIdValue, view, expanded) {
+      var html = '<div class="card" style="margin-bottom:12px;" data-section="highlights">';
+      html += renderSessionSectionTitle(sessionIdValue, 'highlights', '会话重点', expanded);
+      if (!expanded) return html + '</div>';
+      if (!view || view.ok === false) {
+        html += '<div style="font-size:13px;color:var(--ink-faint);margin-top:8px;">会话重点暂不可用</div></div>';
+        return html;
+      }
+      var highlights = sessionDialogueHighlights(view);
+      if (highlights.length === 0) {
+        html += '<div style="font-size:13px;color:var(--ink-faint);margin-top:8px;">暂无会话重点</div></div>';
+        return html;
+      }
+      html += '<div style="display:grid;gap:10px;margin-top:10px;">';
+      highlights.forEach(function(item) {
+        var label = SESSION_HIGHLIGHT_LABELS[item.category] || item.category || '重点';
+        html += '<div style="display:grid;grid-template-columns:82px 1fr;gap:10px;padding:10px 0;border-bottom:1px solid var(--border-light);">';
+        html += '<div><span class="badge badge-muted" style="font-size:10px;padding:3px 8px;">' + esc(label) + '</span></div>';
+        html += '<div style="min-width:0;">';
+        html += '<div style="font-size:14px;color:var(--ink);font-weight:600;line-height:1.35;white-space:pre-wrap;overflow-wrap:anywhere;">' + esc(item.title || label) + '</div>';
+        if (item.summary) html += '<div style="font-size:13px;color:var(--ink-muted);line-height:1.45;margin-top:3px;white-space:pre-wrap;overflow-wrap:anywhere;">' + esc(item.summary) + '</div>';
+        html += '</div></div>';
+      });
+      html += '</div></div>';
+      return html;
+    }
+
+    async function renderSessionDetail(options) {
+      options = options || {};
       var panel = document.getElementById('session-detail');
       if (!panel) return;
       var s = state.sessions.items.find(function(x) { return sessionId(x) === state.sessions.selectedId; });
       var id = sessionId(s);
       if (!s || !id) { panel.innerHTML = ''; return; }
 
-      panel.innerHTML = '<div class="detail-panel"><h3>加载会话详情中…</h3></div>';
-
-      var obs = Array.isArray(s.embeddedObservations) ? s.embeddedObservations : [];
-      if (!obs.length) {
-        var obsRes = await apiGet('observations?sessionId=' + encodeURIComponent(id));
-        obs = (obsRes && obsRes.observations) || [];
-      }
-      if ((!obs || obs.length === 0) && String(s.source || '').indexOf('local-') === 0) {
-        var localRes = await apiGet('local-agent-session-events?sessionId=' + encodeURIComponent(id));
-        obs = (localRes && localRes.observations) || obs || [];
+      var cacheKey = sessionHighlightCacheKey(s);
+      var cachedDetail = state.sessions.detailCacheById && state.sessions.detailCacheById[id];
+      var hasFreshCache = cachedDetail && cachedDetail.cacheKey === cacheKey;
+      var obs;
+      var highlightsView;
+      if (hasFreshCache) {
+        obs = cachedDetail.observations || [];
+        highlightsView = cachedDetail.highlightsView || { ok: false, highlights: [], cacheKey: cacheKey };
+      } else if (options.useCacheOnly) {
+        return;
+      } else {
+        var detailRequestSeq = (state.sessions.detailRequestSeq || 0) + 1;
+        state.sessions.detailRequestSeq = detailRequestSeq;
+        if (!panel.innerHTML) panel.innerHTML = '<div class="detail-panel"><h3>加载会话详情中…</h3></div>';
+        obs = Array.isArray(s.embeddedObservations) ? s.embeddedObservations : [];
+        if (!obs.length) {
+          var obsRes = await apiGet('observations?sessionId=' + encodeURIComponent(id));
+          obs = (obsRes && obsRes.observations) || [];
+        }
+        if ((!obs || obs.length === 0) && String(s.source || '').indexOf('local-') === 0) {
+          var localRes = await apiGet('local-agent-session-events?sessionId=' + encodeURIComponent(id));
+          obs = (localRes && localRes.observations) || obs || [];
+        }
+        highlightsView = await getSessionHighlights(id, s);
+        if (state.sessions.detailRequestSeq !== detailRequestSeq || state.sessions.selectedId !== id) return;
+        state.sessions.detailCacheById[id] = {
+          cacheKey: cacheKey,
+          observations: obs || [],
+          highlightsView: highlightsView,
+        };
       }
 
       var typeCounts = {};
@@ -6505,6 +6683,7 @@
 
       var detailTitle = sessionTitleText(s);
       var preview = sessionBodyPreview({ summary: s.summary, latestPrompt: firstPromptFromObs, firstPrompt: s.firstPrompt }, detailTitle) || firstPromptFromObs || s.summary || s.firstPrompt || '';
+      var detailSections = sessionDetailSections(id);
 
       var html = '<div class="detail-panel">';
       html += '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px;">';
@@ -6523,11 +6702,15 @@
       html += '<div class="card" style="padding:10px;"><div style="font-size:10px;letter-spacing:0.08em;color:var(--ink-muted);">时长</div><div style="font-size:20px;font-weight:600;">' + esc(durationLabel) + '</div></div>';
       html += '</div>';
 
+      html += renderSessionHighlights(id, highlightsView, detailSections.highlights !== false);
+
       var timelineObs = obs.slice().sort(function(a, b) { return (a.timestamp || '').localeCompare(b.timestamp || ''); });
-      html += '<div class="card" style="margin-bottom:12px;"><div class="card-title">完整过程 · ' + timelineObs.length + ' 条</div>';
-      if (timelineObs.length === 0) {
+      var processExpanded = detailSections.process === true;
+      html += '<div class="card" style="margin-bottom:12px;" data-section="process">';
+      html += renderSessionSectionTitle(id, 'process', '完整过程 · ' + timelineObs.length + ' 条', processExpanded);
+      if (processExpanded && timelineObs.length === 0) {
         html += '<div style="font-size:13px;color:var(--ink-faint);margin-top:8px;">这段会话还没有可展示的过程记录。</div>';
-      } else {
+      } else if (processExpanded) {
         html += '<div style="display:grid;gap:8px;margin-top:10px;">';
         timelineObs.forEach(function(o) {
           var display = observationDisplay(o);
@@ -6597,7 +6780,7 @@
     async function endSession(id) {
       await apiPost('session/end', { sessionId: id });
       state.sessions.loaded = false;
-      loadSessions();
+      loadSessions({ showLoading: true, reason: 'manual' });
     }
 
     async function summarizeSession(id, btn) {
@@ -7385,7 +7568,7 @@
       var tick = 0;
       pollTimer = setInterval(function() {
         tick++;
-        refreshActiveTab();
+        refreshActiveTab('poll');
         if (tick % WS_REPROBE_EVERY_TICKS === 0) {
           var ws = state.ws;
           if (!ws || ws.readyState !== WebSocket.OPEN) {
@@ -7543,7 +7726,14 @@
         loadDashboard();
       }
       if (state.activeTab === 'memories') loadMemories();
-      if (state.activeTab === 'sessions') loadSessions();
+      if (state.activeTab === 'sessions') {
+        if (isViewingSessionDetail()) {
+          markSessionsStale();
+        } else {
+          state.sessions.loaded = false;
+          loadSessions({ showLoading: false, reason: 'ws' });
+        }
+      }
       if (state.activeTab === 'lessons') loadLessons();
       if (state.activeTab === 'actions') loadActions();
       if (state.activeTab === 'activity' && msg.observation) {
@@ -7782,7 +7972,7 @@
       }
       if (action === 'refresh-sessions') {
         state.sessions.loaded = false;
-        loadSessions();
+        loadSessions({ showLoading: true, reason: 'manual' });
         return;
       }
       if (action === 'open-session-group') {
@@ -7790,6 +7980,13 @@
         if (openSessionId) state.sessions.selectedId = openSessionId;
         state.sessions.loaded = false;
         switchTab('sessions');
+        return;
+      }
+      if (action === 'toggle-session-detail-section') {
+        toggleSessionDetailSection(
+          target.getAttribute('data-session-id') || state.sessions.selectedId || '',
+          target.getAttribute('data-section') || '',
+        );
         return;
       }
       if (action === 'zoom-graph') {
@@ -8216,7 +8413,7 @@
 
     document.addEventListener('visibilitychange', function() {
       if (document.visibilityState === 'visible') {
-        refreshActiveTab();
+        refreshActiveTab('visibility');
       }
     });
 

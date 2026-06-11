@@ -279,6 +279,7 @@ Agent Memory Lab 默认本地优先。记忆、会话、索引和插件设置都
 - 记忆库来源筛选：浏览器、会话、手动
 - AI 输入框附近的本地记忆提示
 - 页面类型识别与候选记忆结构
+- 0LLM 会话重点视图后端：`GET /agentmemory/session/highlights`
 - 飞书项目介绍文档素材
 
 下一步重点：
@@ -304,6 +305,10 @@ npm run check:delivery
 npm test -- --run test/viewer-security.test.ts test/viewer-session-id.test.ts
 npm test -- --run test/viewer-memories-sort.test.ts
 ```
+
+REST API 当前注册 130 endpoints on port 3111，启动后可通过 `/agentmemory/session/highlights?sessionId=...` 获取单次会话的用户目标与 Agent 输出等对话型 0LLM 重点视图。
+
+MCP surface 当前提供 53 MCP tools；独立 MCP 入口显示为 53 tools, 6 resources, 3 prompts。
 
 ## 来源说明
 

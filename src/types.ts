@@ -142,6 +142,60 @@ export interface SessionSummary {
   observationCount: number;
 }
 
+export type SessionHighlightCategory =
+  | "goal"
+  | "agent_output"
+  | "tool"
+  | "mcp"
+  | "command"
+  | "failure"
+  | "validation"
+  | "file"
+  | "artifact"
+  | "skill"
+  | "todo"
+  | "follow_up";
+
+export interface SessionHighlight {
+  id: string;
+  sessionId: string;
+  category: SessionHighlightCategory;
+  title: string;
+  summary: string;
+  timestamp?: string;
+  sourceObservationId?: string;
+  evidence?: string;
+  files: string[];
+  toolName?: string;
+  importance: number;
+  confidence: number;
+}
+
+export interface SessionHighlightsView {
+  success: true;
+  session: Session;
+  coverage: {
+    llmUsed: false;
+    hasAssistantOutputs: boolean;
+    missingAssistantOutputs: boolean;
+    rawObservationCount: number;
+    compressedObservationCount: number;
+  };
+  stats: {
+    observationCount: number;
+    highlightCount: number;
+    categoryCounts: Record<SessionHighlightCategory, number>;
+    fileCount: number;
+    toolCount: number;
+  };
+  highlights: SessionHighlight[];
+}
+
+export interface SessionHighlightsError {
+  success: false;
+  error: string;
+}
+
 export type HookType =
   | "session_start"
   | "prompt_submit"
