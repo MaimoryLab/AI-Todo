@@ -4541,22 +4541,20 @@
       var next = notPassed.length ? notPassed.join('、') : '真实站点已齐';
       var html = '<div class="card" style="margin-bottom:16px;">';
       html += '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:12px;">';
-      html += '<div><div class="card-title" style="margin-bottom:4px;">浏览器记忆入口</div><div style="font-size:12px;color:var(--ink-muted);line-height:1.45;">从网页和 AI 对话提取具体事实，先送审，再写入记忆库。</div></div>';
+      html += '<div><div class="card-title" style="margin-bottom:4px;">浏览器记忆</div><div style="font-size:13px;color:var(--ink-muted);line-height:1.5;">把网页和 AI 对话里的事实、偏好、待办先放进审阅队列。</div></div>';
       html += '<span class="badge ' + deliveryBadgeClass(external) + '">可本地使用</span>';
       html += '</div>';
-      html += '<div style="margin:-2px 0 14px;font-size:13px;color:var(--ink-secondary);line-height:1.55;">不要把链接当记忆。浏览器入口会把页面里的事实、偏好和待办变成候选，回到这里审阅后才进入长期记忆。</div>';
-      html += '<div style="display:flex;gap:8px;flex-wrap:wrap;margin:-4px 0 14px;"><a class="btn btn-primary" href="/artifacts/agent-memory-lab-extension.zip" target="_blank" rel="noopener">下载插件包</a><a class="btn" href="/artifacts/external-tester-handout.md" target="_blank" rel="noopener">外测手册</a><a class="btn" href="/artifacts/ai-validation-run/quickstart-cn.md" target="_blank" rel="noopener">验收一页纸</a><a class="btn" href="/artifacts/ai-validation-run/tester-pack-cn.md" target="_blank" rel="noopener">AI 验收包</a><a class="btn" href="/artifacts/external-feedback-template-cn.md" target="_blank" rel="noopener">反馈模板</a><a class="btn" href="/artifacts/external-feedback-triage-cn.md" target="_blank" rel="noopener">分诊指南</a></div>';
-      html += '<div class="memory-card-grid" style="grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;margin-bottom:14px;">';
-      html += '<div class="stat-card" style="padding:14px;"><div class="label">1. 先看预览</div><div style="font-size:13px;color:var(--ink-secondary);line-height:1.45;margin:6px 0 10px;">不用登录真实 AI 站点，先确认输入框旁的记忆入口长什么样。</div><a class="btn" href="/demo/browser-extension.html" target="_blank" rel="noopener">打开预览</a></div>';
-      html += '<div class="stat-card" style="padding:14px;"><div class="label">2. 装到浏览器</div><div style="font-size:13px;color:var(--ink-secondary);line-height:1.45;margin:6px 0 10px;">加载 <code>browser-extension/</code>，把真实网页送进同一套审阅队列。</div><a class="btn" href="/browser-extension/LOAD-THIS-FIRST.md" target="_blank" rel="noopener">安装说明</a></div>';
-      html += '<div class="stat-card" style="padding:14px;"><div class="label">3. 验收 AI 页面</div><div style="font-size:13px;color:var(--ink-secondary);line-height:1.45;margin:6px 0 10px;">下一步：' + esc(next) + '。每站都要有具体对话证据和 <code>turnCount &gt; 0</code>。</div><a class="btn" href="/docs/browser-extension-ai-site-test-cards-cn.md" target="_blank" rel="noopener">测试卡</a></div>';
-      html += '<div class="stat-card" style="padding:14px;"><div class="label">4. 回来审阅</div><div style="font-size:13px;color:var(--ink-secondary);line-height:1.45;margin:6px 0 10px;">候选内容先改成具体事实，再确认进入长期记忆或经验。</div><a class="btn" href="#memories">查看待审阅</a></div>';
+      html += '<div style="display:flex;gap:8px;flex-wrap:wrap;margin:-2px 0 14px;"><a class="btn btn-primary" href="/artifacts/agent-memory-lab-extension.zip" target="_blank" rel="noopener">下载插件</a><a class="btn" href="#memories">审阅候选</a><a class="btn" href="/demo/browser-extension.html" target="_blank" rel="noopener">打开预览</a></div>';
+      html += '<div class="memory-card-grid" style="grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;margin-bottom:14px;">';
+      html += '<div class="stat-card" style="padding:14px;"><div class="label">1. 捕捉</div><div style="font-size:13px;color:var(--ink-secondary);line-height:1.45;margin-top:6px;">在网页或 AI 对话旁边摘取具体内容。</div></div>';
+      html += '<div class="stat-card" style="padding:14px;"><div class="label">2. 候选</div><div style="font-size:13px;color:var(--ink-secondary);line-height:1.45;margin-top:6px;">先进入审阅队列，不直接写进长期记忆。</div></div>';
+      html += '<div class="stat-card" style="padding:14px;"><div class="label">3. 入库</div><div style="font-size:13px;color:var(--ink-secondary);line-height:1.45;margin-top:6px;">确认是事实、偏好或待办后再保存。</div></div>';
       html += '</div>';
       if (!showDebug) {
-        html += '<div style="display:flex;gap:8px;align-items:center;justify-content:space-between;flex-wrap:wrap;padding-top:2px;">';
-        html += '<div style="font-size:12px;color:var(--ink-muted);">' + esc(version) + ' · ' + esc(zipLabel) + ' · 真实 AI 证据 ' + passed + '/' + required + '</div>';
-        html += '<a class="btn" href="/docs/browser-extension-ai-site-test-cards-cn.md" target="_blank" rel="noopener">适配检查</a>';
-        html += '</div></div>';
+        html += '<details style="border-top:1px solid var(--line);padding-top:10px;"><summary style="cursor:pointer;font-size:12px;color:var(--ink-muted);">更多材料</summary>';
+        html += '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;"><a class="btn" href="/browser-extension/LOAD-THIS-FIRST.md" target="_blank" rel="noopener">安装说明</a><a class="btn" href="/docs/browser-extension-ai-site-test-cards-cn.md" target="_blank" rel="noopener">适配检查</a><a class="btn" href="/artifacts/external-tester-handout.md" target="_blank" rel="noopener">外测手册</a><a class="btn" href="/artifacts/external-feedback-template-cn.md" target="_blank" rel="noopener">反馈模板</a></div>';
+        html += '<div style="font-size:12px;color:var(--ink-muted);margin-top:8px;">' + esc(version) + ' · ' + esc(zipLabel) + ' · AI 页面证据 ' + passed + '/' + required + '</div>';
+        html += '</details></div>';
         return html;
       }
       html += '<div class="stats-grid" style="margin-bottom:12px;">';
