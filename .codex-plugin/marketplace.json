@@ -8,9 +8,9 @@
       "name": "agent-memory-lab",
       "source": {
         "source": "git-subdir",
-        "url": "https://github.com/sznnnnn/agentmemory-lab.git",
+        "url": "https://github.com/MaimoryLab/agentmemory-lab.git",
         "path": "./plugin",
-        "ref": "szn-viewer-ui-iteration"
+        "ref": "main"
       },
       "policy": {
         "installation": "AVAILABLE",

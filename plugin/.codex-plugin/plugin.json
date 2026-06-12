@@ -3,12 +3,12 @@
   "version": "0.9.24",
   "description": "Local-first Agent memory workbench -- captures sessions, opens a reviewable viewer, syncs durable memories, promotes lessons into Skills, and prepares README/Feishu publishing materials.",
   "author": {
-    "name": "sznnnnn",
-    "url": "https://github.com/sznnnnn/agentmemory-lab"
+    "name": "MaimoryLab",
+    "url": "https://github.com/MaimoryLab/agentmemory-lab"
   },
   "license": "Apache-2.0",
-  "homepage": "https://github.com/sznnnnn/agentmemory-lab/tree/szn-viewer-ui-iteration",
-  "repository": "https://github.com/sznnnnn/agentmemory-lab",
+  "homepage": "https://github.com/MaimoryLab/agentmemory-lab",
+  "repository": "https://github.com/MaimoryLab/agentmemory-lab",
   "skills": "./skills/",
   "mcpServers": "./.mcp.json",
   "hooks": "./hooks/hooks.codex.json"

@@ -44,7 +44,7 @@ describe("Codex plugin manifest (developers.openai.com/codex/plugins)", () => {
       mcpServers?: string;
       hooks?: string;
     }>(manifestPath);
-    expect(manifest.name).toBe("agentmemory");
+    expect(manifest.name).toBe("agent-memory-lab");
     expect(manifest.name).toMatch(/^[a-z][a-z0-9-]*$/);
     expect(manifest.version).toMatch(/^\d+\.\d+\.\d+/);
     expect(manifest.skills).toBeDefined();
@@ -148,12 +148,13 @@ describe("Codex marketplace.json (.codex-plugin/marketplace.json at repo root)",
         source: { source: string; url: string; path: string; ref?: string };
       }>;
     }>(marketplacePath);
-    expect(marketplace.name).toBe("agentmemory");
+    expect(marketplace.name).toBe("agent-memory-lab");
     expect(marketplace.plugins).toHaveLength(1);
     const entry = marketplace.plugins[0];
-    expect(entry.name).toBe("agentmemory");
+    expect(entry.name).toBe("agent-memory-lab");
     expect(entry.source.source).toBe("git-subdir");
     expect(entry.source.path).toBe("./plugin");
-    expect(entry.source.url).toMatch(/rohitg00\/agentmemory/);
+    expect(entry.source.url).toBe("https://github.com/MaimoryLab/agentmemory-lab.git");
+    expect(entry.source.ref).toBe("main");
   });
 });

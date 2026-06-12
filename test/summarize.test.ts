@@ -302,7 +302,7 @@ describe("mem::summarize chunking", () => {
     expect(stored?.title).toBe("merged-with-skip");
   });
 
-  it("too many skipped chunks bails out with a clear error", async () => {
+  it("too many skipped chunks falls back to a local summary", async () => {
     process.env.SUMMARIZE_CHUNK_SIZE = "100";
     process.env.SUMMARIZE_CHUNK_CONCURRENCY = "1";
     // 3 chunks, 2 fully broken → >50% skipped → bail.
@@ -311,7 +311,7 @@ describe("mem::summarize chunking", () => {
       "<garbage/>", "<garbage/>",
       "<garbage/>", "<garbage/>",
     ]);
-    const { handler } = await setupHandler({
+    const { handler, kv } = await setupHandler({
       sessionId: "ses_too_broken",
       obsCount: 250,
       provider,
@@ -319,8 +319,12 @@ describe("mem::summarize chunking", () => {
 
     const result: any = await handler({ sessionId: "ses_too_broken" });
 
-    expect(result.success).toBe(false);
-    expect(result.error).toMatch(/too_many_chunks_skipped: 2\/3/);
+    expect(result.success).toBe(true);
+    expect(result.fallback).toBe(true);
+    expect(result.reason).toMatch(/too_many_chunks_skipped: 2\/3/);
+    const stored: any = await kv.get("summaries", "ses_too_broken");
+    expect(stored?.sessionId).toBe("ses_too_broken");
+    expect(stored?.narrative).toContain("本地规则兜底");
   });
 
   it("provider error on one chunk after retry is skipped, not propagated", async () => {
@@ -356,7 +360,7 @@ describe("mem::summarize chunking", () => {
     expect(stored?.title).toBe("merged-with-skip");
   });
 
-  it("every chunk failing on provider error trips too_many_chunks_skipped", async () => {
+  it("every chunk failing on provider error falls back to a local summary", async () => {
     process.env.SUMMARIZE_CHUNK_SIZE = "100";
     process.env.SUMMARIZE_CHUNK_CONCURRENCY = "1";
     // 3 chunks, all chunk calls throw → 3/3 skipped → bail.
@@ -369,7 +373,7 @@ describe("mem::summarize chunking", () => {
         throw new Error("OpenAI API error (400): invalid request");
       },
     };
-    const { handler } = await setupHandler({
+    const { handler, kv } = await setupHandler({
       sessionId: "ses_all_400",
       obsCount: 250,
       provider,
@@ -377,8 +381,12 @@ describe("mem::summarize chunking", () => {
 
     const result: any = await handler({ sessionId: "ses_all_400" });
 
-    expect(result.success).toBe(false);
-    expect(result.error).toMatch(/too_many_chunks_skipped: 3\/3/);
+    expect(result.success).toBe(true);
+    expect(result.fallback).toBe(true);
+    expect(result.reason).toMatch(/too_many_chunks_skipped: 3\/3/);
+    const stored: any = await kv.get("summaries", "ses_all_400");
+    expect(stored?.sessionId).toBe("ses_all_400");
+    expect(stored?.narrative).toContain("本地规则兜底");
   });
 
   it("chunks run in parallel batches according to SUMMARIZE_CHUNK_CONCURRENCY", async () => {

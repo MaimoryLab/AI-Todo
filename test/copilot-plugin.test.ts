@@ -56,7 +56,7 @@ describe("Copilot plugin manifest (plugin/plugin.json)", () => {
       mcpServers?: string;
       hooks?: string;
     }>(manifestPath);
-    expect(manifest.name).toBe("agentmemory");
+    expect(manifest.name).toBe("agent-memory-lab");
     expect(manifest.name).toMatch(/^[a-z][a-z0-9-]*$/);
     expect(manifest.version).toMatch(/^\d+\.\d+\.\d+/);
     expect(manifest.skills).toBeDefined();
