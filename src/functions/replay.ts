@@ -10,7 +10,7 @@ import type {
   Session,
 } from "../types.js";
 import type { StateKV } from "../state/kv.js";
-import { KV, generateId, fingerprintId } from "../state/schema.js";
+import { KV, fingerprintId } from "../state/schema.js";
 import { parseJsonlText } from "../replay/jsonl-parser.js";
 import { projectTimeline, type Timeline } from "../replay/timeline.js";
 import { safeAudit } from "./audit.js";
@@ -381,7 +381,7 @@ export function registerReplayFunctions(sdk: ISdk, kv: StateKV): void {
           continue;
         }
 
-        const parsed = parseJsonlText(text, generateId("sess"));
+        const parsed = parseJsonlText(text, fingerprintId("sess", text));
         if (parsed.observations.length === 0) continue;
 
         const firstPromptObs = parsed.observations.find(
@@ -391,22 +391,41 @@ export function registerReplayFunctions(sdk: ISdk, kv: StateKV): void {
           ? firstPromptObs.userPrompt.replace(/\s+/g, " ").trim().slice(0, 200)
           : undefined;
 
+        const searchIndex = getSearchIndex();
+        const compressed: CompressedObservation[] = [];
+        const newRawObservations: RawObservation[] = [];
+        await Promise.all(
+          parsed.observations.map(async (obs) => {
+            const existingObs = await kv.get<CompressedObservation>(
+              KV.observations(parsed.sessionId),
+              obs.id,
+            );
+            if (existingObs) return;
+            const synthetic = buildSyntheticCompression(obs);
+            compressed.push(synthetic);
+            newRawObservations.push(obs);
+            await kv.set(KV.observations(parsed.sessionId), obs.id, synthetic);
+            searchIndex.add(synthetic);
+          }),
+        );
+        const storedObservations = await kv.list<CompressedObservation>(
+          KV.observations(parsed.sessionId),
+        );
+        const totalObservationCount = storedObservations.length;
         const existing = await kv.get<Session>(KV.sessions, parsed.sessionId);
         if (existing) {
-          existing.observationCount =
-            (existing.observationCount || 0) + parsed.observations.length;
-          if (parsed.endedAt > (existing.endedAt || "")) {
-            existing.endedAt = parsed.endedAt;
-          }
-          if (existing.status === "active") existing.status = "completed";
           const existingTags = existing.tags || [];
-          if (!existingTags.includes("jsonl-import")) {
-            existing.tags = [...existingTags, "jsonl-import"];
-          }
-          if (!existing.firstPrompt && firstPrompt) {
-            existing.firstPrompt = firstPrompt;
-          }
-          await kv.set(KV.sessions, existing.id, existing);
+          const session: Session = {
+            ...existing,
+            endedAt: parsed.endedAt > (existing.endedAt || "") ? parsed.endedAt : existing.endedAt,
+            status: existing.status === "active" ? "completed" : existing.status,
+            observationCount: totalObservationCount,
+            tags: existingTags.includes("jsonl-import")
+              ? existingTags
+              : [...existingTags, "jsonl-import"],
+            firstPrompt: existing.firstPrompt || firstPrompt,
+          };
+          await kv.set(KV.sessions, session.id, session);
         } else {
           const session: Session = {
             id: parsed.sessionId,
@@ -415,31 +434,21 @@ export function registerReplayFunctions(sdk: ISdk, kv: StateKV): void {
             startedAt: parsed.startedAt,
             endedAt: parsed.endedAt,
             status: "completed",
-            observationCount: parsed.observations.length,
+            observationCount: totalObservationCount,
             tags: ["jsonl-import"],
             firstPrompt,
           };
           await kv.set(KV.sessions, session.id, session);
         }
 
-        const searchIndex = getSearchIndex();
-        const compressed: CompressedObservation[] = [];
-        await Promise.all(
-          parsed.observations.map(async (obs) => {
-            const synthetic = buildSyntheticCompression(obs);
-            compressed.push(synthetic);
-            await kv.set(KV.observations(parsed.sessionId), obs.id, synthetic);
-            searchIndex.add(synthetic);
-          }),
-        );
-        observationCount += parsed.observations.length;
+        observationCount += newRawObservations.length;
         sessionIds.push(parsed.sessionId);
 
         await deriveCrystalAndLessons(
           kv,
           parsed.sessionId,
           parsed.project,
-          parsed.observations,
+          newRawObservations,
           compressed,
           firstPrompt,
         );

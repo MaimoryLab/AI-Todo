@@ -1,12 +1,31 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, beforeEach, vi } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { parseJsonlText } from "../src/replay/jsonl-parser.js";
 import { projectTimeline } from "../src/replay/timeline.js";
+import { registerReplayFunctions } from "../src/functions/replay.js";
+import { getSearchIndex } from "../src/functions/search.js";
 import { buildSyntheticCompression } from "../src/functions/compress-synthetic.js";
+import type { RawObservation, Session } from "../src/types.js";
+import { KV } from "../src/state/schema.js";
+import { mockKV, mockSdk } from "./helpers/mocks.js";
+
+vi.mock("../src/logger.js", () => ({
+  logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+}));
+
+vi.mock("../src/functions/audit.js", () => ({
+  safeAudit: vi.fn(),
+}));
 
 const fx = (name: string) =>
   readFileSync(join(__dirname, "fixtures/jsonl", name), "utf-8");
+
+const fxPath = (name: string) => join(__dirname, "fixtures/jsonl", name);
+
+beforeEach(() => {
+  getSearchIndex().clear();
+});
 
 describe("parseJsonlText", () => {
   it("parses basic user/assistant exchange", () => {
@@ -98,6 +117,37 @@ describe("parseJsonlText", () => {
     const out = parseJsonlText(text, "fb-used");
     expect(out.sessionId).toBe("fb-used");
   });
+
+  it("parses Codex session_meta/event_msg/response_item transcripts", () => {
+    const out = parseJsonlText(fx("codex-session.jsonl"), "fallback-ignored");
+
+    expect(out.sessionId).toBe("codex-real-session");
+    expect(out.project).toBe("codex-project");
+    expect(out.cwd).toBe("/Users/alice/codex-project");
+    expect(out.startedAt).toBe("2026-06-11T08:00:00.000Z");
+    expect(out.endedAt).toBe("2026-06-11T08:00:04.000Z");
+    expect(out.observations.map((o) => o.hookType)).toEqual([
+      "prompt_submit",
+      "stop",
+      "pre_tool_use",
+      "post_tool_use",
+    ]);
+    expect(out.observations[0].userPrompt).toBe("生成摘要按钮点击必定失败，请修复");
+    expect(out.observations[1].assistantResponse).toBe("我会先复现并定位摘要链路。");
+    expect(out.observations[2].toolName).toBe("exec_command");
+    expect(out.observations[2].toolInput).toEqual({
+      cmd: "rg summarize src/viewer/index.html",
+    });
+    expect(out.observations[3].toolOutput).toBe("src/viewer/index.html:6866 summarizeSession");
+    expect(out.observations.every((o) => o.sessionId === "codex-real-session")).toBe(true);
+  });
+
+  it("generates stable observation ids across repeated parses of one JSONL", () => {
+    const first = parseJsonlText(fx("codex-session.jsonl"), "fallback-ignored");
+    const second = parseJsonlText(fx("codex-session.jsonl"), "fallback-ignored");
+
+    expect(first.observations.map((o) => o.id)).toEqual(second.observations.map((o) => o.id));
+  });
 });
 
 describe("projectTimeline", () => {
@@ -154,5 +204,34 @@ describe("buildSyntheticCompression replay coverage", () => {
 
     expect(compressed.type).toBe("conversation");
     expect(compressed.narrative).toContain("Looking into it now.");
+  });
+});
+
+describe("mem::replay::import-jsonl", () => {
+  it("is idempotent when importing the same Codex JSONL repeatedly", async () => {
+    const sdk = mockSdk();
+    const kv = mockKV();
+    registerReplayFunctions(sdk as never, kv as never);
+
+    const first = await sdk.trigger("mem::replay::import-jsonl", {
+      path: fxPath("codex-session.jsonl"),
+      maxFiles: 1,
+    }) as { success: boolean; sessionIds: string[]; observations: number };
+    const second = await sdk.trigger("mem::replay::import-jsonl", {
+      path: fxPath("codex-session.jsonl"),
+      maxFiles: 1,
+    }) as { success: boolean; sessionIds: string[]; observations: number };
+
+    expect(first.success).toBe(true);
+    expect(second.success).toBe(true);
+    expect(first.sessionIds).toEqual(["codex-real-session"]);
+    expect(second.sessionIds).toEqual(["codex-real-session"]);
+    expect(first.observations).toBe(4);
+    expect(second.observations).toBe(0);
+
+    const stored = await kv.list<RawObservation>(KV.observations("codex-real-session"));
+    expect(stored).toHaveLength(4);
+    const session = await kv.get<Session>(KV.sessions, "codex-real-session");
+    expect(session?.observationCount).toBe(4);
   });
 });
