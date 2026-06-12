@@ -1,5 +1,5 @@
 import type { ISdk, ApiRequest } from "iii-sdk";
-import type { Session, CompressedObservation, HookPayload, CommitLink, ReviewQueueItem } from "../types.js";
+import type { Action, Session, CompressedObservation, HookPayload, CommitLink, ReviewQueueItem } from "../types.js";
 import { withKeyedLock } from "../state/keyed-mutex.js";
 import { KV } from "../state/schema.js";
 import { StateKV } from "../state/kv.js";
@@ -13,6 +13,10 @@ import { renderViewerDocument } from "../viewer/document.js";
 import { getBoundViewerPort, getViewerSkipped } from "../viewer/server.js";
 import { MAX_FILES_UPPER_BOUND } from "../functions/replay.js";
 import { logger } from "../logger.js";
+import {
+  type ActionCandidate,
+  extractActionCandidatesFromTurns,
+} from "../functions/action-candidates.js";
 import {
   isGraphExtractionEnabled,
   isConsolidationEnabled,
@@ -242,6 +246,99 @@ async function recordBrowserSessionFromReview(
   });
   await sdk.trigger({ function_id: "api::session::end", payload: { sessionId } });
   return { sessionId, observationCount };
+}
+
+function reviewKind(value: unknown): ReviewQueueItem["kind"] {
+  return value === "lesson" || value === "action" ? value : "memory";
+}
+
+function defaultReviewTitle(kind: ReviewQueueItem["kind"], pageTitle?: string): string {
+  if (pageTitle) return pageTitle;
+  if (kind === "lesson") return "待审阅经验";
+  if (kind === "action") return "待审阅行动";
+  return "待审阅记忆";
+}
+
+function isJsonLikeReviewText(value: string): boolean {
+  const trimmed = value.trim();
+  if (!trimmed.startsWith("{") && !trimmed.startsWith("[")) return false;
+  try {
+    JSON.parse(trimmed);
+    return true;
+  } catch {
+    return true;
+  }
+}
+
+function isMarkdownPlanReviewText(value: string): boolean {
+  const raw = String(value || "");
+  const hasPlanHeading = /^#{1,3}\s+.*(?:计划|Plan)\s*$/im.test(raw);
+  const sectionMatches = raw.match(/^#{1,3}\s+(?:Summary|Key Changes|Test Plan|Assumptions|Public API|Implementation|执行步骤|验证命令)\b/img) || [];
+  const compact = raw.replace(/\s+/g, " ");
+  const compactPlanSectionCount = [
+    /#{1,3}\s+Summary\b/i,
+    /#{1,3}\s+Key Changes\b/i,
+    /#{1,3}\s+Test Plan\b/i,
+    /#{1,3}\s+Assumptions\b/i,
+    /#{1,3}\s+Implementation\b/i,
+    /#{1,3}\s+执行步骤\b/i,
+    /#{1,3}\s+验证命令\b/i,
+  ].filter((pattern) => pattern.test(compact)).length;
+  const compactPlan = /#{1,3}\s+[^#]{0,160}(?:计划|Plan)/i.test(compact) &&
+    (compactPlanSectionCount >= 2 || /#{1,3}\s+Summary\b/i.test(compact));
+  return (hasPlanHeading && sectionMatches.length >= 2) || compactPlan;
+}
+
+function isReviewTextDisplayable(value: string): boolean {
+  const trimmed = value.trim();
+  if (!trimmed) return true;
+  const lower = trimmed.toLowerCase();
+  if (isJsonLikeReviewText(trimmed)) return false;
+  if (isMarkdownPlanReviewText(trimmed)) return false;
+  if (/please implement this plan/i.test(trimmed)) return false;
+  if (/"plan"\s*:/.test(trimmed) && /"status"\s*:/.test(trimmed) && /"step"\s*:/.test(trimmed)) return false;
+  if (/"command"\s*:|toolinput|tooloutput|function_id/.test(lower)) return false;
+  if (/审查结果\s*\[[Pp]\d+\]/.test(trimmed) && /(?:src|test)\/[^\s]+(?:\s*\(line\s+\d+\))?/.test(trimmed)) return false;
+  if (/^src\/[^\s]+/m.test(trimmed) && /\bnpm\s+(test|run|install|build)\b/i.test(trimmed)) return false;
+  if (/^\s*(npm|pnpm|yarn)\s+(test|run|install|build)\b/im.test(trimmed)) return false;
+  return true;
+}
+
+function isReviewCandidateDisplayable(title: string, content: string): boolean {
+  return isReviewTextDisplayable(title) && isReviewTextDisplayable(content);
+}
+
+function actionReviewItemFromCandidate(opts: {
+  candidate: ActionCandidate;
+  now: string;
+  source: ReviewQueueItem["source"];
+  page: ReviewQueueItem["page"];
+  conversation?: ReviewQueueItem["conversation"];
+  basePayload: Record<string, unknown>;
+}): ReviewQueueItem {
+  return {
+    id: `review_${Date.now().toString(36)}_${crypto.randomUUID().replace(/-/g, "").slice(0, 10)}`,
+    createdAt: opts.now,
+    updatedAt: opts.now,
+    status: "pending",
+    kind: "action",
+    title: opts.candidate.title,
+    content: opts.candidate.description,
+    source: opts.source,
+    page: opts.page,
+    ...(opts.conversation ? { conversation: opts.conversation } : {}),
+    payload: {
+      ...opts.basePayload,
+      actionCandidate: {
+        priority: opts.candidate.priority,
+        reason: opts.candidate.reason,
+        confidence: opts.candidate.confidence,
+        duplicateHint: opts.candidate.duplicateHint,
+        sourceObservationIds: opts.candidate.sourceObservationIds,
+      },
+      tags: opts.candidate.tags,
+    },
+  };
 }
 
 function flagDisabledResponse(opts: {
@@ -1202,7 +1299,7 @@ export function registerApiTriggers(
       if (authErr) return authErr;
       const body = (req.body ?? {}) as Record<string, unknown>;
       const syncMode = body.mode === "sync" || body.source === "browser-sync";
-      const rawKind = body.kind === "lesson" ? "lesson" : "memory";
+      const rawKind = reviewKind(body.kind);
       const now = new Date().toISOString();
       const page = body.page && typeof body.page === "object" ? body.page as Record<string, unknown> : {};
       const rawConversation = body.conversation && typeof body.conversation === "object" ? body.conversation as Record<string, unknown> : {};
@@ -1222,8 +1319,12 @@ export function registerApiTriggers(
       if (!rawContent) {
         return { status_code: 400, body: { error: "content is required" } };
       }
-      const title = asNonEmptyString(body.title) || autoCandidate?.title || asNonEmptyString(page.title) || (rawKind === "lesson" ? "待审阅经验" : "待审阅记忆");
+      const title = asNonEmptyString(body.title) || autoCandidate?.title || defaultReviewTitle(rawKind, asNonEmptyString(page.title) || undefined);
+      if (!isReviewCandidateDisplayable(title, rawContent)) {
+        return { status_code: 400, body: { error: "review_content_not_displayable" } };
+      }
       const payload = body.payload && typeof body.payload === "object" ? body.payload as Record<string, unknown> : {};
+      const source = syncMode ? "browser-sync" : (body.source === "viewer" || body.source === "api" ? body.source : "browser-extension");
       const syncId = syncMode ? browserSyncKey(page, conversation) : "";
       const itemId = syncId ? `browser_sync_${syncId}` : `review_${Date.now().toString(36)}_${crypto.randomUUID().replace(/-/g, "").slice(0, 10)}`;
       const existing = syncId ? await kv.get<ReviewQueueItem>(KV.reviewQueue, itemId) : null;
@@ -1235,7 +1336,7 @@ export function registerApiTriggers(
         kind: rawKind,
         title,
         content: rawContent,
-        source: syncMode ? "browser-sync" : (body.source === "viewer" || body.source === "api" ? body.source : "browser-extension"),
+        source,
         ...(autoCandidate ? { decision: autoCandidate.decision, confidence: autoCandidate.confidence, reason: autoCandidate.reason } : {}),
         page: {
           type: typeof page.type === "string" ? page.type : undefined,
@@ -1251,6 +1352,31 @@ export function registerApiTriggers(
           ...(syncId ? { browserSyncId: syncId } : {}),
         },
       };
+      const actionDrafts: ReviewQueueItem[] = [];
+      if ((item.source === "browser-extension" || item.source === "browser-sync") && conversation.turns.length > 0) {
+        const [existingActions, existingReviewItems] = await Promise.all([
+          kv.list<Action>(KV.actions).catch(() => []),
+          kv.list<ReviewQueueItem>(KV.reviewQueue).catch(() => []),
+        ]);
+        for (const candidate of extractActionCandidatesFromTurns(conversation.turns, {
+          existingActions,
+          existingReviewItems,
+        })) {
+          actionDrafts.push(actionReviewItemFromCandidate({
+            candidate,
+            now,
+            source: item.source,
+            page: item.page,
+            conversation,
+            basePayload: {
+              ...payload,
+              ...(item.payload || {}),
+              provider: conversation.provider || payload.provider,
+              pageType: item.page?.type || payload.pageType,
+            },
+          }));
+        }
+      }
       if (item.source === "browser-extension" || item.source === "browser-sync") {
         try {
           const browserSession = await recordBrowserSessionFromReview(sdk, item);
@@ -1267,7 +1393,13 @@ export function registerApiTriggers(
         }
       }
       await kv.set(KV.reviewQueue, item.id, item);
-      return { status_code: existing ? 200 : 201, body: { success: true, item } };
+      for (const draft of actionDrafts) {
+        await kv.set(KV.reviewQueue, draft.id, draft);
+      }
+      return {
+        status_code: existing ? 200 : 201,
+        body: { success: true, item, ...(actionDrafts.length ? { actionDrafts } : {}) },
+      };
     },
   );
   sdk.registerTrigger({
@@ -1296,6 +1428,39 @@ export function registerApiTriggers(
     config: { api_path: "/agentmemory/review", http_method: "GET" },
   });
 
+  sdk.registerFunction("api::review-actions-generate",
+    async (req: ApiRequest): Promise<Response> => {
+      const authErr = checkAuth(req, secret);
+      if (authErr) return authErr;
+      const body = (req.body ?? {}) as Record<string, unknown>;
+      const maxSessions = parseOptionalPositiveInt(body.maxSessions);
+      if (maxSessions === null) {
+        return { status_code: 400, body: { error: "maxSessions must be a positive integer" } };
+      }
+      const maxObservationsPerSession = parseOptionalPositiveInt(body.maxObservationsPerSession);
+      if (maxObservationsPerSession === null) {
+        return { status_code: 400, body: { error: "maxObservationsPerSession must be a positive integer" } };
+      }
+      const payload: Record<string, unknown> = {};
+      if (maxSessions !== undefined) payload.maxSessions = maxSessions;
+      if (maxObservationsPerSession !== undefined) {
+        payload.maxObservationsPerSession = maxObservationsPerSession;
+      }
+      const project = asNonEmptyString(body.project);
+      if (project) payload.project = project;
+      const result = await sdk.trigger({
+        function_id: "mem::action-candidates-generate",
+        payload,
+      });
+      return { status_code: 200, body: result };
+    },
+  );
+  sdk.registerTrigger({
+    type: "http",
+    function_id: "api::review-actions-generate",
+    config: { api_path: "/agentmemory/review/actions/generate", http_method: "POST" },
+  });
+
   sdk.registerFunction("api::review-approve",
     async (req: ApiRequest): Promise<Response> => {
       const authErr = checkAuth(req, secret);
@@ -1316,8 +1481,11 @@ export function registerApiTriggers(
           : undefined;
       const now = new Date().toISOString();
       let result: unknown;
-      const approvedKind = body.kind === "lesson" || body.kind === "memory" ? body.kind : item.kind;
+      const approvedKind = body.kind === "lesson" || body.kind === "memory" || body.kind === "action" ? body.kind : item.kind;
       const payload = (item.payload || {}) as Record<string, unknown>;
+      const actionCandidate = payload.actionCandidate && typeof payload.actionCandidate === "object"
+        ? payload.actionCandidate as Record<string, unknown>
+        : {};
       const provider = asNonEmptyString(payload.provider) || undefined;
       const pageType = asNonEmptyString(payload.pageType) || item.page?.type;
       const sourceLabel = asNonEmptyString(payload.sourceLabel) || provider || item.page?.typeLabel || item.page?.host;
@@ -1334,7 +1502,37 @@ export function registerApiTriggers(
         provider ? `source:${provider.toLowerCase()}` : undefined,
         pageType ? `page:${pageType}` : undefined,
       ].filter((value): value is string => typeof value === "string" && value.length > 0);
-      if (approvedKind === "lesson") {
+      if (approvedKind === "action") {
+        const priorityValue = parseOptionalFiniteNumber(body.priority) ?? parseOptionalFiniteNumber(actionCandidate.priority) ?? 5;
+        const priority = typeof priorityValue === "number" ? Math.max(1, Math.min(10, Math.floor(priorityValue))) : 5;
+        const sourceObservationIds = Array.isArray(actionCandidate.sourceObservationIds)
+          ? actionCandidate.sourceObservationIds.filter((id): id is string => typeof id === "string" && id.length > 0)
+          : [];
+        result = await sdk.trigger({
+          function_id: "mem::action-create",
+          payload: {
+            title,
+            description: content,
+            priority,
+            createdBy: "review",
+            project: project || (typeof payload.project === "string" ? payload.project : undefined),
+            tags: tags || (Array.isArray(payload.tags) ? payload.tags : sourceTags),
+            sourceObservationIds,
+          },
+        });
+        const resultObj = result && typeof result === "object" ? result as Record<string, unknown> : {};
+        const action = resultObj.action && typeof resultObj.action === "object" ? resultObj.action as Record<string, unknown> : null;
+        if (!resultObj.success || !action?.id) {
+          return {
+            status_code: 502,
+            body: {
+              success: false,
+              error: typeof resultObj.error === "string" ? resultObj.error : "action_create_failed",
+              result,
+            },
+          };
+        }
+      } else if (approvedKind === "lesson") {
         result = await sdk.trigger({
           function_id: "mem::lesson-save",
           payload: {
@@ -1364,6 +1562,7 @@ export function registerApiTriggers(
         });
       }
       const resultObj = result && typeof result === "object" ? result as Record<string, unknown> : {};
+      const resultAction = resultObj.action && typeof resultObj.action === "object" ? resultObj.action as Record<string, unknown> : null;
       const resultMemory = resultObj.memory && typeof resultObj.memory === "object" ? resultObj.memory as Record<string, unknown> : null;
       const resultLesson = resultObj.lesson && typeof resultObj.lesson === "object" ? resultObj.lesson as Record<string, unknown> : null;
       item.status = "approved";
@@ -1381,7 +1580,7 @@ export function registerApiTriggers(
       };
       item.updatedAt = now;
       item.reviewedAt = now;
-      item.resultId = String(resultMemory?.id || resultLesson?.id || "");
+      item.resultId = String(resultAction?.id || resultMemory?.id || resultLesson?.id || "");
       await kv.set(KV.reviewQueue, item.id, item);
       return { status_code: 200, body: { success: true, item, result } };
     },

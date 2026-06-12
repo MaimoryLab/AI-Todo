@@ -109,7 +109,7 @@ export interface ReviewQueueItem {
   createdAt: string;
   updatedAt: string;
   status: "pending" | "approved" | "dismissed";
-  kind: "memory" | "lesson";
+  kind: "memory" | "lesson" | "action";
   title: string;
   content: string;
   source: "browser-extension" | "browser-sync" | "viewer" | "api";

@@ -707,4 +707,62 @@ describe("viewer session rendering", () => {
     expect(detail).toContain("缓存中的完整过程");
     expect(detail).not.toContain("加载会话详情中");
   });
+
+  it("hides polluted action review candidates while keeping readable drafts", () => {
+    const { sandbox, getElement } = loadViewerSandbox();
+    sandbox.state.actions = {
+      loaded: true,
+      items: [],
+      frontier: [],
+      statusFilter: "",
+      search: "",
+      reviewItems: [
+        {
+          id: "review_plan",
+          status: "pending",
+          kind: "action",
+          title: "进行修复计划的构建 审查结果",
+          content: "进行修复计划的构建 审查结果 [P1] 仍会显示计划。# 待办生成链路与前端展示修复计划 ## Summary 本轮修复链路。 ## Key Changes - 前端过滤。 ## Test Plan - npm test",
+          source: "viewer",
+          payload: { actionCandidate: { reason: "todo" }, tags: ["action-candidate"] },
+        },
+        {
+          id: "review_readable",
+          status: "pending",
+          kind: "action",
+          title: "修复待办候选展示",
+          content: "下一步请修复待办候选展示。",
+          source: "viewer",
+          payload: { actionCandidate: { reason: "follow_up" }, tags: ["action-candidate"] },
+        },
+        {
+          id: "review_summary_only_plan",
+          status: "pending",
+          kind: "action",
+          title: "待办生成链路与前端展示修复计划",
+          content: "# 待办生成链路与前端展示修复计划 ## Summary 本轮暂不处理摘要按钮，只修待办候选生成与展示链路。",
+          source: "viewer",
+          payload: { actionCandidate: { reason: "todo" }, tags: ["action-candidate"] },
+        },
+        {
+          id: "review_code_finding",
+          status: "pending",
+          kind: "action",
+          title: "进行修复计划的构建 审查结果",
+          content: "进行修复计划的构建 审查结果 [P1] 仍会显示污染候选。根因在 src/functions/action-candidates.ts (line 57)。",
+          source: "viewer",
+          payload: { actionCandidate: { reason: "todo" }, tags: ["action-candidate"] },
+        },
+      ],
+    };
+
+    sandbox.renderActions();
+    const html = getElement("view-actions").innerHTML;
+
+    expect(html).toContain("修复待办候选展示");
+    expect(html).toContain("1 条待审");
+    expect(html).not.toContain("待办生成链路与前端展示修复计划");
+    expect(html).not.toContain("## Summary");
+    expect(html).not.toContain("src/functions/action-candidates.ts");
+  });
 });

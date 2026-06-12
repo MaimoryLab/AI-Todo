@@ -3560,6 +3560,27 @@
       discovery: '&#128161;', subagent: '&#129302;', notification: '&#128276;',
       task: '&#9745;', other: '&#128196;'
     };
+    var TYPE_LABEL_MAP = {
+      file_read: '读取文件',
+      file_write: '写入文件',
+      file_edit: '编辑文件',
+      command_run: '执行命令',
+      search: '搜索',
+      web_fetch: '网页获取',
+      conversation: '对话',
+      error: '错误',
+      decision: '决策',
+      discovery: '发现',
+      subagent: '子代理',
+      notification: '通知',
+      task: '任务',
+      image: '图片',
+      other: '其它'
+    };
+    function observationTypeLabel(type) {
+      var key = String(type || 'other');
+      return TYPE_LABEL_MAP[key] || key.replace(/_/g, ' ');
+    }
     var CB_STATE_COLORS = { closed: 'badge-green', open: 'badge-red', 'half-open': 'badge-yellow' };
     var TAB_IDS = ['dashboard', 'memories', 'sessions', 'lessons', 'actions', 'activity'];
     var TAB_REDIRECTS = { graph: 'dashboard', profile: 'dashboard', audit: 'dashboard', replay: 'dashboard', timeline: 'sessions', crystals: 'dashboard' };
@@ -3577,7 +3598,7 @@
       audit: { loaded: false, entries: [], opFilter: '' },
       activity: { loaded: false, observations: [], sessions: [], typeFilter: '', loadingPhase: '', warnings: [] },
       lessons: { loaded: false, items: [], search: '', skillSearch: '', skillRootFilter: 'all', mode: 'explicit', projects: [] },
-      actions: { loaded: false, items: [], frontier: [], statusFilter: '', search: '' },
+      actions: { loaded: false, items: [], reviewItems: [], frontier: [], statusFilter: '', search: '' },
       crystals: { loaded: false, items: [], search: '', lessonMap: {} },
       profile: { loaded: false, projects: [], selectedProject: '', data: null },
       replay: { loaded: false, sessions: [], selectedId: '', timeline: null, cursor: 0, playing: false, speed: 1, timer: null, startAt: 0, offsetAt: 0 },
@@ -3684,6 +3705,25 @@
 	      if (ti && typeof ti === 'object' && ti.command) return { command: String(ti.command), output: String(o && o.toolOutput || '') };
 	      return { command: '', output: '' };
 	    }
+    function normalizedToolTraceName(value) {
+      return String(value || '').trim().toLowerCase().replace(/\s+/g, '_');
+    }
+    function isJsonLikeText(text) {
+      var trimmed = String(text || '').trim();
+      if (!trimmed || (trimmed[0] !== '{' && trimmed[0] !== '[')) return false;
+      try {
+        JSON.parse(trimmed);
+        return true;
+      } catch (e) {
+        return /^[{\[]/.test(trimmed);
+      }
+    }
+    function looksToolTraceDisplayText(text) {
+      var trimmed = String(text || '').trim();
+      if (!trimmed) return false;
+      var lower = trimmed.toLowerCase();
+      return isJsonLikeText(trimmed) || /"plan"\s*:|"command"\s*:|toolinput|tooloutput|function_id/.test(lower);
+    }
     function commandHumanSummary(command) {
       var c = String(command || '').trim();
       if (!c) return '执行本地操作';
@@ -3721,18 +3761,29 @@
 	      var rawNarrative = normalizePreviewText(o && o.narrative);
 	      var commandInfo = extractCommandText(o);
 	      var type = o && (o.type || o.hookType || '');
+	      var toolName = normalizedToolTraceName(o && (o.toolName || o.title || o.hookType));
 	      var title = baseTitle || 'Observation';
 	      var subtitle = rawSubtitle;
 	      var body = rawNarrative;
 	      if (title === 'prompt_submit') title = '用户提出需求';
 	      if (title === 'agent_message') title = '助手回应';
-	      if ((type === 'command_run' || baseTitle === 'Bash') && commandInfo.command) {
+	      if (toolName === 'update_plan') {
+	        title = '更新执行计划';
+	        subtitle = '';
+	        body = '已更新任务计划。';
+	      } else if (toolName === 'apply_patch') {
+	        title = '更新本地文件';
+	        subtitle = '';
+	        body = '已应用代码修改。';
+	      } else if ((type === 'command_run' || toolName === 'bash' || toolName === 'exec_command') && commandInfo.command) {
 	        title = commandHumanSummary(commandInfo.command);
 	        subtitle = '';
 	        body = commandOutputSummary(commandInfo.output, commandInfo.command);
       } else if (rawSubtitle && rawNarrative && rawNarrative.indexOf(rawSubtitle) === 0) {
         body = rawNarrative.slice(rawSubtitle.length).replace(/^[\s|:：,，.。;；-]+/, '').trim();
       }
+	      if (looksToolTraceDisplayText(subtitle)) subtitle = '';
+	      if (looksToolTraceDisplayText(body)) body = '这一步已记录为结构化工具事件。';
 	      body = sessionBodyPreview({ summary: body, latestPrompt: rawNarrative, firstPrompt: rawSubtitle }, title);
 	      return { title: title, subtitle: subtitle, body: body };
 	    }
@@ -4012,16 +4063,72 @@
     function reviewProject(item) {
       var payload = reviewPayload(item);
       if (payload.projectScope === 'all' || payload.project === 'all') return 'all';
-      return payload.project || (item && item.page && item.page.host) || 'browser';
+      if (payload.project) return payload.project;
+      if (item && item.kind === 'action') return '';
+      return (item && item.page && item.page.host) || 'browser';
     }
     function reviewTags(item) {
       var payload = reviewPayload(item);
       return arrayFromCsv(payload.tags).slice(0, 6);
     }
- function reviewSourceLabel(item) {
-   var payload = reviewPayload(item);
-   return payload.sourceLabel || payload.provider || (item && item.page && (item.page.typeLabel || item.page.host)) || '浏览器';
- }
+    function isMarkdownPlanText(text) {
+      var raw = String(text || '');
+      var hasPlanHeading = /^#{1,3}\s+.*(?:计划|Plan)\s*$/im.test(raw);
+      var sectionMatches = raw.match(/^#{1,3}\s+(?:Summary|Key Changes|Test Plan|Assumptions|Public API|Implementation|执行步骤|验证命令)\b/img) || [];
+      var compact = raw.replace(/\s+/g, ' ');
+      var compactPlanSections = [
+        /#{1,3}\s+Summary\b/i,
+        /#{1,3}\s+Key Changes\b/i,
+        /#{1,3}\s+Test Plan\b/i,
+        /#{1,3}\s+Assumptions\b/i,
+        /#{1,3}\s+Implementation\b/i,
+        /#{1,3}\s+执行步骤\b/i,
+        /#{1,3}\s+验证命令\b/i
+      ].filter(function(pattern) { return pattern.test(compact); }).length;
+      var compactPlan = /#{1,3}\s+[^#]{0,160}(?:计划|Plan)/i.test(compact) &&
+        (compactPlanSections >= 2 || /#{1,3}\s+Summary\b/i.test(compact));
+      return (hasPlanHeading && sectionMatches.length >= 2) || compactPlan;
+    }
+    function isReviewTextPolluted(text) {
+      var trimmed = String(text || '').trim();
+      if (!trimmed) return false;
+      var lower = trimmed.toLowerCase();
+      if (isJsonLikeText(trimmed)) return true;
+      if (isMarkdownPlanText(trimmed)) return true;
+      if (/please implement this plan/i.test(trimmed)) return true;
+      if (/"plan"\s*:/.test(trimmed) && /"status"\s*:/.test(trimmed) && /"step"\s*:/.test(trimmed)) return true;
+      if (/"command"\s*:|toolinput|tooloutput|function_id/.test(lower)) return true;
+      if (/审查结果\s*\[[Pp]\d+\]/.test(trimmed) && /(?:src|test)\/[^\s]+(?:\s*\(line\s+\d+\))?/.test(trimmed)) return true;
+      if (/^src\/[^\s]+/m.test(trimmed) && /\bnpm\s+(test|run|install|build)\b/i.test(trimmed)) return true;
+      if (/^\s*(npm|pnpm|yarn)\s+(test|run|install|build)\b/im.test(trimmed)) return true;
+      return false;
+    }
+    function isReviewItemDisplayable(item) {
+      if (!item) return false;
+      return !isReviewTextPolluted(item.title) && !isReviewTextPolluted(item.content);
+    }
+    function reviewKindLabel(kind) {
+      if (kind === 'lesson') return '经验';
+      if (kind === 'action') return '行动';
+      return '记忆';
+    }
+    function reviewKindCandidateLabel(kind) {
+      if (kind === 'lesson') return '经验候选';
+      if (kind === 'action') return '行动候选';
+      return '记忆候选';
+    }
+    function reviewActionPriority(item) {
+      var payload = reviewPayload(item);
+      var candidate = payload.actionCandidate && typeof payload.actionCandidate === 'object' ? payload.actionCandidate : {};
+      var value = candidate.priority || payload.priority || item.priority || 5;
+      var parsed = parseInt(value, 10);
+      if (!Number.isFinite(parsed)) parsed = 5;
+      return Math.max(1, Math.min(10, parsed));
+    }
+    function reviewSourceLabel(item) {
+      var payload = reviewPayload(item);
+      return payload.sourceLabel || payload.provider || (item && item.page && (item.page.typeLabel || item.page.host)) || '浏览器';
+    }
     function browserSessionObservations(item) {
       var page = (item && item.page) || {};
       var conversation = (item && item.conversation) || {};
@@ -5085,7 +5192,7 @@
           }
           break;
         case 'lessons': state.lessons.loaded = false; loadLessons(); break;
-        case 'actions': state.actions.loaded = false; loadActions(); break;
+        case 'actions': state.actions.loaded = false; loadActions({ generate: reason === 'manual' }); break;
         case 'activity': state.activity.loaded = false; loadActivity(); break;
       }
     }
@@ -5955,24 +6062,27 @@
     }
 
     function renderReviewQueue(items) {
+      items = (items || []).filter(isReviewItemDisplayable);
       if (!items.length) return '';
       var html = '<section class="card memory-section" style="padding:14px 16px;margin-bottom:14px;background:#ffffff;">';
-      html += '<div class="memory-section-head"><div><div class="memory-section-title">待审阅</div><div class="memory-summary-sub" style="margin-top:3px;">浏览器插件送来的候选内容，确认后才会进入长期记忆或经验。</div></div><span class="memory-section-count">' + items.length + ' 条</span></div>';
+      html += '<div class="memory-section-head"><div><div class="memory-section-title">待审阅</div><div class="memory-summary-sub" style="margin-top:3px;">浏览器插件送来的候选内容，确认后才会进入长期记忆、经验或行动。</div></div><span class="memory-section-count">' + items.length + ' 条</span></div>';
       html += '<div class="memory-card-grid">';
       items.forEach(function(item) {
         var page = item.page || {};
         var payload = reviewPayload(item);
         var tags = reviewTags(item);
         var project = reviewProject(item);
+        var kindLabel = reviewKindLabel(item.kind);
+        var candidateLabel = reviewKindCandidateLabel(item.kind);
         var decision = item.decision || (item.status === 'dismissed' ? 'evidence_only' : 'candidate');
-        var meta = [decision === 'evidence_only' ? '会话证据' : (item.kind === 'lesson' ? '经验候选' : '记忆候选'), reviewSourceLabel(item), page.url || ''].filter(Boolean).join(' · ');
+        var meta = [decision === 'evidence_only' ? '会话证据' : candidateLabel, reviewSourceLabel(item), page.url || ''].filter(Boolean).join(' · ');
         html += '<article class="memory-display-card" style="border-radius:8px;">';
-        html += '<div class="memory-card-topline"><span class="memory-card-type">' + esc(decision === 'evidence_only' ? '已同步' : '待审阅') + '</span><span class="memory-card-strength">' + esc(decision === 'evidence_only' ? '证据' : (item.kind === 'lesson' ? '经验' : '记忆')) + '</span></div>';
+        html += '<div class="memory-card-topline"><span class="memory-card-type">' + esc(decision === 'evidence_only' ? '已同步' : '待审阅') + '</span><span class="memory-card-strength">' + esc(decision === 'evidence_only' ? '证据' : kindLabel) + '</span></div>';
         html += '<h3>' + esc(item.title || '未命名候选') + '</h3>';
         html += '<p>' + esc(item.content || '').replace(/\n/g, '<br>') + '</p>';
         html += '<div class="tag-list" style="margin-top:10px;">';
         html += '<span class="badge badge-muted">' + esc(projectDisplayName(project)) + '</span>';
-        if (payload.asLesson || item.kind === 'lesson') html += '<span class="badge badge-green">经验候选</span>';
+        if (payload.asLesson || item.kind === 'lesson' || item.kind === 'action') html += '<span class="badge badge-green">' + esc(candidateLabel) + '</span>';
         tags.forEach(function(tag) { html += '<span class="tag">' + esc(tag) + '</span>'; });
         html += '</div>';
         html += '<div class="memory-card-source">' + esc(meta) + '</div>';
@@ -6113,9 +6223,11 @@
     }
 
     function editReviewItem(id) {
-      var item = (state.memories.reviewItems || []).find(function(x) { return x.id === id; });
+      var item = (state.memories.reviewItems || []).filter(isReviewItemDisplayable).find(function(x) { return x.id === id; }) ||
+        (state.actions.reviewItems || []).filter(isReviewItemDisplayable).find(function(x) { return x.id === id; });
       if (!item) return;
       var payload = item.payload || {};
+      var isAction = item.kind === 'action';
       var sourceLabel = reviewSourceLabel(item);
       var defaultTags = reviewTags(item).length ? reviewTags(item).join(', ') : ['browser', 'reviewed', payload.provider ? 'source:' + String(payload.provider).toLowerCase() : '', item.page && item.page.type ? 'page:' + item.page.type : ''].filter(Boolean).join(', ');
       var defaultProject = reviewProject(item);
@@ -6123,16 +6235,16 @@
       var overlay = document.getElementById('modal-overlay');
       modal.innerHTML =
         '<h3>审阅后保存</h3>' +
-        '<p>这条内容来自 ' + esc(sourceLabel) + '。确认前可以调整标题、内容和归属，避免临时信息直接进入长期记忆。</p>' +
+        '<p>这条内容来自 ' + esc(sourceLabel) + '。确认前可以调整标题、内容和归属，避免临时信息直接进入长期记忆或行动列表。</p>' +
         '<div class="memory-add-form">' +
         '<label>标题<input id="review-title" value="' + esc(item.title || '') + '"></label>' +
         '<label>内容<textarea id="review-content" rows="8">' + esc(item.content || '') + '</textarea></label>' +
         '<div class="memory-add-grid">' +
-        '<label>类型<select id="review-kind"><option value="memory"' + (item.kind !== 'lesson' ? ' selected' : '') + '>记忆</option><option value="lesson"' + (item.kind === 'lesson' ? ' selected' : '') + '>经验</option></select></label>' +
+        '<label>类型<select id="review-kind"><option value="memory"' + (item.kind !== 'lesson' && item.kind !== 'action' ? ' selected' : '') + '>记忆</option><option value="lesson"' + (item.kind === 'lesson' ? ' selected' : '') + '>经验</option><option value="action"' + (isAction ? ' selected' : '') + '>行动候选</option></select></label>' +
         '<label>项目<input id="review-project" value="' + esc(defaultProject) + '"></label>' +
         '</div>' +
         '<div class="memory-add-grid">' +
-        '<label>记忆类型<select id="review-type"><option value="fact"' + (payload.type === 'fact' || !payload.type ? ' selected' : '') + '>事实</option><option value="preference"' + (payload.type === 'preference' ? ' selected' : '') + '>偏好</option><option value="workflow"' + (payload.type === 'workflow' ? ' selected' : '') + '>工作流</option><option value="pattern"' + (payload.type === 'pattern' ? ' selected' : '') + '>模式</option><option value="architecture"' + (payload.type === 'architecture' ? ' selected' : '') + '>架构</option><option value="bug"' + (payload.type === 'bug' ? ' selected' : '') + '>问题</option></select></label>' +
+        (isAction ? '<label>优先级<input id="review-priority" type="number" min="1" max="10" value="' + esc(reviewActionPriority(item)) + '"></label>' : '<label>记忆类型<select id="review-type"><option value="fact"' + (payload.type === 'fact' || !payload.type ? ' selected' : '') + '>事实</option><option value="preference"' + (payload.type === 'preference' ? ' selected' : '') + '>偏好</option><option value="workflow"' + (payload.type === 'workflow' ? ' selected' : '') + '>工作流</option><option value="pattern"' + (payload.type === 'pattern' ? ' selected' : '') + '>模式</option><option value="architecture"' + (payload.type === 'architecture' ? ' selected' : '') + '>架构</option><option value="bug"' + (payload.type === 'bug' ? ' selected' : '') + '>问题</option></select></label>') +
         '<label>标签<input id="review-tags" value="' + esc(defaultTags) + '"></label>' +
         '</div>' +
         '<div id="review-error" class="memory-form-error"></div>' +
@@ -6142,12 +6254,14 @@
     }
 
     async function approveReviewItem(id) {
+      var fromActionsReview = (state.actions.reviewItems || []).some(function(x) { return x.id === id; });
       var err = document.getElementById('review-error');
       var title = (document.getElementById('review-title') || {}).value || '';
       var content = (document.getElementById('review-content') || {}).value || '';
       var kind = (document.getElementById('review-kind') || {}).value || 'memory';
       var project = (document.getElementById('review-project') || {}).value || '';
       var type = (document.getElementById('review-type') || {}).value || 'fact';
+      var priority = parseInt((document.getElementById('review-priority') || {}).value || '', 10);
       var tags = (document.getElementById('review-tags') || {}).value || '';
       if (!content.trim()) {
         if (err) {
@@ -6161,8 +6275,9 @@
         title: title.trim(),
         content: content.trim(),
         kind: kind,
-        project: project.trim() || 'browser',
+        project: project.trim() || undefined,
         type: type,
+        priority: Number.isFinite(priority) ? priority : undefined,
         tags: tags
       });
       if (!result || result.error) {
@@ -6174,13 +6289,24 @@
       }
       closeModal();
       state.memories.loaded = false;
-      await loadMemories();
+      if (state.activeTab === 'actions' || fromActionsReview) {
+        state.actions.loaded = false;
+        await loadActions();
+      } else {
+        await loadMemories();
+      }
     }
 
     async function dismissReviewItem(id) {
+      var fromActionsReview = (state.actions.reviewItems || []).some(function(x) { return x.id === id; });
       await apiPost('review/dismiss', { id: id });
       state.memories.reviewItems = (state.memories.reviewItems || []).filter(function(x) { return x.id !== id; });
-      renderMemories();
+      state.actions.reviewItems = (state.actions.reviewItems || []).filter(function(x) { return x.id !== id; });
+      if (state.activeTab === 'actions' || fromActionsReview) {
+        renderActions();
+      } else {
+        renderMemories();
+      }
     }
 
     function closeModal() {
@@ -6286,24 +6412,7 @@
 	      var filtered = minImp > 0 ? obs.filter(function(o) { return (o.importance || 0) >= minImp; }) : obs;
 	      var html = '';
 
-	      var TYPE_LABEL_MAP = {
-	        file_read: '读取文件',
-        file_write: '写入文件',
-        file_edit: '编辑文件',
-        command_run: '执行命令',
-        search: '搜索',
-        web_fetch: '网页获取',
-        conversation: '对话',
-        error: '错误',
-        decision: '决策',
-        discovery: '发现',
-        subagent: '子代理',
-        notification: '通知',
-        task: '任务',
-        other: '其它'
-      };
-
-	      var typeCounts = {};
+		      var typeCounts = {};
 	      filtered.forEach(function(o) {
 	        var t = observationType(o);
 	        typeCounts[t] = (typeCounts[t] || 0) + 1;
@@ -6663,7 +6772,7 @@
         typeList.slice(0, 12).forEach(function(t) {
           var pct = Math.round((typeCounts[t] / totalObs) * 100);
           var color = OBS_TYPE_COLORS[t] || '#666666';
-          html += '<div class="bar-row"><span class="bar-label">' + esc(TYPE_LABEL_MAP[t] || t.replace(/_/g, ' ')) + '</span><div class="bar-track"><div class="bar-fill" style="width:' + pct + '%;background:' + color + ';"></div></div><span class="bar-value">' + typeCounts[t] + '</span></div>';
+          html += '<div class="bar-row"><span class="bar-label">' + esc(observationTypeLabel(t)) + '</span><div class="bar-track"><div class="bar-fill" style="width:' + pct + '%;background:' + color + ';"></div></div><span class="bar-value">' + typeCounts[t] + '</span></div>';
         });
         html += '</div>';
       }
@@ -6689,7 +6798,7 @@
           html += '<div class="activity-feed-body">';
           html += '<div class="activity-feed-title">' + esc(truncate(title, 60)) + '</div>';
           if (display.body) html += '<div style="font-size:12px;color:var(--ink-muted);margin-top:2px;">' + esc(truncate(display.body, 120)) + '</div>';
-          html += '<div class="activity-feed-meta">' + esc(source.name) + ' · ' + esc(TYPE_LABEL_MAP[type] || type.replace(/_/g, ' '));
+          html += '<div class="activity-feed-meta">' + esc(source.name) + ' · ' + esc(observationTypeLabel(type));
           if (o.files && o.files.length) html += ' &middot; <span class="tag file-tag" style="font-size:9px;padding:0 4px;">' + esc(o.files[0].split('/').pop()) + '</span>';
           html += ' &middot; ' + esc(shortTime(o.timestamp)) + '</div>';
           html += '</div></div>';
@@ -7029,7 +7138,7 @@
           var type = o.type || o.hookType || 'other';
           html += '<div style="display:grid;grid-template-columns:72px 1fr;gap:10px;padding:10px 0;border-bottom:1px solid var(--border-light);">';
           html += '<div style="font-size:12px;color:var(--ink-faint);font-family:var(--font-ui);">' + esc(shortTime(o.timestamp)) + '</div>';
-          html += '<div><div style="font-size:14px;color:var(--ink);font-weight:600;line-height:1.35;white-space:pre-wrap;">' + esc(display.title || TYPE_LABEL_MAP[type] || type) + '</div>';
+          html += '<div><div style="font-size:14px;color:var(--ink);font-weight:600;line-height:1.35;white-space:pre-wrap;">' + esc(display.title || observationTypeLabel(type)) + '</div>';
           if (display.body) html += '<div style="font-size:13px;color:var(--ink-muted);line-height:1.45;margin-top:3px;white-space:pre-wrap;overflow-wrap:anywhere;">' + esc(display.body) + '</div>';
           html += '</div></div>';
         });
@@ -7438,62 +7547,50 @@
       restoreSearchFocus(__focus);
     }
 
-    async function loadActions() {
+    async function loadActions(opts) {
+      opts = opts || {};
       var el = document.getElementById('view-actions');
       el.innerHTML = '<div class="loading">正在整理待办...</div>';
+      var shouldGenerate = opts.generate !== false;
+      var generationPromise = shouldGenerate ? apiPost('review/actions/generate', {}).catch(function() { return null; }) : null;
       var results = await Promise.all([
         apiGet('actions'),
         apiGet('frontier'),
-        apiGet('sessions'),
-        apiGet('audit?limit=80')
+        apiGet('review?status=pending&limit=200')
       ]);
       var explicitActions = (results[0] && results[0].actions) || [];
       var frontier = (results[1] && (results[1].frontier || results[1].actions)) || [];
-      var sessions = ((results[2] && results[2].sessions) || []).filter(function(s) { return !isDemoSession(s); });
-      var audit = (results[3] && results[3].entries) || [];
-
-      var derived = [];
-      sessions.slice().sort(function(a, b) {
-        return (sessionRecordTime(b) || '').localeCompare(sessionRecordTime(a) || '');
-      }).slice(0, 12).forEach(function(s) {
-        var text = s.firstPrompt || s.summary || '';
-        var source = inferSessionSource(s);
-        if (!text && !s.observationCount) return;
-        derived.push({
-          id: 'session-' + sessionId(s),
-          title: '复盘 ' + sessionDisplayName(s) + ' 的最近会话',
-          description: text ? truncate(text, 180) : '这个会话有 ' + (s.observationCount || 0) + ' 条观察记录，可以继续整理成记忆或经验。',
-          status: s.status === 'active' ? 'active' : 'pending',
-          priority: source.name === 'Codex' ? 'high' : 'normal',
-          project: sessionProjectKey(s),
-          updatedAt: sessionRecordTime(s),
-          source: source.name
-        });
+      var reviewItems = ((results[2] && results[2].items) || []).filter(function(item) {
+        return item && item.status === 'pending' && item.kind === 'action' && isReviewItemDisplayable(item);
       });
 
-      audit.slice(0, 8).forEach(function(a) {
-        if (!a || !a.operation) return;
-        derived.push({
-          id: 'audit-' + (a.id || a.timestamp || Math.random()),
-          title: '检查最近的 ' + String(a.operation).replace(/_/g, ' ') + ' 操作',
-          description: a.functionId ? '来源：' + a.functionId : '来自本地审计日志',
-          status: 'pending',
-          priority: a.operation === 'delete' || a.operation === 'forget' ? 'high' : 'normal',
-          project: '系统',
-          updatedAt: a.timestamp,
-          source: '审计'
-        });
-      });
-
-      state.actions.items = explicitActions.length ? explicitActions : derived;
+      state.actions.items = explicitActions;
+      state.actions.reviewItems = reviewItems;
       state.actions.frontier = frontier;
       state.actions.loaded = true;
       renderActions();
+      if (generationPromise) {
+        generationPromise.then(function(result) {
+          if (!result || result.success !== true) return null;
+          return apiGet('review?status=pending&limit=200').then(function(reviewResult) {
+            state.actions.reviewItems = ((reviewResult && reviewResult.items) || []).filter(function(item) {
+              return item && item.status === 'pending' && item.kind === 'action' && isReviewItemDisplayable(item);
+            });
+            if (state.activeTab === 'actions') {
+              renderActions();
+            } else {
+              state.actions.loaded = false;
+            }
+            return null;
+          });
+        }).catch(function() { return null; });
+      }
     }
 
     function renderActions() {
       var el = document.getElementById('view-actions');
-      var items = state.actions.items;
+      var items = (state.actions.items || []).slice();
+      var reviewItems = (state.actions.reviewItems || []).filter(isReviewItemDisplayable);
       var search = state.actions.search.toLowerCase();
       var statusFilter = state.actions.statusFilter;
       var frontierIds = new Set((state.actions.frontier || []).map(function(a) { return a.id; }));
@@ -7504,9 +7601,13 @@
         items = items.filter(function(a) {
           return (a.title + ' ' + (a.description || '') + ' ' + (a.tags || []).join(' ')).toLowerCase().indexOf(search) >= 0;
         });
+        reviewItems = reviewItems.filter(function(item) {
+          return ((item.title || '') + ' ' + (item.content || '') + ' ' + reviewTags(item).join(' ')).toLowerCase().indexOf(search) >= 0;
+        });
       }
       if (statusFilter) {
         items = items.filter(function(a) { return a.status === statusFilter; });
+        if (statusFilter !== 'pending') reviewItems = [];
       }
 
       function actionAttentionText(a, isFrontier) {
@@ -7570,7 +7671,7 @@
         html += '<option value="' + s + '"' + (statusFilter === s ? ' selected' : '') + '>' + statusLabels[s] + '</option>';
       });
       html += '</select>';
-      html += '<span style="font-size:12px;color:var(--ink-faint);align-self:center;">' + items.length + ' 件事</span>';
+      html += '<span style="font-size:12px;color:var(--ink-faint);align-self:center;">' + items.length + ' 件事 · ' + reviewItems.length + ' 条待审</span>';
       html += '</div>';
 
       html += '<div class="action-overview">';
@@ -7580,7 +7681,32 @@
       html += '</div>';
       html += '<div class="memory-summary" style="background:#ffffff;margin-bottom:12px;"><div><div class="memory-summary-title">从会话整理</div><div class="memory-summary-sub">这里放需要继续推进、复盘或确认的事情。</div></div></div>';
 
-      if (items.length === 0) {
+      if (reviewItems.length) {
+        html += '<section class="card memory-section" style="padding:14px 16px;margin-bottom:14px;background:#ffffff;">';
+        html += '<div class="memory-section-head"><div><div class="memory-section-title">待审阅待办</div><div class="memory-summary-sub" style="margin-top:3px;">明确待办会先在这里确认，批准后才进入真实 Action。</div></div><span class="memory-section-count">' + reviewItems.length + ' 条</span></div>';
+        html += '<div class="action-card-list">';
+        reviewItems.forEach(function(item) {
+          var payload = reviewPayload(item);
+          var tags = reviewTags(item);
+          var project = reviewProject(item);
+          html += '<article class="action-item-card">';
+          html += '<div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;">';
+          html += '<div style="min-width:0;"><div class="action-item-title">' + esc(actionTitleText(item.title || '待处理行动')) + '</div>';
+          if (item.content) html += '<div class="action-item-desc">' + esc(truncate(actionDescriptionText(item.content), 160)) + '</div>';
+          html += '</div><span class="badge badge-yellow">待审阅</span></div>';
+          html += '<div class="action-item-meta">';
+          html += '<span class="badge badge-green">行动候选</span>';
+          if (project) html += '<span class="action-meta-text">' + esc(projectDisplayName(project)) + '</span>';
+          if (payload.actionCandidate && payload.actionCandidate.reason) html += '<span class="tag">' + esc(payload.actionCandidate.reason) + '</span>';
+          tags.slice(0, 3).forEach(function(tag) { html += '<span class="tag">' + esc(tag) + '</span>'; });
+          html += '</div>';
+          html += '<div class="memory-card-actions"><button class="btn btn-primary" data-action="edit-review" data-review-id="' + esc(item.id) + '">审阅保存</button><button class="btn" data-action="dismiss-review" data-review-id="' + esc(item.id) + '">忽略</button></div>';
+          html += '</article>';
+        });
+        html += '</div></section>';
+      }
+
+      if (items.length === 0 && reviewItems.length === 0) {
         html += '<div class="empty-state">' +
           '<div class="empty-icon">&#9745;</div>' +
           '<div class="empty-title">还没有待办</div>' +
