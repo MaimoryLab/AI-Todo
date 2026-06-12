@@ -1,9 +1,9 @@
 # STEP-04：Markdown 渲染
 
 - 线:A（前端三栏）
-- 状态:⬜ 未开始
+- 状态:✅ 已合并 PR#10
 - 依赖:STEP-01（可与 02/03 并行）
-- 对应 PR:`codex/markdown-render`
+- 对应 PR:`Claude/markdown-render`
 
 ## 目标（一句话）
 

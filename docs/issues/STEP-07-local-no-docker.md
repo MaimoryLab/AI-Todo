@@ -1,9 +1,9 @@
 # STEP-07：本地去 Docker（完备计划）
 
 - 线:B（去 Docker，独立于线 A，可并行）
-- 状态:✅ 路线 A 完成（07a/07b/07c），07d 不做（保留物料）
+- 状态:✅ 已合并（路线 A 完成 07a/07b/07c，07d 不做、保留物料）
 - 依赖:STEP-00（已跳过，基线已绿）
-- 对应 PR:`Claude/no-docker-local`
+- 对应 PR:`Claude/three-tab-restructure`（07a/07b/07c 随 PR#8 合并）
 
 ## 目标（一句话）
 

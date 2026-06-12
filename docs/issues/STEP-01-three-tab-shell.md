@@ -1,9 +1,9 @@
 # STEP-01：三栏导航骨架 + 砍主导航
 
 - 线:A（前端三栏）
-- 状态:✅ 已完成（本地验证通过，待 PR/CI）
+- 状态:✅ 已合并 PR#7
 - 依赖:STEP-00（已跳过，基线已绿）
-- 对应 PR:`Claude/three-tab-shell`
+- 对应 PR:`Claude/three-tab-restructure`
 
 ## 目标（一句话）
 

@@ -1,9 +1,9 @@
 # STEP-02：待办栏接数据（待处理一区先通）
 
 - 线:A（前端三栏）
-- 状态:⬜ 未开始
+- 状态:✅ 上游已实现（无需独立 PR）
 - 依赖:STEP-01
-- 对应 PR:`codex/todo-wire-actions`
+- 对应 PR:无（上游 `loadActions`/`renderActions` 已接齐数据）
 
 ## 目标（一句话）
 
@@ -37,8 +37,6 @@ revert 单 PR；待办栏回到 STEP-01 的空骨架。
 
 ## 实际反馈（执行后由你回填）
 
-- 构建:
-- 测试:
-- 行为:
-- 与预测的差异:
-- 下一步影响:
+- 结论:**本步无需独立实现**。复核最新 origin/main 发现待办数据接入**上游已完成**:`src/viewer/index.html` 的 `loadActions`(7704) 已接齐 `review/actions/generate` + `actions` + `frontier` + `review`,`renderActions`(7744) 已有候选卡、状态分组、frontier「下一步」标记、搜索/筛选、空态。
+- 与预测的差异:原计划「待办栏接数据」由本步实现,实测上游 codex 分支已做（见 PR#5 优化待办页待审候选展示）。看板与本文件状态已据此从 ⬜ 改为 ✅。
+- 下一步影响:STEP-03（待办→证据跳转）直接在已就绪的待办卡上加「看原文 →」即可,无需先补数据接入——已合并 PR#9。
