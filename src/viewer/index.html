@@ -1820,6 +1820,28 @@
       0% { background: var(--accent-soft, rgba(37,99,235,0.18)); box-shadow: 0 0 0 4px var(--accent-soft, rgba(37,99,235,0.18)); }
       100% { background: transparent; box-shadow: 0 0 0 4px transparent; }
     }
+    .md-pre {
+      background: var(--surface-soft, #f5f6f8);
+      border: 1px solid var(--line, #e3e6ea);
+      border-radius: 6px;
+      padding: 10px 12px;
+      margin: 6px 0;
+      overflow-x: auto;
+      font-family: var(--font-mono, ui-monospace, monospace);
+      font-size: 12px;
+      line-height: 1.5;
+    }
+    .md-pre code { background: none; padding: 0; font-size: inherit; }
+    .md-code {
+      background: var(--surface-soft, #f5f6f8);
+      border-radius: 4px;
+      padding: 1px 5px;
+      font-family: var(--font-mono, ui-monospace, monospace);
+      font-size: 0.92em;
+    }
+    .md-h { font-size: 14px; font-weight: 600; margin: 8px 0 4px; line-height: 1.35; }
+    .md-ul { margin: 4px 0; padding-left: 20px; }
+    .md-ul li { margin: 2px 0; line-height: 1.45; }
     .action-item-actions {
       display: inline-flex;
       align-items: center;
@@ -3749,6 +3771,59 @@
       var d = document.createElement('div');
       d.textContent = String(s);
       return d.innerHTML;
+    }
+    // 安全子集 Markdown 渲染:先对全文 esc() 转义(杜绝原始 HTML/<script>),
+    // 再在已转义的安全文本上做受控的白名单标签替换。绝不把原始文本塞进 innerHTML。
+    // CSP(img-src 'self')会拦外链图片;链接仅放行 http(s) 且加 rel=noopener。
+    function renderMarkdownSafe(text) {
+      var src = String(text == null ? '' : text);
+      if (!src.trim()) return '';
+      // 1) 抽出代码块(```...```),先占位,避免块内被行级规则误伤
+      var blocks = [];
+      src = src.replace(/```[ \t]*([a-zA-Z0-9_+-]*)\n?([\s\S]*?)```/g, function(_m, _lang, code) {
+        blocks.push('<pre class="md-pre"><code>' + esc(code.replace(/\n$/, '')) + '</code></pre>');
+        return ' B' + (blocks.length - 1) + ' ';
+      });
+      // 2) 全文转义(此时不含代码块原文,占位符是纯 ASCII 安全)
+      var s = esc(src);
+      // 3) 行内码 `code`
+      s = s.replace(/`([^`\n]+?)`/g, function(_m, c) { return '<code class="md-code">' + c + '</code>'; });
+      // 4) 链接 [text](http(s)://...) — 仅放行 http/https,转义后的 URL 已无引号注入风险
+      s = s.replace(/\[([^\]\n]+?)\]\((https?:\/\/[^\s)]+?)\)/g, function(_m, label, url) {
+        return '<a href="' + url + '" target="_blank" rel="noopener noreferrer">' + label + '</a>';
+      });
+      // 5) 粗体 **x** / 斜体 *x*（先粗后斜）
+      s = s.replace(/\*\*([^*\n]+?)\*\*/g, '<strong>$1</strong>');
+      s = s.replace(/(^|[^*])\*([^*\n]+?)\*(?!\*)/g, '$1<em>$2</em>');
+      // 6) 按行处理标题与列表
+      var lines = s.split('\n');
+      var out = [];
+      var inList = false;
+      function closeList() { if (inList) { out.push('</ul>'); inList = false; } }
+      for (var i = 0; i < lines.length; i++) {
+        var line = lines[i];
+        var h = line.match(/^(#{1,3})\s+(.+)$/);
+        var li = line.match(/^[ \t]*[-*+]\s+(.+)$/);
+        if (h) {
+          closeList();
+          var lvl = h[1].length + 2; // h3..h5,避免与页面 h1/h2 抢层级
+          out.push('<h' + lvl + ' class="md-h">' + h[2] + '</h' + lvl + '>');
+        } else if (li) {
+          if (!inList) { out.push('<ul class="md-ul">'); inList = true; }
+          out.push('<li>' + li[1] + '</li>');
+        } else if (line.indexOf(' B') === 0 && /^ B\d+ $/.test(line.trim())) {
+          closeList();
+          out.push(line.trim());
+        } else {
+          closeList();
+          out.push(line);
+        }
+      }
+      closeList();
+      s = out.join('\n');
+      // 7) 还原代码块占位符
+      s = s.replace(/ B(\d+) /g, function(_m, idx) { return blocks[Number(idx)] || ''; });
+      return s;
     }
     function formatTime(ts) {
       if (!ts) return '';
@@ -7202,7 +7277,7 @@
         html += '<div><span class="badge badge-muted" style="font-size:10px;padding:3px 8px;">' + esc(label) + '</span></div>';
         html += '<div style="min-width:0;">';
         html += '<div style="font-size:14px;color:var(--ink);font-weight:600;line-height:1.35;white-space:pre-wrap;overflow-wrap:anywhere;">' + esc(item.title || label) + '</div>';
-        if (item.summary) html += '<div style="font-size:13px;color:var(--ink-muted);line-height:1.45;margin-top:3px;white-space:pre-wrap;overflow-wrap:anywhere;">' + esc(item.summary) + '</div>';
+        if (item.summary) html += '<div class="md-body" style="font-size:13px;color:var(--ink-muted);line-height:1.45;margin-top:3px;overflow-wrap:anywhere;">' + renderMarkdownSafe(item.summary) + '</div>';
         html += '</div></div>';
       });
       html += '</div></div>';
@@ -7314,7 +7389,7 @@
           html += '<div' + (o && o.id ? ' id="obs-anchor-' + esc(o.id) + '"' : '') + ' style="display:grid;grid-template-columns:72px 1fr;gap:10px;padding:10px 0;border-bottom:1px solid var(--border-light);">';
           html += '<div style="font-size:12px;color:var(--ink-faint);font-family:var(--font-ui);">' + esc(shortTime(o.timestamp)) + '</div>';
           html += '<div><div style="font-size:14px;color:var(--ink);font-weight:600;line-height:1.35;white-space:pre-wrap;">' + esc(display.title || observationTypeLabel(type)) + '</div>';
-          if (display.body) html += '<div style="font-size:13px;color:var(--ink-muted);line-height:1.45;margin-top:3px;white-space:pre-wrap;overflow-wrap:anywhere;">' + esc(display.body) + '</div>';
+          if (display.body) html += '<div class="md-body" style="font-size:13px;color:var(--ink-muted);line-height:1.45;margin-top:3px;overflow-wrap:anywhere;">' + renderMarkdownSafe(display.body) + '</div>';
           html += '</div></div>';
         });
         html += '</div>';
