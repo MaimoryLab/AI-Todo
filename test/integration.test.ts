@@ -34,7 +34,7 @@ describe("agentmemory integration", () => {
     const res = await fetch(url("/agentmemory/health")).catch(() => null);
     if (!res || !res.ok) {
       throw new Error(
-        `agentmemory is not running at ${BASE_URL}. Start it with: docker compose up -d && npm start`,
+        `agentmemory is not running at ${BASE_URL}. Start it with: npm run build && npm run start:local-memory`,
       );
     }
   });

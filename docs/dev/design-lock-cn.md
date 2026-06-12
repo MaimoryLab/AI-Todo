@@ -77,7 +77,7 @@ graph→dashboard · profile→dashboard · audit→dashboard · replay→dashbo
 ## G. 设计文档与现实的已知偏差（冻结为事实，供审查）
 
 1. `DESIGN.md`（兰博基尼风视觉系统，21KB）与实际 UI **完全脱节**，目前悬空未落地。
-2. README/ROADMAP 并存两条叙事:开源社区项目（v1.0/基金会/11 语言 README） vs 中文本地工作台/公司交付。
+2. README/ROADMAP 并存两条叙事:开源社区项目（v1.0/基金会/11 语言 README） vs 中文本地工作台/公司交付。**[背景] 本仓库 fork 自上游开源记忆项目**，`READMEs/README.*.md` × 11 是上游原版多语言文档（非主中文 README 的翻译），含 Windows/Docker/自托管详解。处理这些文档属方案 §9「定位收敛」，**不在去 docker（STEP-07）范围**，且改动需顾及未来 rebase 上游的冲突。
 3. AGENTS.md 的 Current Stats（v0.9.16）已过时。
 4. ~~仓库内项目命名不一致:测试期望 `agentmemory`，manifest 用 `agent-memory-lab`，目录名 `agentmemory-lab`（导致基线 8 个测试失败）。~~ **[design-lock change] STEP-00 已修复**:规范名锁定为 `agentmemory`，3 个 manifest 已对齐，`hook-project` 测试改为动态取 git 顶层目录名；基线已全绿（128 文件 / 1384 用例 0 失败）。
 

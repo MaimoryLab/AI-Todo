@@ -159,8 +159,11 @@ Options:
 Environment:
   AGENTMEMORY_URL              Full REST base URL (e.g. http://localhost:3111).
                                Honored by status, doctor, and MCP shim commands.
-  AGENTMEMORY_USE_DOCKER=1     Prefer the bundled docker-compose path over the
-                               native iii-engine binary on first run.
+  AGENTMEMORY_USE_DOCKER=1     Opt in to the bundled docker-compose path
+                               instead of the native iii-engine binary. The
+                               native binary is the default and recommended
+                               path for local use; Docker is for self-hosting
+                               (see deploy/).
   AGENTMEMORY_III_VERSION      Override pinned iii-engine version (default ${IIPINNED_VERSION}).
 
 Quick start:
@@ -793,7 +796,7 @@ async function startEngine(): Promise<boolean> {
       },
     ];
     if (dockerBin && composeFile) {
-      options.push({ value: "docker", label: "Use Docker compose", hint: "advanced" });
+      options.push({ value: "docker", label: "Use Docker compose", hint: "advanced · self-host" });
     }
     options.push({ value: "manual", label: "Show manual install steps and exit" });
 

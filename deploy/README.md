@@ -1,5 +1,9 @@
 # One-click deploy templates
 
+> **本地使用不需要 Docker。** 个人本地用户用 `npm run build && npm run start:local-memory`
+> 即可启动工作台（走原生 iii-engine 二进制）。本目录是 **自托管 / 容器化部署** 路径，
+> 面向想在自己的服务器或托管平台上运行 agentmemory 的人。
+
 Stand up agentmemory on managed infrastructure without rolling your own
 Docker host. Each template ships a self-contained Dockerfile that pulls
 `@agentmemory/agentmemory` from npm at build time and copies the iii
