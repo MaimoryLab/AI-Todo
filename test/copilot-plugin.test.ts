@@ -42,6 +42,8 @@ const KNOWN_SKILL_DIRS = [
   "recap",
   "commit-context",
   "commit-history",
+  "ask-user",
+  "organize-todos",
 ];
 
 describe("Copilot plugin manifest (plugin/plugin.json)", () => {

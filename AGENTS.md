@@ -42,6 +42,13 @@ agentmemory is a persistent memory system for AI coding agents, built on iii-eng
 **When adding new audit operations:**
 1. `src/types.ts` — add to AuditEntry.operation union type
 
+**When adding skills (`plugin/skills/<name>/SKILL.md`):**
+1. `AGENTS.md` — skill count in Current Stats ("N skills")
+2. `plugin/.claude-plugin/plugin.json` — skill count in description (when present)
+3. `test/copilot-plugin.test.ts` — add the dir to `KNOWN_SKILL_DIRS` (existence check, not count)
+
+(Skill counts are NOT locked by `consistency.test`, but keep them honest.)
+
 ## Code Patterns
 
 ### Function Registration
@@ -119,6 +126,6 @@ Hook scripts in `src/hooks/` are standalone Node.js scripts (no iii-sdk import).
 - 55 MCP tools (8 visible by default, `AGENTMEMORY_TOOLS=all` for all)
 - 136 REST endpoints
 - 6 MCP resources, 3 MCP prompts
-- 12 hooks, 12 skills
+- 12 hooks, 14 skills
 - 60+ iii functions
 - 1300+ tests
