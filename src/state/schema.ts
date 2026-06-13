@@ -28,6 +28,7 @@ export const KV = {
   routines: "mem:routines",
   routineRuns: "mem:routine-runs",
   signals: "mem:signals",
+  inbox: "mem:inbox",
   checkpoints: "mem:checkpoints",
   mesh: "mem:mesh",
   sketches: "mem:sketches",

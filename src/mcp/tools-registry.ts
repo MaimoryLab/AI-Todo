@@ -925,6 +925,50 @@ export const V010_SLOTS_TOOLS: McpToolDef[] = [
   },
 ];
 
+// Line C: Agent→user async inbox. These are the write-side tools an Agent
+// uses to reach the human user; read/answer/dismiss are user actions exposed
+// via REST + the viewer, not Agent tools.
+export const INBOX_TOOLS: McpToolDef[] = [
+  {
+    name: "memory_inbox_ask",
+    description:
+      "Ask the human user a question that needs a reply. Appears in the user's workbench inbox (待回应). Use when you hit a decision only the user can make.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        body: { type: "string", description: "The question (Markdown allowed)" },
+        fromAgent: { type: "string", description: "Your agent/session label" },
+        project: { type: "string", description: "Related project path" },
+        sourceObservationIds: {
+          type: "array",
+          items: { type: "string" },
+          description: "Observation IDs the question relates to (for evidence jump)",
+        },
+      },
+      required: ["body"],
+    },
+  },
+  {
+    name: "memory_inbox_notify",
+    description:
+      "Push a briefing to the human user (ack-only, no reply needed). Use to proactively report what you organized/finished. Appears in the workbench inbox as an Agent briefing.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        body: { type: "string", description: "The briefing (Markdown allowed)" },
+        fromAgent: { type: "string", description: "Your agent/session label" },
+        project: { type: "string", description: "Related project path" },
+        sourceObservationIds: {
+          type: "array",
+          items: { type: "string" },
+          description: "Observation IDs the briefing relates to",
+        },
+      },
+      required: ["body"],
+    },
+  },
+];
+
 const ESSENTIAL_TOOLS = new Set([
   "memory_save",
   "memory_recall",
@@ -946,6 +990,7 @@ export function getAllTools(): McpToolDef[] {
     ...V070_TOOLS,
     ...V073_TOOLS,
     ...V010_SLOTS_TOOLS,
+    ...INBOX_TOOLS,
   ];
 }
 

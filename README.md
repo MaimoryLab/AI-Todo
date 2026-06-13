@@ -306,9 +306,9 @@ npm test -- --run test/viewer-security.test.ts test/viewer-session-id.test.ts
 npm test -- --run test/viewer-memories-sort.test.ts
 ```
 
-REST API 当前注册 131 endpoints on port 3111，启动后可通过 `/agentmemory/session/highlights?sessionId=...` 获取单次会话的用户目标与 Agent 输出等对话型 0LLM 重点视图。
+REST API 当前注册 136 endpoints on port 3111，启动后可通过 `/agentmemory/session/highlights?sessionId=...` 获取单次会话的用户目标与 Agent 输出等对话型 0LLM 重点视图。
 
-MCP surface 当前提供 53 MCP tools；独立 MCP 入口显示为 53 tools, 6 resources, 3 prompts。
+MCP surface 当前提供 55 MCP tools；独立 MCP 入口显示为 55 tools, 6 resources, 3 prompts。
 
 ## 来源说明
 
