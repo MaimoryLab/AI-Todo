@@ -3026,6 +3026,93 @@ export function registerApiTriggers(
     config: { api_path: "/agentmemory/signals", http_method: "GET" },
   });
 
+  // Line C: Agent→user async inbox (no agentId; single-user).
+  sdk.registerFunction("api::inbox-ask",
+    async (req: ApiRequest<{ body: string }>): Promise<Response> => {
+      const authErr = checkAuth(req, secret);
+      if (authErr) return authErr;
+      if (!req.body?.body) {
+        return { status_code: 400, body: { error: "body is required" } };
+      }
+      const result = await sdk.trigger({ function_id: "mem::inbox-ask", payload: req.body });
+      return { status_code: 201, body: result };
+    },
+  );
+  sdk.registerTrigger({
+    type: "http",
+    function_id: "api::inbox-ask",
+    config: { api_path: "/agentmemory/inbox/ask", http_method: "POST" },
+  });
+
+  sdk.registerFunction("api::inbox-notify",
+    async (req: ApiRequest<{ body: string }>): Promise<Response> => {
+      const authErr = checkAuth(req, secret);
+      if (authErr) return authErr;
+      if (!req.body?.body) {
+        return { status_code: 400, body: { error: "body is required" } };
+      }
+      const result = await sdk.trigger({ function_id: "mem::inbox-notify", payload: req.body });
+      return { status_code: 201, body: result };
+    },
+  );
+  sdk.registerTrigger({
+    type: "http",
+    function_id: "api::inbox-notify",
+    config: { api_path: "/agentmemory/inbox/notify", http_method: "POST" },
+  });
+
+  sdk.registerFunction("api::inbox-list",
+    async (req: ApiRequest): Promise<Response> => {
+      const authErr = checkAuth(req, secret);
+      if (authErr) return authErr;
+      const result = await sdk.trigger({ function_id: "mem::inbox-list", payload: {
+        status: req.query_params?.["status"],
+        kind: req.query_params?.["kind"],
+        limit: parseOptionalInt(req.query_params?.["limit"]),
+      } });
+      return { status_code: 200, body: result };
+    },
+  );
+  sdk.registerTrigger({
+    type: "http",
+    function_id: "api::inbox-list",
+    config: { api_path: "/agentmemory/inbox", http_method: "GET" },
+  });
+
+  sdk.registerFunction("api::inbox-answer",
+    async (req: ApiRequest<{ id: string; answer?: string }>): Promise<Response> => {
+      const authErr = checkAuth(req, secret);
+      if (authErr) return authErr;
+      if (!req.body?.id) {
+        return { status_code: 400, body: { error: "id is required" } };
+      }
+      const result = await sdk.trigger({ function_id: "mem::inbox-answer", payload: req.body });
+      return { status_code: 200, body: result };
+    },
+  );
+  sdk.registerTrigger({
+    type: "http",
+    function_id: "api::inbox-answer",
+    config: { api_path: "/agentmemory/inbox/answer", http_method: "POST" },
+  });
+
+  sdk.registerFunction("api::inbox-dismiss",
+    async (req: ApiRequest<{ id: string }>): Promise<Response> => {
+      const authErr = checkAuth(req, secret);
+      if (authErr) return authErr;
+      if (!req.body?.id) {
+        return { status_code: 400, body: { error: "id is required" } };
+      }
+      const result = await sdk.trigger({ function_id: "mem::inbox-dismiss", payload: req.body });
+      return { status_code: 200, body: result };
+    },
+  );
+  sdk.registerTrigger({
+    type: "http",
+    function_id: "api::inbox-dismiss",
+    config: { api_path: "/agentmemory/inbox/dismiss", http_method: "POST" },
+  });
+
   sdk.registerFunction("api::checkpoint-create", 
     async (
       req: ApiRequest<{

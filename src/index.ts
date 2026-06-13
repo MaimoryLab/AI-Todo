@@ -65,6 +65,7 @@ import { registerFrontierFunction } from "./functions/frontier.js";
 import { registerLeasesFunction } from "./functions/leases.js";
 import { registerRoutinesFunction } from "./functions/routines.js";
 import { registerSignalsFunction } from "./functions/signals.js";
+import { registerInboxFunction } from "./functions/inbox.js";
 import { registerCheckpointsFunction } from "./functions/checkpoints.js";
 import { registerFlowCompressFunction } from "./functions/flow-compress.js";
 import { registerMeshFunction } from "./functions/mesh.js";
@@ -310,6 +311,7 @@ async function main() {
   registerLeasesFunction(sdk, kv);
   registerRoutinesFunction(sdk, kv);
   registerSignalsFunction(sdk, kv);
+  registerInboxFunction(sdk, kv);
   registerCheckpointsFunction(sdk, kv);
   registerMeshFunction(sdk, kv, secret);
   registerBranchAwareFunction(sdk, kv);
@@ -520,7 +522,7 @@ async function main() {
     `Ready. ${embeddingProvider ? "Triple-stream (BM25+Vector+Graph)" : "BM25+Graph"} search active.`,
   );
   bootLog(
-    `REST API: 131 endpoints at http://localhost:${config.restPort}/agentmemory/*`,
+    `REST API: 136 endpoints at http://localhost:${config.restPort}/agentmemory/*`,
   );
   bootLog(
     `MCP surface (opt-in via \`npx @agentmemory/mcp\`): ${getAllTools().length} tools · 6 resources · 3 prompts`,

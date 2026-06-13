@@ -639,7 +639,11 @@ export interface AuditEntry {
     | "slot_replace"
     | "slot_create"
     | "slot_delete"
-    | "slot_reflect";
+    | "slot_reflect"
+    | "inbox_ask"
+    | "inbox_notify"
+    | "inbox_answer"
+    | "inbox_dismiss";
   userId?: string;
   functionId: string;
   targetIds: string[];
@@ -764,6 +768,25 @@ export interface Signal {
   metadata?: Record<string, unknown>;
   createdAt: string;
   readAt?: string;
+  expiresAt?: string;
+}
+
+// Line C: Agent→user async inbox. Distinct from Signal (which is agent↔agent,
+// requires agentId, has no awaiting/answered state). Inbox items are always
+// "Agent → the human user", so no `to`/agentId field.
+export interface InboxItem {
+  id: string;
+  kind: "question" | "briefing"; // question = needs a reply; briefing = Agent's proactive summary, ack-only
+  body: string; // Markdown; rendered via renderMarkdownSafe in the viewer
+  status: "awaiting" | "answered" | "dismissed";
+  priority?: "high" | "normal" | "low"; // reserved; not used for ordering this round
+  fromAgent?: string;
+  project?: string;
+  sourceObservationIds?: string[]; // reuses STEP-03 evidence-jump
+  sourceSessionId?: string;
+  answer?: string; // user's reply when a question is answered
+  createdAt: string;
+  answeredAt?: string;
   expiresAt?: string;
 }
 

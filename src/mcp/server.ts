@@ -856,6 +856,34 @@ export function registerMcpEndpoints(
             };
           }
 
+          case "memory_inbox_ask":
+          case "memory_inbox_notify": {
+            if (typeof args.body !== "string" || !args.body.trim()) {
+              return {
+                status_code: 400,
+                body: { error: "body is required" },
+              };
+            }
+            const fnId =
+              name === "memory_inbox_ask"
+                ? "mem::inbox-ask"
+                : "mem::inbox-notify";
+            const inboxResult = await sdk.trigger({ function_id: fnId, payload: {
+              body: args.body,
+              fromAgent: args.fromAgent,
+              project: args.project,
+              sourceObservationIds: args.sourceObservationIds,
+            } });
+            return {
+              status_code: 200,
+              body: {
+                content: [
+                  { type: "text", text: JSON.stringify(inboxResult, null, 2) },
+                ],
+              },
+            };
+          }
+
           case "memory_checkpoint": {
             const cpOp = args.operation as string;
             if (!cpOp) {
