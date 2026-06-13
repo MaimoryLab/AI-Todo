@@ -10,7 +10,9 @@ docs/
 ├── dev/                             ← 开发环境文档(怎么做/在哪做)
 │   ├── README.md                    本文件:索引 + 工作流约定
 │   ├── environment.md               开发环境、命令、CI 实情、基线状态
-│   └── design-lock-cn.md            🔒 锁定的产品设计文档(冻结基线，改动需走变更流程)
+│   ├── design-lock-cn.md            🔒 锁定的产品设计文档(冻结基线，改动需走变更流程)
+│   ├── tooling-and-skills-cn.md     提效工具/Skill/MCP 整理与吸纳建议
+│   └── workflow-review-cn.md        工作流全面审查(含 doc-drift 清单 + 用户视角方向)
 └── issues/                          ← 重构步骤拆解(每个文件 = 一步 = 一个 PR)
     ├── README.md                    issue 看板:状态、依赖、合并顺序
     ├── STEP-00-*.md … STEP-NN-*.md  每步:目标/改动面/结果预测/验证/回滚
@@ -24,6 +26,8 @@ docs/
 | `product-restructure-plan-cn.md` | 为什么重构、最终形态是什么 | 低（方向变才改） |
 | `dev/design-lock-cn.md` | 当前基线**确切**是什么样（被冻结的事实） | 🔒 冻结，走变更流程 |
 | `dev/environment.md` | 在什么环境、用什么命令、CI 怎么跑 | 中 |
+| `dev/tooling-and-skills-cn.md` | 用什么工具/Skill/MCP 提效、怎么固化 | 中 |
+| `dev/workflow-review-cn.md` | 工作流哪里会绊脚、doc-drift、下一方向 | 阶段性复盘时 |
 | `issues/STEP-*.md` | 具体每一步怎么做、预测什么结果 | 每步执行时更新 |
 
 ## 工作流约定（重要）
