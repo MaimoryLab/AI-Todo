@@ -3027,14 +3027,28 @@ export function registerApiTriggers(
   });
 
   // Line C: Agent→user async inbox (no agentId; single-user).
+  // Whitelist InboxItem-shaped fields; never forward the raw request body.
+  function inboxWriteFields(body: Record<string, unknown> | undefined) {
+    const b = body || {};
+    return {
+      body: b["body"],
+      fromAgent: b["fromAgent"],
+      project: b["project"],
+      priority: b["priority"],
+      sourceObservationIds: b["sourceObservationIds"],
+      sourceSessionId: b["sourceSessionId"],
+      expiresInMs: b["expiresInMs"],
+    };
+  }
   sdk.registerFunction("api::inbox-ask",
     async (req: ApiRequest<{ body: string }>): Promise<Response> => {
       const authErr = checkAuth(req, secret);
       if (authErr) return authErr;
-      if (!req.body?.body) {
+      const fields = inboxWriteFields(req.body as Record<string, unknown>);
+      if (typeof fields.body !== "string" || !fields.body.trim()) {
         return { status_code: 400, body: { error: "body is required" } };
       }
-      const result = await sdk.trigger({ function_id: "mem::inbox-ask", payload: req.body });
+      const result = await sdk.trigger({ function_id: "mem::inbox-ask", payload: fields });
       return { status_code: 201, body: result };
     },
   );
@@ -3048,10 +3062,11 @@ export function registerApiTriggers(
     async (req: ApiRequest<{ body: string }>): Promise<Response> => {
       const authErr = checkAuth(req, secret);
       if (authErr) return authErr;
-      if (!req.body?.body) {
+      const fields = inboxWriteFields(req.body as Record<string, unknown>);
+      if (typeof fields.body !== "string" || !fields.body.trim()) {
         return { status_code: 400, body: { error: "body is required" } };
       }
-      const result = await sdk.trigger({ function_id: "mem::inbox-notify", payload: req.body });
+      const result = await sdk.trigger({ function_id: "mem::inbox-notify", payload: fields });
       return { status_code: 201, body: result };
     },
   );
@@ -3083,10 +3098,11 @@ export function registerApiTriggers(
     async (req: ApiRequest<{ id: string; answer?: string }>): Promise<Response> => {
       const authErr = checkAuth(req, secret);
       if (authErr) return authErr;
-      if (!req.body?.id) {
+      const b = (req.body || {}) as Record<string, unknown>;
+      if (typeof b["id"] !== "string" || !b["id"]) {
         return { status_code: 400, body: { error: "id is required" } };
       }
-      const result = await sdk.trigger({ function_id: "mem::inbox-answer", payload: req.body });
+      const result = await sdk.trigger({ function_id: "mem::inbox-answer", payload: { id: b["id"], answer: b["answer"] } });
       return { status_code: 200, body: result };
     },
   );
@@ -3100,10 +3116,11 @@ export function registerApiTriggers(
     async (req: ApiRequest<{ id: string }>): Promise<Response> => {
       const authErr = checkAuth(req, secret);
       if (authErr) return authErr;
-      if (!req.body?.id) {
+      const b = (req.body || {}) as Record<string, unknown>;
+      if (typeof b["id"] !== "string" || !b["id"]) {
         return { status_code: 400, body: { error: "id is required" } };
       }
-      const result = await sdk.trigger({ function_id: "mem::inbox-dismiss", payload: req.body });
+      const result = await sdk.trigger({ function_id: "mem::inbox-dismiss", payload: { id: b["id"] } });
       return { status_code: 200, body: result };
     },
   );
