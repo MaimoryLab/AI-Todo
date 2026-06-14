@@ -11,11 +11,11 @@
 | **C1** | inbox 后端原语(5 函数 + 5 REST + 2 MCP 工具 + KV + audit) | ✅ **已合并** [PR#19](https://github.com/MaimoryLab/agentmemory-lab/pull/19)(main baa5771) |
 | **C1.5** | Agent 主动发送+整理接入点(`ask-user`/`organize-todos` skill,⭐核心) | ✅ **已合并** [PR#21](https://github.com/MaimoryLab/agentmemory-lab/pull/21)(main a22e411)+ 真实触发场景端到端测试 |
 | **C2** | viewer「待回应/通知」区接真数据 | ✅ **已合并** [PR#22](https://github.com/MaimoryLab/agentmemory-lab/pull/22)(main fd6be27,question/briefing 双卡,preview 实证)|
-| **C3** | 动作:回应 / 知道了 / 转待处理 / 看原文 | ✅ **已实现**(回应→inbox-answer、知道了→空 answer、转待处理→action-create+dismiss、看原文复用 STEP-03,preview 三流实证)|
-| **C4** | 「已完成」区(只读 done,可与 C3 并行) | ⬜ 待开工(独立) |
+| **C3** | 动作:回应 / 知道了 / 转待处理 / 看原文 | ✅ **已合并** [PR#24](https://github.com/MaimoryLab/agentmemory-lab/pull/24)(main c8887a6)+ 防重入收口 [PR#25](https://github.com/MaimoryLab/agentmemory-lab/pull/25)(main c679732)|
+| **C4** | 「已完成」区(只读 done,可与 C3 并行) | ✅ **已实现**(底部折叠区,只读 `status:done` 当天项,默认折叠,preview 实证)|
 
-> **里程碑**:C1→C1.5→C2→C3 已就位——「Agent 写→落库→用户在工作台看到→**用户回应/消解**」整条交互闭环贯通。C3 给两类卡片接上动作:question 可回应(行内输入)/转待处理/知道了,briefing 可知道了/转待处理,均乐观更新+失败 flashHint 提示。剩 **C4**(已完成只读区,独立、纯前端)。
-> 另:[PR#23](https://github.com/MaimoryLab/agentmemory-lab/pull/23)(main 0f2d7f9)收口 review 的 inbox REST 端点字段白名单 + 空白正文 400(C1 遗留债)。
+> **里程碑**:🎉 **线 C 全栈贯通(C1→C4)**——「Agent 写→落库→用户看到→回应/消解→已完成归档」整条闭环可用。C4 给待办栏底部加只读「已完成」折叠区(§3.2/§3.3),筛 `action.status==='done'` 且当天 `updatedAt`,默认折叠、点击展开,纯前端零后端。
+> 另:[PR#23](https://github.com/MaimoryLab/agentmemory-lab/pull/23)(main 0f2d7f9)收口 inbox REST 字段白名单 + 空白正文 400;[PR#26](https://github.com/MaimoryLab/agentmemory-lab/pull/26)(main 54493f8)修 viewer 预览代理端口自动发现(实证环境可信度)。
 
 ---
 
@@ -195,6 +195,13 @@ interface InboxItem {
 - **改动面**:`src/viewer/index.html`。新增折叠区,筛 `state.actions.items` 里 `status==="done"` 且当天 `updatedAt`。
 - **结果预测**:build + 单测;零后端改动;preview 实证折叠/展开。
 - **风险**:极低。纯前端筛现有数据。
+- ✅ **实际反馈(已实现,待开 PR)**:
+  - 仅改 `src/viewer/index.html`。`state.actions` 加 `doneExpanded`(默认 false);新增 `isUpdatedToday`(本地日期判定)+ `renderDoneTodaySection(doneItems, frontierIds, cardRenderer)`。
+  - **默认视图改造**:无筛选时 `done` 不再混进常规分组流(`['active','blocked','pending','cancelled']`),改由底部「🟢 已完成」折叠区单独承载、且**只显当天** `updatedAt` 的;点「已完成」筛选 chip(`statusFilter==='done'`)时仍照常全列、不走折叠区。
+  - 折叠区是 `<button data-action="toggle-done-today">`,`aria-expanded` + ▸/▾ 反映 `doneExpanded`;展开才渲染卡片。
+  - **踩坑**:`renderActionCard` 是 `renderActions` 的**内嵌函数**,顶层的 `renderDoneTodaySection` 闭包看不到它——直接引用会 `ReferenceError`(build 仍绿,VM sandbox 暴露)。改为把 `renderActionCard` 作为 `cardRenderer` 参数传入。教训同 C3:viewer 改动必跑测试/preview,build 过 ≠ JS 正确。
+  - 测试:新增 `test/viewer-done-section.test.ts`(5 例:isUpdatedToday 当天判定、折叠区只收当天 done、展开渲染卡片、无当天 done 不渲染、默认视图 done 进折叠区而 done 筛选照常全列)。**preview 实证**:造 1 条当天 done → 折叠区显示「今天完成了 1 件」、aria-expanded=false/0 卡;点击展开→true/1 卡;再点→收起。实证后 demo action 置 cancelled。
+  - 基线:`npm run pre-pr` 131 文件 / 1394 用例全绿。
 
 ## 5. 一致性铁律连带清单(C1 已守完,留作 C1.5+ 参照)
 
@@ -259,7 +266,9 @@ C1.5 紧跟 C1:原语一就绪就让 Agent 能往里写,避免「前端接好了
 - ✅ **C1.5 已交付合并**([PR#21](https://github.com/MaimoryLab/agentmemory-lab/pull/21),main a22e411)——`ask-user`/`organize-todos` 两个 Agent 自主 skill + 真实触发场景端到端测试。
 - ✅ **C2 已交付合并**([PR#22](https://github.com/MaimoryLab/agentmemory-lab/pull/22),main fd6be27)——viewer 待回应区接真 inbox 数据(question/briefing 双卡、看原文、preview 实证)。
 - ✅ **inbox REST 收口合并**([PR#23](https://github.com/MaimoryLab/agentmemory-lab/pull/23),main 0f2d7f9)——review [P2/P3]:写端点字段白名单 + 空白正文 400。
-- ✅ **C3 已实现**——四动作(回应/知道了/转待处理/看原文)接 inbox-answer/dismiss + action-create,乐观更新,preview 三流实证,待开 PR。
-- ▶️ **下一步:C4**(已完成只读区,筛 action.status==='done' 当天项,纯前端、独立)——线 C 收尾步。
+- ✅ **C3 已合并**([PR#24](https://github.com/MaimoryLab/agentmemory-lab/pull/24),main c8887a6)+ 防重入收口([PR#25](https://github.com/MaimoryLab/agentmemory-lab/pull/25),main c679732)——四动作接 inbox-answer/dismiss + action-create,乐观更新+防重入,preview 实证。
+- ✅ **预览代理修复**([PR#26](https://github.com/MaimoryLab/agentmemory-lab/pull/26),main 54493f8)——viewer 预览代理端口自动发现,消除多 worker 端口漂移误判。
+- ✅ **C4 已实现**——待办栏底部「已完成」只读折叠区,筛 done 当天项,默认折叠,preview 实证,待开 PR。
+- 🎉 **线 C 全栈贯通(C1→C4)。** 后续可选:优先级算法、飞书投递出口(线 D)、briefing 自动触发 hook。
 
 
