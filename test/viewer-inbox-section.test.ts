@@ -262,4 +262,138 @@ describe("STEP-C2 viewer 待回应分区接真数据", () => {
     expect(sandbox.state.inbox.items.map((i: { id: string }) => i.id)).toEqual(["q2"]);
     expect(sandbox.state.inbox.replyingId).toBeNull();
   });
+
+  // --- STEP-C3 异步动作:mock apiPost 锁住 API 调用与失败/防重入分支 ---
+
+  type PostCall = { path: string; body: Record<string, unknown> };
+  function withMockApiPost(
+    sandbox: Record<string, any>,
+    responder: (path: string, body: Record<string, unknown>) => unknown,
+  ) {
+    const calls: PostCall[] = [];
+    sandbox.apiPost = async (path: string, body: Record<string, unknown>) => {
+      calls.push({ path, body: body || {} });
+      return responder(path, body || {});
+    };
+    return calls;
+  }
+  // Make getElementById id-aware: the reply textarea for inbox-reply-input-*,
+  // a generic style-bearing element otherwise (flashHint touches el.style).
+  function stubReplyInput(sandbox: Record<string, any>, value: string) {
+    const orig = sandbox.document.getElementById;
+    sandbox.document.getElementById = (id: string) => {
+      if (typeof id === "string" && id.indexOf("inbox-reply-input-") === 0) {
+        return { value, focus() {} };
+      }
+      return orig ? orig(id) : { style: {}, focus() {} };
+    };
+  }
+
+  it("回应 调用 inbox/answer 带 answer,成功后剔除该项", async () => {
+    const { sandbox } = loadViewerSandbox();
+    sandbox.state.inbox = {
+      loaded: true, replyingId: "q1", pendingById: {},
+      items: [{ id: "q1", kind: "question", body: "问", status: "awaiting", createdAt: "2026-06-13T09:00:00Z" }],
+    };
+    stubReplyInput(sandbox, "  加,和 /api/* 一致  ");
+    const calls = withMockApiPost(sandbox, () => ({ success: true, item: {} }));
+
+    await sandbox.submitInboxReply("q1");
+
+    expect(calls).toHaveLength(1);
+    expect(calls[0].path).toBe("inbox/answer");
+    expect(calls[0].body).toMatchObject({ id: "q1", answer: "加,和 /api/* 一致" });
+    expect(sandbox.state.inbox.items).toHaveLength(0);
+    expect(sandbox.state.inbox.pendingById.q1).toBeUndefined();
+  });
+
+  it("空回应不发请求", async () => {
+    const { sandbox } = loadViewerSandbox();
+    sandbox.state.inbox = {
+      loaded: true, replyingId: "q1", pendingById: {},
+      items: [{ id: "q1", kind: "question", body: "问", status: "awaiting", createdAt: "2026-06-13T09:00:00Z" }],
+    };
+    stubReplyInput(sandbox, "   ");
+    const calls = withMockApiPost(sandbox, () => ({ success: true }));
+    await sandbox.submitInboxReply("q1");
+    expect(calls).toHaveLength(0);
+    expect(sandbox.state.inbox.items).toHaveLength(1);
+  });
+
+  it("知道了 调用 inbox/answer 不带 answer(空 = 已读)", async () => {
+    const { sandbox } = loadViewerSandbox();
+    sandbox.state.inbox = {
+      loaded: true, replyingId: null, pendingById: {},
+      items: [{ id: "b1", kind: "briefing", body: "汇报", status: "awaiting", createdAt: "2026-06-13T09:00:00Z" }],
+    };
+    const calls = withMockApiPost(sandbox, () => ({ success: true, item: {} }));
+    await sandbox.ackInboxItem("b1");
+    expect(calls).toHaveLength(1);
+    expect(calls[0].path).toBe("inbox/answer");
+    expect(calls[0].body.answer).toBeUndefined();
+    expect(sandbox.state.inbox.items).toHaveLength(0);
+  });
+
+  it("转待处理 先 create 成功再 dismiss,两步都调用后剔除", async () => {
+    const { sandbox } = loadViewerSandbox();
+    sandbox.state.inbox = {
+      loaded: true, replyingId: null, pendingById: {},
+      items: [{ id: "q9", kind: "question", body: "把这个变成待办", status: "awaiting", createdAt: "2026-06-13T09:00:00Z", project: "/repo" }],
+    };
+    const calls = withMockApiPost(sandbox, () => ({ success: true, item: {}, action: {} }));
+    await sandbox.convertInboxToTodo("q9");
+    expect(calls.map((c) => c.path)).toEqual(["actions", "inbox/dismiss"]);
+    expect(calls[0].body).toMatchObject({ title: "把这个变成待办", createdBy: "inbox", project: "/repo" });
+    expect(calls[1].body).toMatchObject({ id: "q9" });
+    expect(sandbox.state.inbox.items).toHaveLength(0);
+  });
+
+  it("转待处理 create 失败则不 dismiss、不剔除 inbox 项", async () => {
+    const { sandbox } = loadViewerSandbox();
+    sandbox.state.inbox = {
+      loaded: true, replyingId: null, pendingById: {},
+      items: [{ id: "q9", kind: "question", body: "x", status: "awaiting", createdAt: "2026-06-13T09:00:00Z" }],
+    };
+    const calls = withMockApiPost(sandbox, (path) => (path === "actions" ? { success: false } : { success: true }));
+    await sandbox.convertInboxToTodo("q9");
+    expect(calls.map((c) => c.path)).toEqual(["actions"]); // dismiss never called
+    expect(sandbox.state.inbox.items).toHaveLength(1); // item preserved
+  });
+
+  it("转待处理 dismiss 失败则保留 inbox 项(绝不丢条目)", async () => {
+    const { sandbox } = loadViewerSandbox();
+    sandbox.state.inbox = {
+      loaded: true, replyingId: null, pendingById: {},
+      items: [{ id: "q9", kind: "question", body: "x", status: "awaiting", createdAt: "2026-06-13T09:00:00Z" }],
+    };
+    const calls = withMockApiPost(sandbox, (path) => (path === "inbox/dismiss" ? { success: false } : { success: true }));
+    await sandbox.convertInboxToTodo("q9");
+    expect(calls.map((c) => c.path)).toEqual(["actions", "inbox/dismiss"]);
+    expect(sandbox.state.inbox.items).toHaveLength(1); // dismiss failed → item kept
+  });
+
+  it("防重入:动作进行中再次调用直接返回,不重复发请求", async () => {
+    const { sandbox } = loadViewerSandbox();
+    sandbox.state.inbox = {
+      loaded: true, replyingId: null, pendingById: {},
+      items: [{ id: "q9", kind: "question", body: "x", status: "awaiting", createdAt: "2026-06-13T09:00:00Z" }],
+    };
+    let release: () => void = () => {};
+    const gate = new Promise<void>((r) => { release = r; });
+    const calls: string[] = [];
+    sandbox.apiPost = async (path: string) => {
+      calls.push(path);
+      if (path === "actions") await gate; // hold the first create in-flight
+      return { success: true, item: {}, action: {} };
+    };
+    const first = sandbox.convertInboxToTodo("q9"); // enters, marks pending, awaits create
+    await Promise.resolve();
+    const second = sandbox.convertInboxToTodo("q9"); // should bail on isInboxPending
+    await second;
+    expect(calls).toEqual(["actions"]); // second made no call
+    release();
+    await first;
+    expect(calls).toEqual(["actions", "inbox/dismiss"]);
+    expect(sandbox.state.inbox.pendingById.q9).toBeUndefined();
+  });
 });

@@ -3909,7 +3909,7 @@
       activity: { loaded: false, observations: [], sessions: [], typeFilter: '', loadingPhase: '', warnings: [] },
       lessons: { loaded: false, items: [], search: '', skillSearch: '', skillRootFilter: 'all', mode: 'explicit', projects: [] },
       actions: { loaded: false, items: [], reviewItems: [], frontier: [], statusFilter: '', search: '' },
-      inbox: { loaded: false, items: [], replyingId: null },
+      inbox: { loaded: false, items: [], replyingId: null, pendingById: {} },
       crystals: { loaded: false, items: [], search: '', lessonMap: {} },
       profile: { loaded: false, projects: [], selectedProject: '', data: null },
       replay: { loaded: false, sessions: [], selectedId: '', timeline: null, cursor: 0, playing: false, speed: 1, timer: null, startAt: 0, offsetAt: 0 },
@@ -8090,24 +8090,27 @@
       html += '</div>';
       html += '<div class="md-body inbox-card-body">' + renderMarkdownSafe((item && item.body) || '') + '</div>';
 
+      var pending = isInboxPending(id);
+      var dis = pending ? ' disabled aria-busy="true"' : '';
       html += '<div class="inbox-card-actions">';
       if (kind === 'question') {
-        html += '<button type="button" class="btn btn-primary" style="font-size:10px;padding:2px 10px;" data-action="inbox-reply" data-inbox-id="' + esc(id) + '">回应…</button>';
-        html += '<button type="button" class="btn" style="font-size:10px;padding:2px 8px;" data-action="inbox-to-todo" data-inbox-id="' + esc(id) + '">转待处理</button>';
-        html += '<button type="button" class="btn" style="font-size:10px;padding:2px 8px;" data-action="inbox-ack" data-inbox-id="' + esc(id) + '">知道了</button>';
+        html += '<button type="button" class="btn btn-primary" style="font-size:10px;padding:2px 10px;" data-action="inbox-reply" data-inbox-id="' + esc(id) + '"' + dis + '>回应…</button>';
+        html += '<button type="button" class="btn" style="font-size:10px;padding:2px 8px;" data-action="inbox-to-todo" data-inbox-id="' + esc(id) + '"' + dis + '>' + (pending ? '处理中…' : '转待处理') + '</button>';
+        html += '<button type="button" class="btn" style="font-size:10px;padding:2px 8px;" data-action="inbox-ack" data-inbox-id="' + esc(id) + '"' + dis + '>知道了</button>';
       } else {
-        html += '<button type="button" class="btn btn-primary" style="font-size:10px;padding:2px 10px;" data-action="inbox-ack" data-inbox-id="' + esc(id) + '">知道了</button>';
-        html += '<button type="button" class="btn" style="font-size:10px;padding:2px 8px;" data-action="inbox-to-todo" data-inbox-id="' + esc(id) + '">转待处理</button>';
+        html += '<button type="button" class="btn btn-primary" style="font-size:10px;padding:2px 10px;" data-action="inbox-ack" data-inbox-id="' + esc(id) + '"' + dis + '>知道了</button>';
+        html += '<button type="button" class="btn" style="font-size:10px;padding:2px 8px;" data-action="inbox-to-todo" data-inbox-id="' + esc(id) + '"' + dis + '>' + (pending ? '处理中…' : '转待处理') + '</button>';
       }
       html += inboxEvidenceButton(item);
       html += '</div>';
 
       if (kind === 'question' && state.inbox.replyingId === id) {
+        var sd = pending ? ' disabled aria-busy="true"' : '';
         html += '<div class="inbox-reply-box">';
-        html += '<textarea class="inbox-reply-input" id="inbox-reply-input-' + esc(id) + '" rows="2" placeholder="回一句…"></textarea>';
+        html += '<textarea class="inbox-reply-input" id="inbox-reply-input-' + esc(id) + '" rows="2" placeholder="回一句…"' + (pending ? ' disabled' : '') + '></textarea>';
         html += '<div class="inbox-reply-actions">';
-        html += '<button type="button" class="btn btn-primary" style="font-size:10px;padding:3px 12px;" data-action="inbox-reply-submit" data-inbox-id="' + esc(id) + '">提交</button>';
-        html += '<button type="button" class="btn" style="font-size:10px;padding:3px 8px;" data-action="inbox-reply-cancel" data-inbox-id="' + esc(id) + '">取消</button>';
+        html += '<button type="button" class="btn btn-primary" style="font-size:10px;padding:3px 12px;" data-action="inbox-reply-submit" data-inbox-id="' + esc(id) + '"' + sd + '>' + (pending ? '提交中…' : '提交') + '</button>';
+        html += '<button type="button" class="btn" style="font-size:10px;padding:3px 8px;" data-action="inbox-reply-cancel" data-inbox-id="' + esc(id) + '"' + sd + '>取消</button>';
         html += '</div></div>';
       }
       html += '</article>';
@@ -8163,6 +8166,16 @@
     function findInboxItem(id) {
       return (state.inbox.items || []).filter(function(i) { return i && i.id === id; })[0] || null;
     }
+    // 防重入:动作进行中标记 pendingById[id],按钮渲染为 disabled,
+    // 慢网下连点不会重复提交(尤其转待处理的 create 会重复建待办)。
+    function isInboxPending(id) {
+      return !!(state.inbox.pendingById && state.inbox.pendingById[id]);
+    }
+    function setInboxPending(id, on) {
+      if (!state.inbox.pendingById) state.inbox.pendingById = {};
+      if (on) state.inbox.pendingById[id] = true;
+      else delete state.inbox.pendingById[id];
+    }
     function openInboxReply(id) {
       state.inbox.replyingId = (state.inbox.replyingId === id) ? null : id;
       renderActions();
@@ -8176,42 +8189,64 @@
       renderActions();
     }
     async function submitInboxReply(id) {
+      if (isInboxPending(id)) return;
       var input = document.getElementById('inbox-reply-input-' + id);
       var answer = input ? String(input.value || '').trim() : '';
       if (!answer) { flashHint('回应内容不能为空'); if (input && input.focus) input.focus(); return; }
-      var res = await apiPost('inbox/answer', { id: id, answer: answer });
-      if (!res || res.success !== true) { flashHint('回应未送达,请确认本地 worker 在运行'); return; }
-      removeInboxItemLocal(id);
+      setInboxPending(id, true);
       renderActions();
-      flashHint('已回应,Agent 会看到');
+      try {
+        var res = await apiPost('inbox/answer', { id: id, answer: answer });
+        if (!res || res.success !== true) { flashHint('回应未送达,请确认本地 worker 在运行'); return; }
+        removeInboxItemLocal(id);
+        flashHint('已回应,Agent 会看到');
+      } finally {
+        setInboxPending(id, false);
+        renderActions();
+      }
     }
     async function ackInboxItem(id) {
-      // 空 answer = 已读/ack(briefing 或无需回的 question)。
-      var res = await apiPost('inbox/answer', { id: id });
-      if (!res || res.success !== true) { flashHint('操作未送达,请确认本地 worker 在运行'); return; }
-      removeInboxItemLocal(id);
+      if (isInboxPending(id)) return;
+      setInboxPending(id, true);
       renderActions();
-      flashHint('已标记知道了');
+      try {
+        // 空 answer = 已读/ack(briefing 或无需回的 question)。
+        var res = await apiPost('inbox/answer', { id: id });
+        if (!res || res.success !== true) { flashHint('操作未送达,请确认本地 worker 在运行'); return; }
+        removeInboxItemLocal(id);
+        flashHint('已标记知道了');
+      } finally {
+        setInboxPending(id, false);
+        renderActions();
+      }
     }
     async function convertInboxToTodo(id) {
+      if (isInboxPending(id)) return;
       // 转待处理:先建 action(标题取 body),成功后再 dismiss inbox 项;
       // 串行 + 失败回滚提示,避免「dismiss 了却没建 action」的丢条目。
       var item = findInboxItem(id);
       if (!item) return;
-      var title = String(item.body || '').trim().slice(0, 120) || '(来自收件箱)';
-      var created = await apiPost('actions', { title: title, createdBy: 'inbox', project: item.project });
-      if (!created || created.success !== true) { flashHint('转待处理失败:未能创建待办'); return; }
-      var dismissed = await apiPost('inbox/dismiss', { id: id });
-      if (!dismissed || dismissed.success !== true) {
-        flashHint('已建待办,但收件箱项未消解,请手动「知道了」');
+      setInboxPending(id, true);
+      renderActions();
+      try {
+        var title = String(item.body || '').trim().slice(0, 120) || '(来自收件箱)';
+        var created = await apiPost('actions', { title: title, createdBy: 'inbox', project: item.project });
+        if (!created || created.success !== true) { flashHint('转待处理失败:未能创建待办'); return; }
+        var dismissed = await apiPost('inbox/dismiss', { id: id });
+        if (!dismissed || dismissed.success !== true) {
+          flashHint('已建待办,但收件箱项未消解,请手动「知道了」');
+          state.actions.loaded = false;
+          loadActions({ generate: false });
+          return;
+        }
+        removeInboxItemLocal(id);
         state.actions.loaded = false;
         loadActions({ generate: false });
-        return;
+        flashHint('已转入待处理');
+      } finally {
+        setInboxPending(id, false);
+        renderActions();
       }
-      removeInboxItemLocal(id);
-      state.actions.loaded = false;
-      loadActions({ generate: false });
-      flashHint('已转入待处理');
     }
 
     function renderActions() {

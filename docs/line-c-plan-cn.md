@@ -189,6 +189,7 @@ interface InboxItem {
   - 测试:`test/viewer-inbox-section.test.ts` 加 5 例(动作按钮存在性、briefing 无回应、replyingId 驱动输入框、removeInboxItemLocal 剔除+清回应态)。**preview 三流实证**:回应→后端 `answered` + 回应文本入库 + 卡片移除;转待处理→后端 inbox `dismissed` + 新 action 标题取 body + 卡片移除;空态正确。实证后已清理 demo(action 置 cancelled)。
   - **踩坑**:Edit 替换 `renderActions(){` 时把函数声明行一并吞掉,导致 viewer JS 语法断裂——但 tsdown 把 HTML 当字符串资产打包、**不做 JS 解析,build 仍绿**,是 viewer 测试的 VM sandbox 才暴露(`Unexpected token`)。教训:viewer 改动光看 build 过不够,必须跑 viewer 测试或 preview。
   - 基线:`npm run pre-pr` 130 文件 / 1382 用例全绿。
+  - ✅ **review 收口(PR 待开)**:[P2] 转待处理缺防重入,慢网双击会重复建待办——加 `state.inbox.pendingById[id]`,三个 async 动作进入即标记 + 按钮渲染 `disabled`/「处理中…」,`finally` 清标记;`isInboxPending` 早返回挡住重复提交。[P3] 补 7 例 VM mock `apiPost` 异步测试:回应带 answer / 空回应不发请求 / 知道了空 answer / 转待处理 create→dismiss 两步 / create 失败不 dismiss 不剔除 / dismiss 失败保留条目 / 防重入 race(in-flight 时第二次调用零请求)。preview 实证:双击 `convertInboxToTodo` 仅 1 次 create(后端确认仅建 1 条待办)。1389 用例全绿。
 
 ### STEP-C4 — 「已完成」区(只读 done,可与 C3 并行)
 - **改动面**:`src/viewer/index.html`。新增折叠区,筛 `state.actions.items` 里 `status==="done"` 且当天 `updatedAt`。
