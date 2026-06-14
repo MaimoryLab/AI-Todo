@@ -1829,6 +1829,12 @@
     }
     .inbox-subhead-marker { font-size: 12px; }
     .inbox-subhead-note { font-size: 11px; font-weight: 400; color: var(--ink-faint, #9aa0a6); }
+    .inbox-subhead-toggle {
+      width: 100%; background: none; border: none; cursor: pointer;
+      text-align: left; padding: 0; font: inherit;
+    }
+    .inbox-subhead-toggle:hover { color: var(--accent, #2563eb); }
+    .inbox-subhead-caret { margin-left: auto; color: var(--ink-faint, #9aa0a6); font-size: 12px; }
     .inbox-reply-box { margin-top: 9px; }
     .inbox-reply-input {
       width: 100%;
@@ -3922,7 +3928,7 @@
       activity: { loaded: false, observations: [], sessions: [], typeFilter: '', loadingPhase: '', warnings: [] },
       lessons: { loaded: false, items: [], search: '', skillSearch: '', skillRootFilter: 'all', mode: 'explicit', projects: [] },
       actions: { loaded: false, items: [], reviewItems: [], frontier: [], statusFilter: '', search: '', doneExpanded: false },
-      inbox: { loaded: false, items: [], replyingId: null, pendingById: {} },
+      inbox: { loaded: false, items: [], replyingId: null, pendingById: {}, briefingExpanded: false },
       crystals: { loaded: false, items: [], search: '', lessonMap: {} },
       profile: { loaded: false, projects: [], selectedProject: '', data: null },
       replay: { loaded: false, sessions: [], selectedId: '', timeline: null, cursor: 0, playing: false, speed: 1, timer: null, startAt: 0, offsetAt: 0 },
@@ -8170,10 +8176,18 @@
         html += '</div>';
       }
       if (briefings.length) {
-        html += '<div class="inbox-subhead"><span class="inbox-subhead-marker" aria-hidden="true">📋</span>Agent 整理 (' + briefings.length + ')<span class="inbox-subhead-note">知悉即可</span></div>';
-        html += '<div class="inbox-card-list">';
-        briefings.forEach(function(it) { html += renderInboxCard(it, 'briefing'); });
-        html += '</div>';
+        // briefing 知悉即可、优先级低,默认折叠以缩短首屏、让 question 不被压下去。
+        // 搜索命中时强制展开(否则命中的 briefing 藏在折叠里看不到)。
+        var bExpanded = !!state.inbox.briefingExpanded || !!search;
+        html += '<button type="button" class="inbox-subhead inbox-subhead-toggle" data-action="toggle-briefings" aria-expanded="' + (bExpanded ? 'true' : 'false') + '">';
+        html += '<span class="inbox-subhead-marker" aria-hidden="true">📋</span>Agent 整理 (' + briefings.length + ')<span class="inbox-subhead-note">知悉即可</span>';
+        html += '<span class="inbox-subhead-caret">' + (bExpanded ? '▾' : '▸') + '</span>';
+        html += '</button>';
+        if (bExpanded) {
+          html += '<div class="inbox-card-list">';
+          briefings.forEach(function(it) { html += renderInboxCard(it, 'briefing'); });
+          html += '</div>';
+        }
       }
       html += '</section>';
       return html;
@@ -9338,6 +9352,11 @@
       }
       if (action === 'toggle-done-today') {
         state.actions.doneExpanded = !state.actions.doneExpanded;
+        renderActions();
+        return;
+      }
+      if (action === 'toggle-briefings') {
+        state.inbox.briefingExpanded = !state.inbox.briefingExpanded;
         renderActions();
         return;
       }

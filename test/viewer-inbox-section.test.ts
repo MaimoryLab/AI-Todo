@@ -144,7 +144,7 @@ describe("STEP-C2 viewer 待回应分区接真数据", () => {
   it("briefing 渲染为 📋 子区卡片,不计入待回应计数", () => {
     const { sandbox } = loadViewerSandbox();
     sandbox.state.inbox = {
-      loaded: true,
+      loaded: true, briefingExpanded: true,
       items: [
         { id: "inbox_b", kind: "briefing", body: "今天完成了 3 件", fromAgent: "line-c", status: "awaiting", createdAt: "2026-06-13T09:00:00Z" },
       ],
@@ -186,7 +186,7 @@ describe("STEP-C2 viewer 待回应分区接真数据", () => {
   it("question 与 briefing 混合:各自分区,question 在前", () => {
     const { sandbox } = loadViewerSandbox();
     sandbox.state.inbox = {
-      loaded: true,
+      loaded: true, briefingExpanded: true,
       items: [
         { id: "b1", kind: "briefing", body: "汇报", status: "awaiting", createdAt: "2026-06-13T09:05:00Z" },
         { id: "q1", kind: "question", body: "问题", status: "awaiting", createdAt: "2026-06-13T09:00:00Z" },
@@ -228,7 +228,7 @@ describe("STEP-C2 viewer 待回应分区接真数据", () => {
   it("briefing 卡只有 知道了/转待处理,无 回应", () => {
     const { sandbox } = loadViewerSandbox();
     sandbox.state.inbox = {
-      loaded: true, replyingId: null,
+      loaded: true, replyingId: null, briefingExpanded: true,
       items: [{ id: "b9", kind: "briefing", body: "完成 3 件", status: "awaiting", createdAt: "2026-06-13T09:00:00Z" }],
     };
     const html = sandbox.renderAwaitingReplySection();
@@ -436,7 +436,7 @@ describe("STEP-C2 viewer 待回应分区接真数据", () => {
   it("无搜索词时照常渲染全部", () => {
     const { sandbox } = loadViewerSandbox();
     sandbox.state.inbox = {
-      loaded: true, replyingId: null, pendingById: {},
+      loaded: true, replyingId: null, pendingById: {}, briefingExpanded: true,
       items: [
         { id: "q1", kind: "question", body: "问一", fromAgent: "a", status: "awaiting", createdAt: "2026-06-13T09:00:00Z" },
         { id: "b1", kind: "briefing", body: "报一", fromAgent: "b", status: "awaiting", createdAt: "2026-06-13T09:01:00Z" },
@@ -446,5 +446,49 @@ describe("STEP-C2 viewer 待回应分区接真数据", () => {
     const html = sandbox.renderAwaitingReplySection();
     expect(html).toContain("问一");
     expect(html).toContain("报一");
+  });
+
+  // --- P1 briefing 分区折叠 ---
+
+  it("briefing 默认折叠:显示可点开的子区头但不渲染卡片", () => {
+    const { sandbox } = loadViewerSandbox();
+    sandbox.state.inbox = {
+      loaded: true, replyingId: null, pendingById: {}, briefingExpanded: false,
+      items: [
+        { id: "q1", kind: "question", body: "问题正文", fromAgent: "a", status: "awaiting", createdAt: "2026-06-13T09:00:00Z" },
+        { id: "b1", kind: "briefing", body: "简报正文", fromAgent: "b", status: "awaiting", createdAt: "2026-06-13T09:01:00Z" },
+      ],
+    };
+    const html = sandbox.renderAwaitingReplySection();
+    // question 仍直接显示
+    expect(html).toContain("问题正文");
+    // briefing 子区头在,但折叠态:卡片正文不渲染
+    expect(html).toContain('data-action="toggle-briefings"');
+    expect(html).toContain('aria-expanded="false"');
+    expect(html).toContain("Agent 整理 (1)");
+    expect(html).not.toContain("简报正文");
+  });
+
+  it("briefingExpanded 为真时渲染 briefing 卡片", () => {
+    const { sandbox } = loadViewerSandbox();
+    sandbox.state.inbox = {
+      loaded: true, replyingId: null, pendingById: {}, briefingExpanded: true,
+      items: [{ id: "b1", kind: "briefing", body: "简报正文", fromAgent: "b", status: "awaiting", createdAt: "2026-06-13T09:01:00Z" }],
+    };
+    const html = sandbox.renderAwaitingReplySection();
+    expect(html).toContain('aria-expanded="true"');
+    expect(html).toContain("简报正文");
+  });
+
+  it("搜索命中时强制展开 briefing(否则命中项被折叠藏住)", () => {
+    const { sandbox } = loadViewerSandbox();
+    sandbox.state.inbox = {
+      loaded: true, replyingId: null, pendingById: {}, briefingExpanded: false,
+      items: [{ id: "b1", kind: "briefing", body: "鉴权加固完成", fromAgent: "auth", status: "awaiting", createdAt: "2026-06-13T09:01:00Z" }],
+    };
+    sandbox.state.actions.search = "鉴权";
+    const html = sandbox.renderAwaitingReplySection();
+    expect(html).toContain('aria-expanded="true"');
+    expect(html).toContain("鉴权加固完成");
   });
 });
