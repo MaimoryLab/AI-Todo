@@ -158,4 +158,23 @@ describe("renderMarkdownSafe — correct rendering (STEP-04)", () => {
     expect(render("")).toBe("");
     expect(render("   ")).toBe("");
   });
+
+  // 回归(评测发现):两个含 * 的行内码之间的文本被 emphasis 跨 span 误配。
+  it("does not emphasize text between two inline-code spans containing *", () => {
+    const render = loadRenderer();
+    const out = render("我改完了 `/api/*`,但 `/admin/*` 你之前没提");
+    // 两个路径都成代码片段,星号原样保留在 <code> 内
+    expect(out).toContain("<code class=\"md-code\">/api/*</code>");
+    expect(out).toContain("<code class=\"md-code\">/admin/*</code>");
+    // 关键:不该出现 <em>(此前 `*`,但 `/admin/*` 之间被错误斜体)
+    expect(out).not.toContain("<em>");
+  });
+
+  it("inline code with * does not leak emphasis into surrounding bold", () => {
+    const render = loadRenderer();
+    const out = render("**加**:与 `/api/*` 一致");
+    expect(out).toContain("<strong>加</strong>");
+    expect(out).toContain("<code class=\"md-code\">/api/*</code>");
+    expect(out).not.toContain("<em>");
+  });
 });

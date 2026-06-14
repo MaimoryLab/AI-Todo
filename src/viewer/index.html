@@ -3957,8 +3957,13 @@
       });
       // 2) 全文转义(此时不含代码块原文,占位符是纯 ASCII 安全)
       var s = esc(src);
-      // 3) 行内码 `code`
-      s = s.replace(/`([^`\n]+?)`/g, function(_m, c) { return '<code class="md-code">' + c + '</code>'; });
+      // 3) 行内码 `code` —— 抽成占位符,避免码内的 * 被后续 emphasis 跨 span 误配
+      //    (如 `/admin/*` 与 `/api/*` 之间的文本曾被错误 <em> 包裹)
+      var inlines = [];
+      s = s.replace(/`([^`\n]+?)`/g, function(_m, c) {
+        inlines.push('<code class="md-code">' + c + '</code>');
+        return ' C' + (inlines.length - 1) + ' ';
+      });
       // 4) 链接 [text](http(s)://...) — 仅放行 http/https,转义后的 URL 已无引号注入风险
       s = s.replace(/\[([^\]\n]+?)\]\((https?:\/\/[^\s)]+?)\)/g, function(_m, label, url) {
         return '<a href="' + url + '" target="_blank" rel="noopener noreferrer">' + label + '</a>';
@@ -3992,7 +3997,8 @@
       }
       closeList();
       s = out.join('\n');
-      // 7) 还原代码块占位符
+      // 7) 还原行内码 + 代码块占位符
+      s = s.replace(/ C(\d+) /g, function(_m, idx) { return inlines[Number(idx)] || ''; });
       s = s.replace(/ B(\d+) /g, function(_m, idx) { return blocks[Number(idx)] || ''; });
       return s;
     }
