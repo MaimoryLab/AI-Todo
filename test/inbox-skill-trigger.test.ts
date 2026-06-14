@@ -198,6 +198,34 @@ describe("STEP-C1.5 skill → inbox end-to-end", () => {
     expect(list.body.items?.length).toBe(0);
   });
 
+  it("fallback POST rejects a whitespace-only body with 400, not 201", async () => {
+    // Regression: the API layer used to only check presence (!req.body.body),
+    // so "   " passed the 201 path while the function returned {success:false}.
+    const ask = await callRest("POST", "/agentmemory/inbox/ask", { body: "   " });
+    expect(ask.status_code).toBe(400);
+    const notify = await callRest("POST", "/agentmemory/inbox/notify", { body: "\n\t " });
+    expect(notify.status_code).toBe(400);
+    const list = await callRest("GET", "/agentmemory/inbox", undefined, {});
+    expect(list.body.items?.length).toBe(0);
+  });
+
+  it("write endpoints whitelist fields — unknown keys never reach the item", async () => {
+    const res = await callRest("POST", "/agentmemory/inbox/ask", {
+      body: "real question",
+      fromAgent: "agent-x",
+      status: "answered",
+      id: "attacker-controlled",
+      answer: "injected",
+    } as Record<string, unknown>);
+    expect(res.status_code).toBe(201);
+    const item = res.body.item as InboxItem & { answer?: string };
+    expect(item.fromAgent).toBe("agent-x");
+    // Whitelisted away: forged status/id/answer must not survive.
+    expect(item.status).toBe("awaiting");
+    expect(item.id).not.toBe("attacker-controlled");
+    expect(item.answer).toBeUndefined();
+  });
+
   // --- Both entry points feed the same single-user inbox. ---
 
   it("MCP and REST writes converge in one inbox, newest first", async () => {
