@@ -1771,6 +1771,19 @@
       font-size: 16px;
       font-weight: 650;
     }
+    .done-today-section { opacity: 0.92; }
+    .done-today-head {
+      width: 100%;
+      background: none;
+      border: none;
+      cursor: pointer;
+      text-align: left;
+      padding: 0;
+      font: inherit;
+    }
+    .done-today-head:hover .action-group-title { color: var(--accent, #2563eb); }
+    .done-today-sub { font-size: 12px; font-weight: 400; color: var(--ink-faint, #9aa0a6); margin-left: 6px; }
+    .done-today-caret { color: var(--ink-faint, #9aa0a6); font-size: 13px; }
     .action-card-list {
       display: grid;
       gap: 8px;
@@ -3908,7 +3921,7 @@
       audit: { loaded: false, entries: [], opFilter: '' },
       activity: { loaded: false, observations: [], sessions: [], typeFilter: '', loadingPhase: '', warnings: [] },
       lessons: { loaded: false, items: [], search: '', skillSearch: '', skillRootFilter: 'all', mode: 'explicit', projects: [] },
-      actions: { loaded: false, items: [], reviewItems: [], frontier: [], statusFilter: '', search: '' },
+      actions: { loaded: false, items: [], reviewItems: [], frontier: [], statusFilter: '', search: '', doneExpanded: false },
       inbox: { loaded: false, items: [], replyingId: null, pendingById: {} },
       crystals: { loaded: false, items: [], search: '', lessonMap: {} },
       profile: { loaded: false, projects: [], selectedProject: '', data: null },
@@ -8249,6 +8262,37 @@
       }
     }
 
+    // STEP-C4「已完成」折叠区:只读现有 action.status==='done' 且当天 updatedAt 的项,
+    // 默认折叠(§3.2)。不新增抽取器、不动后端,纯前端筛 state.actions.items。
+    function isUpdatedToday(ts) {
+      if (!ts) return false;
+      var d = new Date(ts);
+      if (isNaN(d.getTime())) return false;
+      var now = new Date();
+      return d.getFullYear() === now.getFullYear() &&
+        d.getMonth() === now.getMonth() &&
+        d.getDate() === now.getDate();
+    }
+    function renderDoneTodaySection(doneItems, frontierIds, cardRenderer) {
+      var today = (doneItems || []).filter(function(a) { return isUpdatedToday(a.updatedAt); });
+      if (!today.length) return '';
+      var expanded = !!state.actions.doneExpanded;
+      var html = '<section class="action-group done-today-section">';
+      html += '<button type="button" class="action-group-head done-today-head" data-action="toggle-done-today" aria-expanded="' + (expanded ? 'true' : 'false') + '">';
+      html += '<div class="action-group-title">🟢 已完成 <span class="done-today-sub">今天完成了 ' + today.length + ' 件</span></div>';
+      html += '<span class="done-today-caret">' + (expanded ? '▾' : '▸') + '</span>';
+      html += '</button>';
+      if (expanded && typeof cardRenderer === 'function') {
+        html += '<div class="action-card-list">';
+        today.forEach(function(a) {
+          html += cardRenderer(a, frontierIds.has(a.id));
+        });
+        html += '</div>';
+      }
+      html += '</section>';
+      return html;
+    }
+
     function renderActions() {
       var el = document.getElementById('view-actions');
       var items = (state.actions.items || []).slice();
@@ -8499,7 +8543,14 @@
           var order = { active: 1, blocked: 2, pending: 3, done: 4, cancelled: 5 };
           return (order[a.status] || 9) - (order[b.status] || 9) || (Number(b.priority) || 0) - (Number(a.priority) || 0);
         });
-        ['active','blocked','pending','done','cancelled'].forEach(function(status) {
+        // STEP-C4:无筛选的默认视图里,done 不混在分组流中,改由底部「已完成」
+        // 折叠区单独承载、且只显当天完成的(§3.2/§3.3)。点了「已完成」筛选 chip
+        // (statusFilter==='done')时则照常全列,不走折叠区。
+        var defaultView = !statusFilter;
+        var inlineStatuses = defaultView
+          ? ['active','blocked','pending','cancelled']
+          : ['active','blocked','pending','done','cancelled'];
+        inlineStatuses.forEach(function(status) {
           var group = items.filter(function(a) { return a.status === status; });
           if (!group.length) return;
           html += '<section class="action-group">';
@@ -8511,6 +8562,9 @@
           });
           html += '</div></section>';
         });
+        if (defaultView) {
+          html += renderDoneTodaySection(items.filter(function(a) { return a.status === 'done'; }), frontierIds, renderActionCard);
+        }
       }
 
       var __focus = captureSearchFocus(['actions-search']);
@@ -9271,6 +9325,11 @@
       }
       if (action === 'inbox-to-todo') {
         convertInboxToTodo(target.getAttribute('data-inbox-id') || '');
+        return;
+      }
+      if (action === 'toggle-done-today') {
+        state.actions.doneExpanded = !state.actions.doneExpanded;
+        renderActions();
         return;
       }
       if (action === 'toggle-session-detail-section') {
