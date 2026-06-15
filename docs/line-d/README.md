@@ -4,7 +4,7 @@
 > 日期:2026-06-15 · 基线:`@agentmemory/agentmemory` v0.9.24 · 沟通信道:`lark-cli`(`/opt/homebrew/bin/lark-cli` v1.0.50)。
 > 方法论沿用线 A/C 验证有效的工作流:一步一 PR、预测后回填、preview/实跑实证、文档零 CI。
 >
-> **v2 拍板更新(2026-06-15)**:① question + briefing **都推**(§0.5 #1 锁定)② **要飞书内回复闭环**——D5 从「远期可选」**提为本轮必做**(§0.5 #5 改、新 §9 专章)③ 前置 lark-cli bot 配置已在另一会话就绪(已核:bot ready;agentmemory 侧 `AGENTMEMORY_LARK_*` env 仍需 D1 引入 + 填 open_id)。
+> **v3 拍板更新(2026-06-15)**:在 v2(都推 + 回复闭环必做)基础上 ——④ 回复映射**选方案 A(单未决假设)**(§9.2)⑤ 目标 **open_id 已给:`ou_e569d0bfc85638755d4d805100832fb1`**,并已**实发一条 bot 私聊验证通过**(`message_id om_x100b...`,P2P `chat_id oc_15d763954d0416d4759afe452bef0d39`)——bot→你的推送链路已确证可用。剩余仅 §8 三个轻量确认(沟通方式 A / 加急策略 / p2p scope),均有默认、无异议即采纳。
 
 ## 进度看板(2026-06-15)
 
@@ -186,11 +186,11 @@ interface DeliveryRecord {
    - **`im:message.p2p_msg:readonly`(收私聊,D5 回复闭环必需)** + 后台勾选 `im.message.receive_v1` 事件
    - 失败时 lark-cli 回 `console_url`,照它去后台补。
 3. **bot 可私聊目标用户**:bot 加入可见范围,且与目标用户能建立 P2P 会话。
-4. **目标用户 open_id**(`ou_xxx`):用 `lark-cli contact +search-user --query "<你的名字>"`(lark-contact skill)查到,填进 `AGENTMEMORY_LARK_USER_ID`。
+4. ~~目标用户 open_id~~ → ✅ **已给并实发验证**:`ou_e569d0bfc85638755d4d805100832fb1`(P2P chat `oc_15d763954d0416d4759afe452bef0d39`)。填进 `AGENTMEMORY_LARK_USER_ID`。
 5. **配置写入** `~/.agentmemory/.env`(config.ts 的 file-env 层自动加载;**已核该文件当前不存在,D1 落地时新建**):
    ```
    AGENTMEMORY_LARK_DELIVERY=true
-   AGENTMEMORY_LARK_USER_ID=ou_xxxxxxxx
+   AGENTMEMORY_LARK_USER_ID=ou_e569d0bfc85638755d4d805100832fb1
    AGENTMEMORY_LARK_URGENT_QUESTION=true
    AGENTMEMORY_LARK_REPLY_LOOP=true
    ```
@@ -206,15 +206,15 @@ interface DeliveryRecord {
 
 ## 8. 待人工审阅 / 拍板的点
 
-> v2 已锁:① question+briefing 都推(§0.5 #1)② 飞书内回复闭环本轮做(D5/§9)③ bot 配置就绪(已核)。以下为仍需你定的点:
+> v3 已锁:① 都推 ② 飞书内回复闭环本轮做 ③ bot 配置就绪 ④ 映射方案 A ⑤ open_id 已给并实发验证通过。剩余仅 §8.3/8.4/8.7 三个轻量确认:
 
 1. ~~question + briefing 都推 还是只推 question~~ → ✅ **已定:都推**。
 2. ~~回执闭环本轮做不做~~ → ✅ **已定:做**(§9)。
-3. **沟通方式选 A(lark-cli 子进程)**:认可用 lark-cli 而非自建 webhook?(A 富能力 + 现成 bot;线 D 既然要回复闭环,本就强依赖 lark-cli 的 event consume,A 几乎是唯一合理选择)。
-4. **加急策略**:question 默认 `urgent_app`(应用内加急)。要不要更激进(`urgent_phone` 电话加急)或更克制(完全不加急)?
-5. **目标 open_id**:用 `lark-cli contact +search-user --query "<你的名字>"` 查到你的 `ou_xxx` 填进 `AGENTMEMORY_LARK_USER_ID`。**需要你给名字或直接给 open_id**(我可以代查,但要你确认是哪个账号收推送)。
-6. **【新】回复→question 映射方案**(§9.2):本轮先做**方案 A(单未决假设:回复即答最新一条未答 question,卡片注明)**,精确映射(B 文本锚 / C 一问一会话)留 D5.1?还是你要一上来就精确对应?
-7. **bot scope 确认**:除 `im:message`,回复闭环还需 `im:message.p2p_msg:readonly`(收私聊)。请确认后台已开通,或我实跑时遇 `missing_scope` 再透传 console_url 给你。
+3. **沟通方式选 A(lark-cli 子进程)**:认可用 lark-cli 而非自建 webhook?(回复闭环强依赖 lark-cli 的 event consume,A 几乎是唯一合理选择)。**默认按 A,无异议即采纳**。
+4. **加急策略**:question 默认 `urgent_app`(应用内加急)。要不要更激进(`urgent_phone`)或更克制(不加急)?**默认 urgent_app,无异议即采纳**。
+5. ~~目标 open_id~~ → ✅ **已给:`ou_e569d0bfc85638755d4d805100832fb1`**,且已**实发一条 bot 私聊验证通过**(`message_id om_x100b...`,P2P `chat_id oc_15d763954d0416d4759afe452bef0d39`)。
+6. ~~回复→question 映射方案~~ → ✅ **已定:方案 A(单未决假设)**,见 §9.2。
+7. **bot scope 确认**:发消息已验证可用(`im:message` 在)。回复闭环还需 **`im:message.p2p_msg:readonly`**(收私聊)+ 后台勾选 `im.message.receive_v1` 事件——**D5 实跑时若遇 `missing_scope` 我会透传 console_url 给你补**;若你已开通则直接通。加急需 `im:message.urgent`(同理,缺则降级不加急)。
 
 ---
 
@@ -235,11 +235,18 @@ interface DeliveryRecord {
 
 | 方案 | 做法 | 优点 | 缺点 |
 |---|---|---|---|
-| **A. 单未决假设**(推荐起步) | 维护"最近一条未答 question"的指针;用户回复即视为答它 | 实现最简、零额外交互 | 多条 question 同时未决时会答错;需在卡片里提示"回复将答最新一条" |
-| **B. 引用回复 + 文本锚** | 推送时在 question 正文带短 token(如 `#q3a2`),要求用户引用/带 token 回复;消费侧正则提取 token 反查 inbox 项 | 能精确对应任意一条 | 要求用户带 token,体验差;飞书引用回复在事件里仍不一定回传 parent |
-| **C. 一问一会话**(每条 question 单开 thread/话题) | 用 `+messages-reply --reply-in-thread` 或为每条 question 建独立话题群,回复落在该 thread | 天然隔离、对应精确 | 重(每问一会话)、bot 建话题/群成本高、可能超出本轮范围 |
+| **A. 单未决假设**(✅ **已选,本轮做**) | 维护"最近一条未答 question"的指针;用户回复即视为答它 | 实现最简、零额外交互 | 多条 question 同时未决时会答错;需在卡片里提示"回复将答最新一条" |
+| B. 引用回复 + 文本锚 | 推送时在 question 正文带短 token(如 `#q3a2`),要求用户引用/带 token 回复;消费侧正则提取 token 反查 inbox 项 | 能精确对应任意一条 | 要求用户带 token,体验差;飞书引用回复在事件里仍不一定回传 parent |
+| C. 一问一会话(每条 question 单开 thread/话题) | 用 `+messages-reply --reply-in-thread` 或为每条 question 建独立话题群,回复落在该 thread | 天然隔离、对应精确 | 重(每问一会话)、bot 建话题/群成本高 |
 
-> **草案推荐**:本轮先做 **方案 A(单未决假设)** + 在 question 卡片底部明确写「直接回复将回答上面这条;多条待答请去工作台」。把精确映射(B/C)留作 D5.1 增强。**这点需你拍板**(见 §8 新增第 6 点)。
+> ✅ **已拍板:本轮做方案 A(单未决假设)**。question 卡片底部明确写「直接回复将回答这条;多条待答请去工作台」。精确映射(B/C)留作 D5.1 增强。
+>
+> **方案 A 的指针语义(实现要点)**:
+> - 投递 question 成功后,把 `item.id` 记为"当前未决指针"(存 KV,如 `mem:delivery` 里的 `pendingReplyTarget`)。
+> - 多条 question 接连推送时,指针指向**最新推出**的一条(后推覆盖前指针)。
+> - 收到用户回复 → 答指针指向的 question → 答完**清空指针**(下条回复无指针则忽略/提示去工作台)。
+> - briefing 不参与指针(briefing 不需要回复,飞书侧用 reaction ack 或直接已读,见 §9.3)。
+> - 边界提示:若用户在"无未决指针"时回复,bot 回一句「当前没有在等你回的问题,去工作台看看?」+ 工作台链接。
 
 ### 9.3 写回路径
 
