@@ -12,8 +12,8 @@
 |---|---|---|
 | **D1** | 投递原语后端:`mem::inbox-deliver` 函数 + 投递配置 + audit + 去重 | ✅ **已合并** [PR#34](https://github.com/MaimoryLab/agentmemory-lab/pull/34)(main 658e7b4,纯后端默认关,7 例测试 + CI 4 格绿;适配器 D1 桩、D2 实接) |
 | **D2** | lark-cli 适配器:把 InboxItem 渲染成飞书消息(卡片/markdown)并发出 | ✅ **已合并** [PR#35](https://github.com/MaimoryLab/agentmemory-lab/pull/35)(main 6a837f4,真 execFile 实接、9 例测试 + CI 4 格绿;**真发验证**:question 卡片 + briefing 各一条 `ok:true`,urgent 缺 scope 正确降级) |
-| **D3** | 挂接 inbox 写路径:ask/notify 后 fire-and-forget 触发投递 | ✅ **已合并** [PR#36](https://github.com/MaimoryLab/agentmemory-lab/pull/36)(main 9cecd5c,只改 inbox.ts、4 新测试 + CI 4 格绿;**第一条完整链路贯通**:Agent 写 inbox → 自动触发 delivery → 飞书收到) |
-| **D4** | 投递状态回写 + viewer 呈现(已推送/推送失败标记) | ⬜ 待开工(依赖 D3) |
+| **D3** | 挂接 inbox 写路径:ask/notify 后 fire-and-forget 触发投递 | ✅ **已合并** [PR#36](https://github.com/MaimoryLab/agentmemory-lab/pull/36)(main 9cecd5c,只改 inbox.ts、4 新测试)+ **关键修复** [PR#40](https://github.com/MaimoryLab/agentmemory-lab/pull/40)(main fca8a41):原 dispatch 用了 iii-sdk 0.11.2 不存在的 `sdk.triggerVoid`,投递从未真正发生,改用 `sdk.trigger({action:TriggerAction.Void()})`,真发复验通过 |
+| **D4** | 投递状态回写 + viewer 呈现(已推送/推送失败标记) | ✅ **已合并** [PR#41](https://github.com/MaimoryLab/agentmemory-lab/pull/41)(main 612bd28,**不新增端点**、inbox-list join `mem:delivery`、9 新测试 + CI 4 格绿;真发实证工作台显示「已推送 ✓」) |
 | **D5** | **飞书内回复闭环**:bot 订阅收信 → 回复映射回 inbox-answer(**本轮必做**) | ⬜ 待开工(依赖 D3,见 §9) |
 
 > **里程碑**:线 C 已让「Agent 写 → 落库 → 用户**打开工作台**才看到」。线 D 补上**跨设备主动触达 + 飞书内回复闭环**——Agent 抛出 question/briefing 后,飞书 bot 主动私聊推给用户(D1-D4);用户**直接在飞书回一句**就把对应 question 在工作台标记 answered(D5)。推送 + 回复双向都在飞书完成,工作台与飞书互为镜像。
@@ -178,6 +178,13 @@ interface DeliveryRecord {
 - **改动面**:`src/triggers/api.ts`(inbox-list 响应里 join DeliveryRecord,或新增 `GET /agentmemory/delivery`)+ `src/viewer/index.html`(卡片角标「已推送 ✓ / 推送失败 ⚠ + 原因」)。
 - **结果预测**:REST 若新增端点则触发端点计数连带(3 处);viewer 加单测 + preview 实证。
 - **风险**:低-中。看是否新增端点(影响一致性铁律)。
+- ✅ **实际反馈([PR#41](https://github.com/MaimoryLab/agentmemory-lab/pull/41) 已合并,main 612bd28,CI 4 格绿)**:
+  - **选了 join、不加端点**:`api::inbox-list` 对每条 item 读 `kv.get(KV.delivery, item.id)`,附加只读 `delivery` 字段 `{channel,status,messageId,urgent,error,attempts,deliveredAt}`。**InboxItem 落库结构不动**,字段只在 API 响应里。**端点计数不变 → 不触发一致性 3 处连带。**
+  - viewer `inboxDeliveryBadge`:sent→「已推送 ✓」(urgent 加「· 加急」)/ failed→「推送失败 ⚠」+ ≤60 字短错误(完整在 title)/ skipped→不显示(投递未开启不污染 UI)。错误走 `esc()` 防 XSS。渲在卡片头部时间戳后。
+  - 测试:`inbox-skill-trigger.test.ts` +2(join 正确、落库不含 delivery 键)、`viewer-inbox-section.test.ts` +7(sent/urgent/failed/截断/skipped 静默/无 delivery 向后兼容/错误 XSS)。
+  - **真发实证**:开投递→inbox-ask 真推飞书→台账记 sent→GET /inbox 带出→preview DOM 实测卡片 badge = 「已推送 ✓」。
+  - **⚠ 本轮捎带发现并修了 D3 的硬 bug**:真发实证时发现 D3 的 `sdk.triggerVoid` 在 iii-sdk 0.11.2 根本不存在(`grep -rln triggerVoid node_modules/iii-sdk/dist/` 零命中),投递一直静默失败(被 try/catch 当 warn 吞掉)。**单测过是因为 mock sdk 自带了真实 SDK 没有的 triggerVoid——只 mock 的盲区,务必真发复验**。已在 [PR#40](https://github.com/MaimoryLab/agentmemory-lab/pull/40) 单独修复(改 `sdk.trigger({action:TriggerAction.Void()})`+不 await 加 `.catch`)。**src/ 其它 8+ 处 `triggerVoid` 同源 bug(observe/image/disk/events/api),都藏在很少走的 gated 分支里,已另行登记单独 PR 处理,不在 D3/D4 范围。**
+  - **协作踩坑**:并行的「修全仓 triggerVoid」后台任务在同一 worktree 改了 api.ts/events.ts/observe.ts 等,与 D4 工作树串味,差点把它的改动混进 D4 commit(CI `session-end-triggers-graph.test.ts` 断言旧 triggerVoid 字符串才暴露)。**教训:多任务共用 worktree 时,commit 前必 `git show HEAD:<file>` 核对、跑全套(非仅 targeted)**。
 
 ### STEP-D5(本轮必做)— 飞书内回复闭环
 - **改动面**:新增长驻订阅消费者(`lark-cli event consume im.message.receive_v1 --as bot`)+ 把回复映射回 `mem::inbox-answer`。详见 **§9 专章**(映射方案是核心难点)。
