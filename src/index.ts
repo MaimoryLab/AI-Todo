@@ -66,6 +66,7 @@ import { registerLeasesFunction } from "./functions/leases.js";
 import { registerRoutinesFunction } from "./functions/routines.js";
 import { registerSignalsFunction } from "./functions/signals.js";
 import { registerInboxFunction } from "./functions/inbox.js";
+import { registerInboxDeliverFunction } from "./functions/inbox-deliver.js";
 import { registerCheckpointsFunction } from "./functions/checkpoints.js";
 import { registerFlowCompressFunction } from "./functions/flow-compress.js";
 import { registerMeshFunction } from "./functions/mesh.js";
@@ -312,6 +313,7 @@ async function main() {
   registerRoutinesFunction(sdk, kv);
   registerSignalsFunction(sdk, kv);
   registerInboxFunction(sdk, kv);
+  registerInboxDeliverFunction(sdk, kv);
   registerCheckpointsFunction(sdk, kv);
   registerMeshFunction(sdk, kv, secret);
   registerBranchAwareFunction(sdk, kv);

@@ -188,6 +188,42 @@ export function isDropStaleIndexEnabled(): boolean {
   return getMergedEnv()["AGENTMEMORY_DROP_STALE_INDEX"] === "true";
 }
 
+// Line D: Feishu/Lark cross-device delivery of inbox items.
+// Default OFF — when disabled (or user-id missing), inbox behaves exactly as
+// Line C with zero side effects. Only an explicit "true" opts in.
+export function isLarkDeliveryEnabled(): boolean {
+  const env = getMergedEnv();
+  return (
+    env["AGENTMEMORY_LARK_DELIVERY"] === "true" &&
+    hasRealValue(env["AGENTMEMORY_LARK_USER_ID"])
+  );
+}
+
+// Reply loop (D5): bot subscribes to incoming P2P messages and maps a reply
+// back to the pending question. Independent switch from the push side.
+export function isLarkReplyLoopEnabled(): boolean {
+  const env = getMergedEnv();
+  return (
+    env["AGENTMEMORY_LARK_REPLY_LOOP"] === "true" &&
+    hasRealValue(env["AGENTMEMORY_LARK_USER_ID"])
+  );
+}
+
+export interface LarkConfig {
+  userId: string; // target open_id (ou_xxx)
+  urgentQuestion: boolean; // send urgent_app on question delivery
+}
+
+export function getLarkConfig(): LarkConfig | null {
+  const env = getMergedEnv();
+  const userId = env["AGENTMEMORY_LARK_USER_ID"];
+  if (!hasRealValue(userId)) return null;
+  return {
+    userId: userId!,
+    urgentQuestion: env["AGENTMEMORY_LARK_URGENT_QUESTION"] !== "false",
+  };
+}
+
 export function detectLlmProviderKind(): "llm" | "noop" {
   const env = getMergedEnv();
   if (

@@ -643,7 +643,9 @@ export interface AuditEntry {
     | "inbox_ask"
     | "inbox_notify"
     | "inbox_answer"
-    | "inbox_dismiss";
+    | "inbox_dismiss"
+    | "inbox_delivered"
+    | "delivery_failed";
   userId?: string;
   functionId: string;
   targetIds: string[];
@@ -788,6 +790,22 @@ export interface InboxItem {
   createdAt: string;
   answeredAt?: string;
   expiresAt?: string;
+}
+
+// Line D: per-item delivery ledger for cross-device push (Feishu/Lark).
+// Kept separate from InboxItem so the inbox stays the source of truth and
+// delivery state never pollutes it. id === InboxItem.id (one-to-one, natural
+// dedup key — an item is pushed at most once).
+export interface DeliveryRecord {
+  id: string; // = InboxItem.id
+  channel: "lark"; // only lark this round; reserved for multi-channel
+  status: "sent" | "failed" | "skipped";
+  messageId?: string; // lark message_id (om_xxx), for receipts/recall
+  urgent?: boolean; // whether urgent_app succeeded (question only)
+  error?: string; // failure reason (lark-cli stderr summary / permission_violations)
+  attempts: number;
+  createdAt: string;
+  deliveredAt?: string;
 }
 
 export interface Checkpoint {
