@@ -14,7 +14,7 @@
 | **D2** | lark-cli 适配器:把 InboxItem 渲染成飞书消息(卡片/markdown)并发出 | ✅ **已合并** [PR#35](https://github.com/MaimoryLab/agentmemory-lab/pull/35)(main 6a837f4,真 execFile 实接、9 例测试 + CI 4 格绿;**真发验证**:question 卡片 + briefing 各一条 `ok:true`,urgent 缺 scope 正确降级) |
 | **D3** | 挂接 inbox 写路径:ask/notify 后 fire-and-forget 触发投递 | ✅ **已合并** [PR#36](https://github.com/MaimoryLab/agentmemory-lab/pull/36)(main 9cecd5c,只改 inbox.ts、4 新测试)+ **关键修复** [PR#40](https://github.com/MaimoryLab/agentmemory-lab/pull/40)(main fca8a41):原 dispatch 用了 iii-sdk 0.11.2 不存在的 `sdk.triggerVoid`,投递从未真正发生,改用 `sdk.trigger({action:TriggerAction.Void()})`,真发复验通过 |
 | **D4** | 投递状态回写 + viewer 呈现(已推送/推送失败标记) | ✅ **已合并** [PR#41](https://github.com/MaimoryLab/agentmemory-lab/pull/41)(main 612bd28,**不新增端点**、inbox-list join `mem:delivery`、9 新测试 + CI 4 格绿;真发实证工作台显示「已推送 ✓」) |
-| **D5** | **飞书内回复闭环**:bot 订阅收信 → 回复映射回 inbox-answer(**本轮必做**) | ⬜ 待开工(依赖 D3,见 §9) |
+| **D5** | **飞书内回复闭环**:bot 订阅收信 → 回复映射回 inbox-answer(**本轮必做**) | 🔵 **拆两半**(D5 风险高于 D1-D4):**D5a** ✅ 映射内核+可测消费者(无进程)[PR#43](https://github.com/MaimoryLab/agentmemory-lab/pull/43)(main 1305158);**D5b** ⬜ worker 启动长驻 lark-cli event consume + 实跑(依赖 D5a) |
 
 > **里程碑**:线 C 已让「Agent 写 → 落库 → 用户**打开工作台**才看到」。线 D 补上**跨设备主动触达 + 飞书内回复闭环**——Agent 抛出 question/briefing 后,飞书 bot 主动私聊推给用户(D1-D4);用户**直接在飞书回一句**就把对应 question 在工作台标记 answered(D5)。推送 + 回复双向都在飞书完成,工作台与飞书互为镜像。
 
@@ -300,6 +300,14 @@ interface DeliveryRecord {
 - KV scope `mem:delivery` 里复用或加字段存"最近未决 question 指针"(方案 A)+ `event_id` 去重集。
 - `src/index.ts`:worker 启动时按开关 spawn 消费者;关闭时优雅停。
 - 测试:NDJSON 解析 + 映射 + 去重单测(mock 子进程 stdout);实跑飞书私聊回一句验证闭环。
+
+> **D5 拆两半(2026-06-15,因风险高于 D1-D4)**:
+> - **D5a ✅ 映射内核 + 可测消费者(无进程)** [PR#43](https://github.com/MaimoryLab/agentmemory-lab/pull/43)(main 1305158,CI 4 格绿):
+>   - `src/functions/lark-reply-consumer.ts`(新)**只暴露纯函数/可注入 runner,零 spawn**:`parseEventLine`(防御解析 NDJSON 扁平/嵌套、解 `{text}`、坏行返 null 不抛)、方案 A 指针 set/get/clear(存 `mem:delivery` 保留 key `__lark_pending_reply_target__`,**不新增 scope**)、`makeReplyHandler({kv,sdk,userId}).handleLine`(解析→过滤 p2p+目标用户→`event_id` 去重→映射未决 question→守卫仍 awaiting→`mem::inbox-answer`→成功清指针,永不抛)。
+>   - `inbox-deliver.ts`:question sent + `isLarkReplyLoopEnabled()` 时写指针(最新覆盖);briefing/失败/loop关 都不写。
+>   - 多加一个**过期指针守卫**:用户若在工作台答了该 question(status≠awaiting),消费者清掉过期指针并忽略该回复,不重复 answer。
+>   - 测试 19 例(consumer 15 + inbox-deliver 4),全 mock 无真实进程,CI 稳。**用 `sdk.trigger` 非 triggerVoid**(吸取 D3 教训)。
+> - **D5b ⬜ worker 启动长驻进程 + 实跑**(下一步):`src/index.ts` worker ready 后按 `isLarkReplyLoopEnabled()` spawn `lark-cli event consume im.message.receive_v1 --as bot --quiet`,stdout 逐行喂 D5a 的 `handleLine`;SIGTERM/关 stdin 优雅退(禁 kill -9);本地开 `AGENTMEMORY_LARK_REPLY_LOOP=true` 造 question→飞书回一句→工作台转 answered 实证。失败会集中在权限/scope/生命周期,不与映射语义混。
 
 ---
 
