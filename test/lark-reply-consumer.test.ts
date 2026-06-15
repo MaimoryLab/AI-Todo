@@ -24,8 +24,13 @@ const USER = "ou_target_user";
 function mockKV() {
   const store = new Map<string, Map<string, unknown>>();
   return {
-    get: async <T>(scope: string, key: string): Promise<T | null> =>
-      (store.get(scope)?.get(key) as T) ?? null,
+    // Mirror the real iii-engine state::get: a MISSING key resolves to
+    // `undefined`, not `null`. (The earlier `?? null` mock hid the
+    // duplicate_event bug where `!== null` dropped every first-seen event.)
+    get: async <T>(scope: string, key: string): Promise<T | null> => {
+      const bucket = store.get(scope);
+      return bucket && bucket.has(key) ? (bucket.get(key) as T) : (undefined as unknown as T);
+    },
     set: async <T>(scope: string, key: string, data: T): Promise<T> => {
       if (!store.has(scope)) store.set(scope, new Map());
       store.get(scope)!.set(key, data);
@@ -133,6 +138,18 @@ describe("D5a lark reply-consumer kernel", () => {
       payload: { id: "inbox_q1", answer: "改" },
     });
     expect(await getPendingReplyTarget(kv as never)).toBeNull();
+  });
+
+  it("first-seen event (missing dedup key → undefined) is NOT treated as duplicate", async () => {
+    // Regression: real iii-engine state::get returns undefined for a missing
+    // key. A `!== null` dedup check wrongly flagged every first event as
+    // duplicate_event and dropped the reply. A brand-new event must answer.
+    await seedQuestion("inbox_fresh");
+    await setPendingReplyTarget(kv as never, "inbox_fresh");
+    const out = await handler().handleLine(evt({ event_id: "evt_never_seen" }));
+    expect(out.action).toBe("answered");
+    expect(out.reason).toBeUndefined();
+    expect(trigger).toHaveBeenCalledTimes(1);
   });
 
   it("reply with no pending pointer is ignored (no answer)", async () => {

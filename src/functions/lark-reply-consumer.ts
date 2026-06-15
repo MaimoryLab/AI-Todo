@@ -146,7 +146,12 @@ function eventKey(eventId: string): string {
 }
 
 async function isEventProcessed(kv: StateKV, eventId: string): Promise<boolean> {
-  return (await kv.get<ProcessedEvent>(KV.delivery, eventKey(eventId))) !== null;
+  // The real iii-engine state::get returns `undefined` for a missing key, not
+  // `null`. A `!== null` check would treat a first-seen event (undefined) as a
+  // duplicate and silently drop every reply. Treat both null and undefined as
+  // "not processed".
+  const existing = await kv.get<ProcessedEvent>(KV.delivery, eventKey(eventId));
+  return existing != null;
 }
 
 async function markEventProcessed(kv: StateKV, eventId: string): Promise<void> {
