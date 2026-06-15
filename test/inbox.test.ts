@@ -4,6 +4,14 @@ vi.mock("../src/logger.js", () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
 
+// Delivery config gate (Line D / STEP-D3). Default OFF so the Line C inbox
+// behavior — and the 9 tests below — are unaffected. Per-test toggle via
+// mockGate.enabled. Only isLarkDeliveryEnabled is imported by inbox.ts.
+const mockGate = { enabled: false };
+vi.mock("../src/config.js", () => ({
+  isLarkDeliveryEnabled: () => mockGate.enabled,
+}));
+
 import { registerInboxFunction } from "../src/functions/inbox.js";
 import type { InboxItem } from "../src/types.js";
 
@@ -29,12 +37,14 @@ function mockKV() {
 
 function mockSdk() {
   const functions = new Map<string, Function>();
+  const triggerVoid = vi.fn();
   return {
     registerFunction: (idOrOpts: string | { id: string }, handler: Function) => {
       const id = typeof idOrOpts === "string" ? idOrOpts : idOrOpts.id;
       functions.set(id, handler);
     },
     registerTrigger: () => {},
+    triggerVoid,
     call: async (id: string, payload?: unknown) => {
       const fn = functions.get(id);
       if (!fn) throw new Error(`No function: ${id}`);
@@ -50,6 +60,7 @@ describe("Inbox Functions (Line C)", () => {
   beforeEach(() => {
     sdk = mockSdk();
     kv = mockKV();
+    mockGate.enabled = false;
     registerInboxFunction(sdk as never, kv as never);
   });
 
@@ -121,5 +132,43 @@ describe("Inbox Functions (Line C)", () => {
     await sdk.call("mem::inbox-ask", { body: "expired", expiresInMs: -1000 });
     const all = await sdk.call("mem::inbox-list", {});
     expect(all.items.length).toBe(0);
+  });
+
+  // Line D / STEP-D3 — fire-and-forget delivery dispatch on the write path.
+  describe("delivery dispatch (STEP-D3)", () => {
+    it("delivery OFF (default): ask/notify do NOT trigger deliver", async () => {
+      await sdk.call("mem::inbox-ask", { body: "q" });
+      await sdk.call("mem::inbox-notify", { body: "b" });
+      expect(sdk.triggerVoid).not.toHaveBeenCalled();
+    });
+
+    it("delivery ON: ask triggers mem::inbox-deliver with the persisted item", async () => {
+      mockGate.enabled = true;
+      const r = await sdk.call("mem::inbox-ask", { body: "要不要加鉴权?" });
+      expect(r.success).toBe(true);
+      expect(sdk.triggerVoid).toHaveBeenCalledTimes(1);
+      expect(sdk.triggerVoid).toHaveBeenCalledWith("mem::inbox-deliver", { item: r.item });
+    });
+
+    it("delivery ON: notify triggers mem::inbox-deliver with the persisted item", async () => {
+      mockGate.enabled = true;
+      const r = await sdk.call("mem::inbox-notify", { body: "今天完成了 3 件" });
+      expect(r.success).toBe(true);
+      expect(sdk.triggerVoid).toHaveBeenCalledTimes(1);
+      expect(sdk.triggerVoid).toHaveBeenCalledWith("mem::inbox-deliver", { item: r.item });
+    });
+
+    it("triggerVoid throwing does NOT break the inbox write (still success)", async () => {
+      mockGate.enabled = true;
+      sdk.triggerVoid.mockImplementationOnce(() => {
+        throw new Error("dispatch boom");
+      });
+      const r = await sdk.call("mem::inbox-ask", { body: "q" });
+      expect(r.success).toBe(true);
+      expect(r.item.status).toBe("awaiting");
+      // and the item was still persisted
+      const stored = await kv.get<InboxItem>("mem:inbox", r.item.id);
+      expect(stored?.id).toBe(r.item.id);
+    });
   });
 });

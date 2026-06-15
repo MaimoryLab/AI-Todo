@@ -3,6 +3,27 @@ import type { StateKV } from "../state/kv.js";
 import { KV, generateId } from "../state/schema.js";
 import type { InboxItem } from "../types.js";
 import { recordAudit } from "./audit.js";
+import { isLarkDeliveryEnabled } from "../config.js";
+import { logger } from "../logger.js";
+
+// Fire-and-forget cross-device delivery (Line D / STEP-D3). Called after an
+// inbox item is persisted+audited. Guarded by the delivery config gate so the
+// inbox behaves exactly as Line C when delivery is OFF (the default). The
+// dispatch is best-effort: any failure is logged and swallowed so it can never
+// affect the inbox write's return value. (mem::inbox-deliver applies its own
+// config gate + dedup; this guard just avoids dispatching when clearly off.)
+function dispatchDelivery(sdk: ISdk, item: InboxItem): void {
+  if (!isLarkDeliveryEnabled()) return;
+  try {
+    sdk.triggerVoid("mem::inbox-deliver", { item });
+  } catch (err) {
+    logger.warn("inbox delivery dispatch failed", {
+      itemId: item.id,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+}
+
 
 // Line C: Agent→user async inbox.
 // Unlike signals (agent↔agent, requires agentId), inbox items are always
@@ -30,6 +51,7 @@ export function registerInboxFunction(sdk: ISdk, kv: StateKV): void {
       kind: "question",
       fromAgent: data.fromAgent,
     });
+    dispatchDelivery(sdk, item);
     return { success: true, item };
   });
 
@@ -53,6 +75,7 @@ export function registerInboxFunction(sdk: ISdk, kv: StateKV): void {
       kind: "briefing",
       fromAgent: data.fromAgent,
     });
+    dispatchDelivery(sdk, item);
     return { success: true, item };
   });
 
