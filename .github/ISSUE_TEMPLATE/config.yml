@@ -1,8 +1,5 @@
 blank_issues_enabled: false
 contact_links:
-  - name: Questions & usage help
-    url: https://github.com/MaimoryLab/AI-Todo/discussions
-    about: Have a how-to question or need help using AI-Todo? Please ask in GitHub Discussions instead of opening an issue.
   - name: Report a security vulnerability
     url: https://github.com/MaimoryLab/AI-Todo/blob/main/SECURITY.md
     about: Do not open a public issue for security problems. Report them privately by following SECURITY.md.
