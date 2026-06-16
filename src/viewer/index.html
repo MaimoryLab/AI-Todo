@@ -1723,7 +1723,7 @@
     }
     .action-overview {
       display: grid;
-      grid-template-columns: repeat(4, minmax(0, 1fr));
+      grid-template-columns: repeat(5, minmax(0, 1fr));
       gap: 10px;
       margin-bottom: 12px;
     }
@@ -1816,6 +1816,8 @@
     }
     .inbox-card-question { border-left: 3px solid var(--danger, #dc2626); }
     .inbox-card-briefing { border-left: 3px solid var(--accent, #2563eb); }
+    .inbox-card-answered { border-left: 3px solid var(--green, #16a34a); background: #ffffff; }
+    .inbox-card-known { border-left: 3px solid var(--border); background: #ffffff; opacity: 0.9; }
     .inbox-card-head { display: flex; align-items: center; gap: 8px; margin-bottom: 5px; }
     .inbox-card-marker { font-size: 13px; flex-shrink: 0; }
     .inbox-card-from { font-size: 12px; font-weight: 600; color: var(--ink-muted, #6b7280); }
@@ -1825,6 +1827,18 @@
     .inbox-delivery-failed { color: var(--danger, #b42318); background: var(--danger-bg, rgba(180,35,24,0.10)); display: inline-flex; gap: 5px; align-items: baseline; max-width: 60%; overflow: hidden; }
     .inbox-delivery-err { font-weight: 400; opacity: 0.85; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .inbox-card-body { font-size: 13px; color: var(--ink, #1f2329); line-height: 1.5; overflow-wrap: anywhere; }
+    .inbox-card-body-muted { color: var(--ink-muted, #6b7280); }
+    .inbox-card-answer {
+      margin-top: 8px;
+      padding: 8px 10px;
+      border-radius: 7px;
+      background: rgba(22, 163, 74, 0.08);
+      color: var(--ink, #1f2329);
+      font-size: 12.5px;
+      line-height: 1.45;
+      overflow-wrap: anywhere;
+    }
+    .inbox-card-answer-label { color: var(--green, #16a34a); font-weight: 700; margin-right: 4px; }
     .inbox-card-actions { margin-top: 8px; }
     .inbox-subhead {
       display: flex; align-items: center; gap: 7px;
@@ -3932,7 +3946,7 @@
       activity: { loaded: false, observations: [], sessions: [], typeFilter: '', loadingPhase: '', warnings: [] },
       lessons: { loaded: false, items: [], search: '', skillSearch: '', skillRootFilter: 'all', mode: 'explicit', projects: [] },
       actions: { loaded: false, items: [], reviewItems: [], frontier: [], statusFilter: '', search: '', doneExpanded: false },
-      inbox: { loaded: false, items: [], replyingId: null, pendingById: {}, briefingExpanded: false },
+      inbox: { loaded: false, items: [], awaitingItems: [], answeredItems: [], dismissedItems: [], replyingId: null, pendingById: {}, briefingExpanded: false, answeredExpanded: false },
       crystals: { loaded: false, items: [], search: '', lessonMap: {} },
       profile: { loaded: false, projects: [], selectedProject: '', data: null },
       replay: { loaded: false, sessions: [], selectedId: '', timeline: null, cursor: 0, playing: false, speed: 1, timer: null, startAt: 0, offsetAt: 0 },
@@ -7985,7 +7999,9 @@
         apiGet('actions'),
         apiGet('frontier'),
         apiGet('review?status=pending&limit=200'),
-        apiGet('inbox?status=awaiting&limit=50')
+        apiGet('inbox?status=awaiting&limit=50'),
+        apiGet('inbox?status=answered&limit=50'),
+        apiGet('inbox?status=dismissed&limit=50')
       ]);
       var explicitActions = (results[0] && results[0].actions) || [];
       var frontier = (results[1] && (results[1].frontier || results[1].actions)) || [];
@@ -7997,7 +8013,10 @@
       state.actions.reviewItems = reviewItems;
       state.actions.frontier = frontier;
       state.actions.loaded = true;
-      state.inbox.items = (results[3] && results[3].items) || [];
+      state.inbox.awaitingItems = (results[3] && results[3].items) || [];
+      state.inbox.answeredItems = (results[4] && results[4].items) || [];
+      state.inbox.dismissedItems = (results[5] && results[5].items) || [];
+      state.inbox.items = state.inbox.awaitingItems;
       state.inbox.loaded = true;
       renderActions();
       if (generationPromise) {
@@ -8126,6 +8145,44 @@
       }
       return ''; // skipped → silent
     }
+    function inboxAwaiting() {
+      var s = state.inbox || {};
+      if (Array.isArray(s.awaitingItems) && s.awaitingItems.length) return s.awaitingItems;
+      return Array.isArray(s.items) ? s.items : [];
+    }
+    function inboxAnswered() {
+      var s = state.inbox || {};
+      return Array.isArray(s.answeredItems) ? s.answeredItems : [];
+    }
+    function inboxDismissed() {
+      var s = state.inbox || {};
+      return Array.isArray(s.dismissedItems) ? s.dismissedItems : [];
+    }
+    function sortInboxItems(items) {
+      return (items || []).slice().sort(function(a, b) {
+        return new Date((b && (b.answeredAt || b.dismissedAt || b.updatedAt || b.createdAt)) || 0).getTime() -
+          new Date((a && (a.answeredAt || a.dismissedAt || a.updatedAt || a.createdAt)) || 0).getTime();
+      });
+    }
+    function inboxSearchText(item) {
+      return [
+        item && item.body,
+        item && item.answer,
+        item && item.fromAgent,
+        item && item.status,
+        item && item.kind,
+      ].filter(Boolean).join(' ').toLowerCase();
+    }
+    function filterInboxItems(items, search) {
+      if (!search) return items || [];
+      return (items || []).filter(function(item) { return inboxSearchText(item).indexOf(search) >= 0; });
+    }
+    function inboxRecent(item) {
+      var ts = item && (item.answeredAt || item.dismissedAt || item.updatedAt || item.createdAt);
+      if (!ts) return false;
+      var t = new Date(ts).getTime();
+      return Number.isFinite(t) && Date.now() - t <= 24 * 60 * 60 * 1000;
+    }
     function renderInboxCard(item, kind) {
       var marker = kind === 'question' ? '🔴' : '📋';
       var from = inboxFromLabel(item);
@@ -8165,16 +8222,97 @@
       html += '</article>';
       return html;
     }
+    function renderInboxArchiveCard(item) {
+      var kind = item && item.kind === 'question' ? 'question' : 'briefing';
+      var answered = item && item.status === 'answered';
+      var marker = kind === 'question' ? '✅' : '✓';
+      var cls = answered && kind === 'question' ? 'inbox-card-answered' : 'inbox-card-known';
+      var from = inboxFromLabel(item);
+      var ts = (item && (item.answeredAt || item.dismissedAt || item.updatedAt || item.createdAt)) || '';
+      var html = '<article class="inbox-card ' + cls + '" data-inbox-id="' + esc((item && item.id) || '') + '">';
+      html += '<div class="inbox-card-head">';
+      html += '<span class="inbox-card-marker" aria-hidden="true">' + marker + '</span>';
+      if (from) html += '<span class="inbox-card-from">' + from + '</span>';
+      if (ts) html += '<span class="inbox-card-time">' + esc(shortTime(ts)) + '</span>';
+      html += '</div>';
+      html += '<div class="md-body inbox-card-body inbox-card-body-muted">' + renderMarkdownSafe((item && item.body) || '') + '</div>';
+      if (answered && kind === 'question') {
+        html += '<div class="inbox-card-answer"><span class="inbox-card-answer-label">你已回复：</span>' + esc((item && item.answer) || '知道了') + '</div>';
+      }
+      html += '</article>';
+      return html;
+    }
+    function renderAwaitingQuestionSection() {
+      var search = (state.actions.search || '').toLowerCase();
+      var items = filterInboxItems(sortInboxItems(inboxAwaiting()), search);
+      var questions = items.filter(function(i) { return i && i.kind === 'question'; });
+      if (!questions.length) return '';
+      var html = '<section class="card memory-section awaiting-reply-section" style="padding:14px 16px;margin-bottom:14px;background:#ffffff;">';
+      html += '<div class="memory-section-head"><div>';
+      html += '<div class="memory-section-title"><span class="awaiting-dot" aria-hidden="true"></span>待回应 (' + questions.length + ')</div>';
+      html += '<div class="memory-summary-sub" style="margin-top:3px;">Agent 运行中抛给你的、时间敏感的问题会汇集到这里。</div>';
+      html += '</div><span class="badge badge-muted">Agent 在等你回</span></div>';
+      html += '<div class="inbox-card-list">';
+      questions.forEach(function(it) { html += renderInboxCard(it, 'question'); });
+      html += '</div></section>';
+      return html;
+    }
+    function renderAwaitingBriefingSection() {
+      var search = (state.actions.search || '').toLowerCase();
+      var items = filterInboxItems(sortInboxItems(inboxAwaiting()), search);
+      var briefings = items.filter(function(i) { return i && i.kind === 'briefing'; });
+      if (!briefings.length) return '';
+      var bExpanded = !!state.inbox.briefingExpanded || !!search;
+      var html = '<section class="card memory-section awaiting-reply-section" style="padding:14px 16px;margin-bottom:14px;background:#ffffff;">';
+      html += '<button type="button" class="inbox-subhead inbox-subhead-toggle" data-action="toggle-briefings" aria-expanded="' + (bExpanded ? 'true' : 'false') + '">';
+      html += '<span class="inbox-subhead-marker" aria-hidden="true">📋</span>Agent 整理 (' + briefings.length + ')<span class="inbox-subhead-note">知悉即可</span>';
+      html += '<span class="inbox-subhead-caret">' + (bExpanded ? '▾' : '▸') + '</span>';
+      html += '</button>';
+      if (bExpanded) {
+        html += '<div class="inbox-card-list">';
+        briefings.forEach(function(it) { html += renderInboxCard(it, 'briefing'); });
+        html += '</div>';
+      }
+      html += '</section>';
+      return html;
+    }
+    function renderInboxArchiveSection() {
+      var search = (state.actions.search || '').toLowerCase();
+      var answered = inboxAnswered();
+      var dismissed = inboxDismissed();
+      var all = sortInboxItems(answered.concat(dismissed));
+      var visible = filterInboxItems(all, search);
+      if (!visible.length) return '';
+      var answeredQuestions = visible.filter(function(i) { return i && i.kind === 'question' && i.status === 'answered'; });
+      var known = visible.filter(function(i) { return !(i && i.kind === 'question' && i.status === 'answered'); });
+      var recentCount = visible.filter(inboxRecent).length;
+      var expanded = !!state.inbox.answeredExpanded || !!search;
+      var title = answeredQuestions.length ? '已回应 ' + answeredQuestions.length + ' 条' : '已回应';
+      if (recentCount && !expanded) title += ' · 最近 ' + recentCount + ' 条';
+      var html = '<section class="card memory-section inbox-archive-section" style="padding:14px 16px;margin-bottom:14px;background:#ffffff;">';
+      html += '<button type="button" class="inbox-subhead inbox-subhead-toggle" data-action="toggle-inbox-archive" aria-expanded="' + (expanded ? 'true' : 'false') + '">';
+      html += '<span class="inbox-subhead-marker" aria-hidden="true">✅</span>' + esc(title) + '<span class="inbox-subhead-note">只读归档</span>';
+      html += '<span class="inbox-subhead-caret">' + (expanded ? '▾' : '▸') + '</span>';
+      html += '</button>';
+      if (expanded) {
+        if (answeredQuestions.length) {
+          html += '<div class="inbox-card-list">';
+          answeredQuestions.forEach(function(it) { html += renderInboxArchiveCard(it); });
+          html += '</div>';
+        }
+        if (known.length) {
+          html += '<div class="inbox-subhead"><span class="inbox-subhead-marker" aria-hidden="true">✓</span>已知悉 (' + known.length + ')<span class="inbox-subhead-note">briefing / 已消解</span></div>';
+          html += '<div class="inbox-card-list">';
+          known.forEach(function(it) { html += renderInboxArchiveCard(it); });
+          html += '</div>';
+        }
+      }
+      html += '</section>';
+      return html;
+    }
     function renderAwaitingReplySection() {
       var search = (state.actions.search || '').toLowerCase();
-      var items = (state.inbox.items || []).slice().sort(function(a, b) {
-        return new Date((b && b.createdAt) || 0).getTime() - new Date((a && a.createdAt) || 0).getTime();
-      });
-      if (search) {
-        items = items.filter(function(i) {
-          return ((i.body || '') + ' ' + (i.fromAgent || '')).toLowerCase().indexOf(search) >= 0;
-        });
-      }
+      var items = filterInboxItems(sortInboxItems(inboxAwaiting()), search);
       var questions = items.filter(function(i) { return i && i.kind === 'question'; });
       var briefings = items.filter(function(i) { return i && i.kind === 'briefing'; });
 
@@ -8227,10 +8365,28 @@
     // 重渲染(乐观更新),避免全量 loadActions 抖动;失败用 flashHint 提示。
     function removeInboxItemLocal(id) {
       state.inbox.items = (state.inbox.items || []).filter(function(i) { return i && i.id !== id; });
+      state.inbox.awaitingItems = (state.inbox.awaitingItems || []).filter(function(i) { return i && i.id !== id; });
       if (state.inbox.replyingId === id) state.inbox.replyingId = null;
     }
     function findInboxItem(id) {
-      return (state.inbox.items || []).filter(function(i) { return i && i.id === id; })[0] || null;
+      return inboxAwaiting().filter(function(i) { return i && i.id === id; })[0] || null;
+    }
+    function archiveInboxItemLocal(id, status, answer) {
+      var item = findInboxItem(id);
+      removeInboxItemLocal(id);
+      if (!item) return;
+      var archived = Object.assign({}, item, {
+        status: status,
+        answer: answer || item.answer || '',
+        updatedAt: new Date().toISOString(),
+      });
+      if (status === 'answered') {
+        archived.answeredAt = archived.updatedAt;
+        state.inbox.answeredItems = [archived].concat(state.inbox.answeredItems || []);
+      } else {
+        archived.dismissedAt = archived.updatedAt;
+        state.inbox.dismissedItems = [archived].concat(state.inbox.dismissedItems || []);
+      }
     }
     // 防重入:动作进行中标记 pendingById[id],按钮渲染为 disabled,
     // 慢网下连点不会重复提交(尤其转待处理的 create 会重复建待办)。
@@ -8264,7 +8420,7 @@
       try {
         var res = await apiPost('inbox/answer', { id: id, answer: answer });
         if (!res || res.success !== true) { flashHint('回应未送达,请确认本地 worker 在运行'); return; }
-        removeInboxItemLocal(id);
+        archiveInboxItemLocal(id, 'answered', answer);
         flashHint('已回应,Agent 会看到');
       } finally {
         setInboxPending(id, false);
@@ -8279,7 +8435,7 @@
         // 空 answer = 已读/ack(briefing 或无需回的 question)。
         var res = await apiPost('inbox/answer', { id: id });
         if (!res || res.success !== true) { flashHint('操作未送达,请确认本地 worker 在运行'); return; }
-        removeInboxItemLocal(id);
+        archiveInboxItemLocal(id, 'answered', '');
         flashHint('已标记知道了');
       } finally {
         setInboxPending(id, false);
@@ -8305,7 +8461,7 @@
           loadActions({ generate: false });
           return;
         }
-        removeInboxItemLocal(id);
+        archiveInboxItemLocal(id, 'dismissed', '');
         state.actions.loaded = false;
         loadActions({ generate: false });
         flashHint('已转入待处理');
@@ -8487,10 +8643,11 @@
         if (!cleaned || cleaned === title || cleaned.indexOf(title) === 0) return '';
         return truncate(actionDescriptionText(cleaned), 96);
       }
-      function actionMetricCards(counts, reviewCount) {
+      function actionMetricCards(counts, reviewCount, waitingCount) {
         var metrics = [
-          { label: '待确认', value: reviewCount, primary: reviewCount > 0 },
-          { label: '待跟进', value: counts.pending + counts.blocked, primary: reviewCount === 0 && (counts.pending + counts.blocked) > 0 },
+          { label: '待回应', value: waitingCount, primary: waitingCount > 0 },
+          { label: '待确认', value: reviewCount, primary: waitingCount === 0 && reviewCount > 0 },
+          { label: '待跟进', value: counts.pending + counts.blocked, primary: waitingCount === 0 && reviewCount === 0 && (counts.pending + counts.blocked) > 0 },
           { label: '进行中', value: counts.active, primary: false },
           { label: '已完成', value: counts.done, primary: false }
         ];
@@ -8570,10 +8727,15 @@
       }
       var statusCounts = { active: 0, blocked: 0, pending: 0, done: 0, cancelled: 0 };
       items.forEach(function(a) { if (statusCounts[a.status] !== undefined) statusCounts[a.status] += 1; });
+      var searchForInbox = (state.actions.search || '').toLowerCase();
+      var waitingCount = filterInboxItems(sortInboxItems(inboxAwaiting()), searchForInbox).filter(function(i) { return i && i.kind === 'question'; }).length;
+      var awaitingQuestionsHtml = renderAwaitingQuestionSection();
+      var awaitingBriefingsHtml = renderAwaitingBriefingSection();
+      var inboxArchiveHtml = renderInboxArchiveSection();
 
       var html = renderActionFilters();
-      html += actionMetricCards(statusCounts, reviewItems.length);
-      html += renderAwaitingReplySection();
+      html += actionMetricCards(statusCounts, reviewItems.length, waitingCount);
+      html += awaitingQuestionsHtml;
 
       if (reviewItems.length) {
         html += '<section class="card memory-section" style="padding:14px 16px;margin-bottom:14px;background:#ffffff;">';
@@ -8585,7 +8747,9 @@
         html += '</div></section>';
       }
 
-      if (items.length === 0 && reviewItems.length === 0) {
+      html += awaitingBriefingsHtml;
+
+      if (items.length === 0 && reviewItems.length === 0 && !awaitingQuestionsHtml && !awaitingBriefingsHtml && !inboxArchiveHtml) {
         html += '<div class="empty-state">' +
           '<div class="empty-icon">&#9745;</div>' +
           '<div class="empty-title">还没有待办</div>' +
@@ -8619,6 +8783,7 @@
           html += renderDoneTodaySection(items.filter(function(a) { return a.status === 'done'; }), frontierIds, renderActionCard);
         }
       }
+      html += inboxArchiveHtml;
 
       var __focus = captureSearchFocus(['actions-search']);
       el.innerHTML = html;
@@ -9387,6 +9552,11 @@
       }
       if (action === 'toggle-briefings') {
         state.inbox.briefingExpanded = !state.inbox.briefingExpanded;
+        renderActions();
+        return;
+      }
+      if (action === 'toggle-inbox-archive') {
+        state.inbox.answeredExpanded = !state.inbox.answeredExpanded;
         renderActions();
         return;
       }

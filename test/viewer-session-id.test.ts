@@ -748,11 +748,14 @@ describe("viewer session rendering", () => {
     await flushPromises(8);
 
     expect(urls.some((url) => url.includes("actions"))).toBe(true);
+    expect(urls.some((url) => url.includes("inbox?status=awaiting"))).toBe(true);
+    expect(urls.some((url) => url.includes("inbox?status=answered"))).toBe(true);
+    expect(urls.some((url) => url.includes("inbox?status=dismissed"))).toBe(true);
     expect(urls.some((url) => url.includes("review/actions/generate"))).toBe(true);
     expect(getElement("view-actions").innerHTML).toContain("正在整理待办");
   });
 
-  it("renders the 待回应 section with an honest empty state when the inbox is empty (STEP-C2)", () => {
+  it("renders the action classification metrics without a false waiting section when inbox is empty", () => {
     const { sandbox, getElement } = loadViewerSandbox();
     sandbox.state.activeTab = "actions";
     sandbox.state.actions = {
@@ -766,17 +769,21 @@ describe("viewer session rendering", () => {
     sandbox.state.inbox = { loaded: true, items: [] };
     sandbox.renderActions();
     const html = getElement("view-actions").innerHTML;
-    // 分区存在且标题为「待回应」
-    expect(html).toContain("awaiting-reply-section");
     expect(html).toContain("待回应");
-    // 诚实空态:无待回应条目时显示空态文案
-    expect(html).toContain("暂无待回应");
+    expect(html).toContain("还没有待办");
+    expect(html).not.toContain("awaiting-reply-section");
+    expect(html).not.toContain("暂无待回应");
     // STEP-C2 已接通后端,不再出现「尚未接通」「即将上线」
     expect(html).not.toContain("尚未接通");
     expect(html).not.toContain("即将上线");
-    // 「待回应」出现在「完整对话过程」等 action 分组之前(顶部)
-    const idxAwaiting = html.indexOf("awaiting-reply-section");
-    const idxGroups = html.indexOf("action-group");
+    sandbox.state.inbox = {
+      loaded: true,
+      items: [{ id: "q1", kind: "question", body: "需要拍板", status: "awaiting", createdAt: "2026-06-15T10:00:00Z" }],
+    };
+    sandbox.renderActions();
+    const withQuestion = getElement("view-actions").innerHTML;
+    const idxAwaiting = withQuestion.indexOf("awaiting-reply-section");
+    const idxGroups = withQuestion.indexOf("action-group");
     expect(idxAwaiting).toBeGreaterThan(-1);
     expect(idxGroups === -1 || idxAwaiting < idxGroups).toBe(true);
   });
