@@ -594,4 +594,78 @@ describe("STEP-C2 viewer 待回应分区接真数据", () => {
     expect(html).not.toContain("<img src=x onerror");
     expect(html).toContain("&lt;img");
   });
+
+  it("answered question 进入已回应归档并显示用户回复", () => {
+    const { sandbox } = loadViewerSandbox();
+    sandbox.state.inbox = {
+      loaded: true,
+      items: [],
+      answeredItems: [
+        {
+          id: "answered-q",
+          kind: "question",
+          body: "演示验证：请直接在飞书里回复这条消息",
+          answer: "auto-ok",
+          fromAgent: "reply-loop-check",
+          status: "answered",
+          answeredAt: "2026-06-15T10:00:00Z",
+        },
+      ],
+      dismissedItems: [],
+      answeredExpanded: true,
+    };
+    const html = sandbox.renderInboxArchiveSection();
+    expect(html).toContain("已回应 1 条");
+    expect(html).toContain("演示验证");
+    expect(html).toContain("你已回复：");
+    expect(html).toContain("auto-ok");
+    expect(html).toContain("来自 reply-loop-check");
+  });
+
+  it("answered/dismissed briefing 进入已知悉归档,不出现在待回应", () => {
+    const { sandbox } = loadViewerSandbox();
+    sandbox.state.inbox = {
+      loaded: true,
+      items: [],
+      answeredItems: [
+        { id: "brief-ack", kind: "briefing", body: "本次整理完成", status: "answered", answeredAt: "2026-06-15T10:00:00Z" },
+      ],
+      dismissedItems: [
+        { id: "brief-dismissed", kind: "briefing", body: "旧简报已消解", status: "dismissed", dismissedAt: "2026-06-15T10:01:00Z" },
+      ],
+      answeredExpanded: true,
+    };
+    expect(sandbox.renderAwaitingReplySection()).toContain("暂无待回应");
+    const html = sandbox.renderInboxArchiveSection();
+    expect(html).toContain("已知悉 (2)");
+    expect(html).toContain("本次整理完成");
+    expect(html).toContain("旧简报已消解");
+    expect(html).not.toContain("data-action=\"inbox-ack\"");
+    expect(html).not.toContain("data-action=\"inbox-to-todo\"");
+  });
+
+  it("搜索可命中已回应 answer 与已知悉 briefing", () => {
+    const { sandbox } = loadViewerSandbox();
+    sandbox.state.inbox = {
+      loaded: true,
+      items: [],
+      answeredItems: [
+        { id: "q", kind: "question", body: "飞书同步验证", answer: "auto-ok", status: "answered", answeredAt: "2026-06-15T10:00:00Z" },
+      ],
+      dismissedItems: [
+        { id: "b", kind: "briefing", body: "Agent 整理归档", status: "dismissed", dismissedAt: "2026-06-15T10:01:00Z" },
+      ],
+      answeredExpanded: false,
+    };
+    sandbox.state.actions.search = "auto-ok";
+    let html = sandbox.renderInboxArchiveSection();
+    expect(html).toContain('aria-expanded="true"');
+    expect(html).toContain("飞书同步验证");
+    expect(html).not.toContain("Agent 整理归档");
+
+    sandbox.state.actions.search = "整理";
+    html = sandbox.renderInboxArchiveSection();
+    expect(html).toContain("Agent 整理归档");
+    expect(html).not.toContain("飞书同步验证");
+  });
 });
