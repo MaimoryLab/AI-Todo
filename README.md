@@ -57,6 +57,8 @@ AI Todo v1 focuses on the current core product plus the required launch constrai
 
 This repository currently contains the implementation foundation for the local daemon, local API, browser extension, and web UI. Some internal package names, CLI commands, and API paths may still use earlier implementation names while the product is being renamed to AI Todo.
 
+Under the hood, the current prototype still exposes the full implementation surface: **55 MCP tools** (8 visible by default — 55 tools, 6 resources, 3 prompts over MCP) and a local REST API serving **136 endpoints on port** 3111. These counts track the implementation that is mid-rename to AI Todo.
+
 Common local checks:
 
 ```bash
