@@ -121,6 +121,16 @@ Hook scripts in `src/hooks/` are standalone Node.js scripts (no iii-sdk import).
 - Test files go in `test/` with `.test.ts` extension
 - Follow existing patterns in `test/crystallize.test.ts` for function tests
 
+## Done Means
+
+A change is done only when:
+
+- Relevant tests pass — run `./scripts/test.sh` (= `npm test`); add or update tests for behavior changes.
+- The pre-PR gate is green: `npm run pre-pr` (consistency + build + test).
+- The change stays scoped to the requested task; the diff stays small (soft cap ~400 lines) and the product stays usable.
+- If MCP tools / REST endpoints / version changed, the Consistency Rules above were applied across every listed file.
+- Public-facing copy and docs follow the language policy (English-first).
+
 ## Current Stats (v0.9.24)
 
 - 55 MCP tools (8 visible by default, `AGENTMEMORY_TOOLS=all` for all)
