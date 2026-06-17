@@ -40,6 +40,7 @@ describe("review action candidates", () => {
     kv = mockKV();
     registerActionsFunction(sdk as never, kv as never);
     registerActionCandidateFunctions(sdk as never, kv as never);
+    sdk.registerFunction("mem::todo-extract-generate", async (payload) => ({ success: true, ...payload }));
     sdk.registerFunction("api::session::start", async () => ({ success: true }));
     sdk.registerFunction("mem::observe", async () => ({ success: true }));
     sdk.registerFunction("mem::remember", async () => ({ success: true, memory: { id: "mem_1" } }));
@@ -96,6 +97,33 @@ describe("review action candidates", () => {
     })) as { body: { generated: number; items: ReviewQueueItem[] } };
     expect(second.body.generated).toBe(0);
     expect(second.body.items).toEqual([]);
+  });
+
+  it("manually triggers todo extraction through the API", async () => {
+    const response = await sdk.trigger("api::todo-extract-generate", req({
+      maxSessions: 3,
+      maxObservationsPerSession: 20,
+      project: "agentmemory-lab",
+      force: true,
+    })) as { status_code: number; body: Record<string, unknown> };
+
+    expect(response.status_code).toBe(200);
+    expect(response.body).toMatchObject({
+      success: true,
+      maxSessions: 3,
+      maxObservationsPerSession: 20,
+      project: "agentmemory-lab",
+      force: true,
+    });
+  });
+
+  it("rejects invalid todo extraction limits through the API", async () => {
+    const response = await sdk.trigger("api::todo-extract-generate", req({
+      maxSessions: 0,
+    })) as { status_code: number; body: Record<string, unknown> };
+
+    expect(response.status_code).toBe(400);
+    expect(response.body).toMatchObject({ error: "maxSessions must be a positive integer" });
   });
 
   it("approves generated session action reviews into the source session project when request project is omitted", async () => {

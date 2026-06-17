@@ -1446,6 +1446,35 @@ export function registerApiTriggers(
     config: { api_path: "/agentmemory/review/actions/generate", http_method: "POST" },
   });
 
+  sdk.registerFunction("api::todo-extract-generate",
+    async (req: ApiRequest): Promise<Response> => {
+      const authErr = checkAuth(req, secret);
+      if (authErr) return authErr;
+      const body = (req.body ?? {}) as Record<string, unknown>;
+      const maxSessions = parseOptionalPositiveInt(body.maxSessions);
+      if (maxSessions === null) {
+        return { status_code: 400, body: { error: "maxSessions must be a positive integer" } };
+      }
+      const maxObservationsPerSession = parseOptionalPositiveInt(body.maxObservationsPerSession);
+      if (maxObservationsPerSession === null) {
+        return { status_code: 400, body: { error: "maxObservationsPerSession must be a positive integer" } };
+      }
+      const payload: Record<string, unknown> = {};
+      if (maxSessions !== undefined) payload.maxSessions = maxSessions;
+      if (maxObservationsPerSession !== undefined) payload.maxObservationsPerSession = maxObservationsPerSession;
+      const project = asNonEmptyString(body.project);
+      if (project) payload.project = project;
+      if (body.force === true) payload.force = true;
+      const result = await sdk.trigger({ function_id: "mem::todo-extract-generate", payload });
+      return { status_code: 200, body: result };
+    },
+  );
+  sdk.registerTrigger({
+    type: "http",
+    function_id: "api::todo-extract-generate",
+    config: { api_path: "/agentmemory/todo-extract/generate", http_method: "POST" },
+  });
+
   sdk.registerFunction("api::review-approve",
     async (req: ApiRequest): Promise<Response> => {
       const authErr = checkAuth(req, secret);

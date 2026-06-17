@@ -37,6 +37,37 @@ def load_langextract():
         raise SystemExit(f"langextract unavailable: {exc}") from exc
 
 
+def extract_kwargs(lx, model_id: str, model_config_cls=None) -> dict:
+    provider = os.environ.get("LANGEXTRACT_PROVIDER", "").strip().lower()
+    api_key = os.environ.get("LANGEXTRACT_API_KEY", "").strip()
+    base_url = os.environ.get("LANGEXTRACT_BASE_URL", "").strip()
+    thinking_depth = os.environ.get("LANGEXTRACT_THINKING_DEPTH", "medium").strip()
+    params = {
+        "extraction_passes": int(os.environ.get("LANGEXTRACT_PASSES", "2")),
+        "max_workers": int(os.environ.get("LANGEXTRACT_MAX_WORKERS", "4")),
+        "max_char_buffer": int(os.environ.get("LANGEXTRACT_MAX_CHAR_BUFFER", "1600")),
+    }
+    if provider == "openai":
+        if not api_key:
+            raise SystemExit("LANGEXTRACT_API_KEY is required for LANGEXTRACT_PROVIDER=openai")
+        if model_config_cls is None:
+            from langextract.factory import ModelConfig as model_config_cls  # type: ignore
+
+        provider_kwargs = {"api_key": api_key}
+        if base_url:
+            provider_kwargs["base_url"] = base_url
+        if thinking_depth:
+            provider_kwargs["reasoning_effort"] = thinking_depth
+        params["config"] = model_config_cls(
+            model_id=model_id,
+            provider="openai",
+            provider_kwargs=provider_kwargs,
+        )
+    else:
+        params["model_id"] = model_id
+    return params
+
+
 def main() -> int:
     payload = json.load(sys.stdin)
     blocks = payload.get("blocks") or []
@@ -73,15 +104,12 @@ def main() -> int:
             ],
         )
     ]
-    model_id = os.environ.get("LANGEXTRACT_MODEL") or os.environ.get("GEMINI_MODEL") or "gemini-3.5-flash"
+    model_id = os.environ.get("LANGEXTRACT_MODEL") or os.environ.get("GEMINI_MODEL") or "pa/gpt-5.5"
     result = lx.extract(
         text_or_documents=text,
         prompt_description=PROMPT,
         examples=examples,
-        model_id=model_id,
-        extraction_passes=int(os.environ.get("LANGEXTRACT_PASSES", "2")),
-        max_workers=int(os.environ.get("LANGEXTRACT_MAX_WORKERS", "4")),
-        max_char_buffer=int(os.environ.get("LANGEXTRACT_MAX_CHAR_BUFFER", "1600")),
+        **extract_kwargs(lx, model_id),
     )
 
     todos = []
@@ -120,4 +148,23 @@ def main() -> int:
 
 
 if __name__ == "__main__":
+    if os.environ.get("LANGEXTRACT_SELF_TEST") == "1":
+        class DummyConfig:
+            def __init__(self, **kwargs):
+                self.__dict__.update(kwargs)
+
+        class DummyFactory:
+            ModelConfig = DummyConfig
+
+        class DummyLx:
+            factory = DummyFactory
+
+        params = extract_kwargs(DummyLx, os.environ.get("LANGEXTRACT_MODEL", "pa/gpt-5.5"), DummyConfig)
+        config = params.get("config")
+        assert config.model_id == "pa/gpt-5.5"
+        assert config.provider == "openai"
+        assert config.provider_kwargs["base_url"] == "https://api.novita.ai/openai/v1"
+        assert config.provider_kwargs["reasoning_effort"] == "medium"
+        print("ok")
+        raise SystemExit(0)
     raise SystemExit(main())
