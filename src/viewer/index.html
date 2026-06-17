@@ -3862,13 +3862,91 @@
         'tab.dashboard': 'Overview', 'tab.actions': 'To-Do', 'tab.sessions': 'Evidence',
         'status.pending': 'Pending', 'status.active': 'In progress', 'status.done': 'Done',
         'status.blocked': 'Blocked', 'status.cancelled': 'Cancelled',
-        'filter.review': 'Review', 'filter.all': 'All'
+        'filter.review': 'Review', 'filter.all': 'All',
+        'dash.firstRun.kicker': 'First run',
+        'dash.firstRun.title': 'Import sample data first',
+        'dash.firstRun.body': 'No session data yet. Run the demo and the page will fill with browsable memory and activity.',
+        'dash.firstRun.link': 'View quick start &rarr;',
+        'dash.noRecord': 'No records yet',
+        'dash.stat.sessions': 'Sessions',
+        'dash.stat.recent': 'Latest',
+        'dash.stat.memories': 'Memories',
+        'dash.stat.latestVersion': 'Latest version',
+        'dash.stat.lessons': 'Lessons',
+        'dash.stat.lessonsSub': 'Lessons to organize',
+        'dash.stat.graphNodes': 'Graph nodes',
+        'dash.stat.edges': 'Edges',
+        'dash.stat.status': 'Status',
+        'dash.stat.toolCalls': 'Tool calls',
+        'dash.stat.tracking': 'Tracking',
+        'dash.stat.functions': 'functions',
+        'dash.stat.circuitBreaker': 'Circuit breaker',
+        'dash.stat.failed': 'Failed',
+        'dash.stat.times': 'times',
+        'dash.systemResources': 'System resources',
+        'dash.alerts': 'Alerts',
+        'dash.notes': 'Notes',
+        'dash.recentSessions': 'Recent sessions',
+        'dash.emptySessions': 'No session data yet. Run the demo or connect your workflow.',
+        'dash.unnamedSession': 'Unnamed session',
+        'dash.openLatestSyncOf': 'Open latest sync of',
+        'dash.syncs': 'syncs',
+        'dash.records': 'records',
+        'dash.lastSync': 'Last sync',
+        'dash.functionMetrics': 'Function metrics (OTel)',
+        'dash.workers': 'Workers',
+        'dash.circuitBreakerDetail': 'Circuit breaker detail',
+        'dash.semanticMemory': 'Semantic memory',
+        'dash.emptySemantic': 'No semantic memory yet; the system distills it from observations over time.',
+        'dash.proceduralMemory': 'Procedural memory',
+        'dash.emptyProcedural': 'No procedural memory yet; repeated patterns are extracted automatically.',
+        'dash.consolidationStatus': 'Consolidation status',
+        'dash.memoryRelations': 'Memory relations'
       },
       zh: {
         'tab.dashboard': '总览', 'tab.actions': '待办', 'tab.sessions': '证据',
         'status.pending': '待处理', 'status.active': '进行中', 'status.done': '已完成',
         'status.blocked': '受阻', 'status.cancelled': '已取消',
-        'filter.review': '待确认', 'filter.all': '全部'
+        'filter.review': '待确认', 'filter.all': '全部',
+        'dash.firstRun.kicker': '首次使用',
+        'dash.firstRun.title': '先导入示例数据',
+        'dash.firstRun.body': '目前还没有会话数据。先运行 demo，页面就会出现可浏览的记忆与活动。',
+        'dash.firstRun.link': '查看快速开始 &rarr;',
+        'dash.noRecord': '暂无记录',
+        'dash.stat.sessions': '会话',
+        'dash.stat.recent': '最近',
+        'dash.stat.memories': '记忆',
+        'dash.stat.latestVersion': '最新版本',
+        'dash.stat.lessons': '经验',
+        'dash.stat.lessonsSub': '可整理经验',
+        'dash.stat.graphNodes': '关系节点',
+        'dash.stat.edges': '连线',
+        'dash.stat.status': '状态',
+        'dash.stat.toolCalls': '工具调用',
+        'dash.stat.tracking': '追踪',
+        'dash.stat.functions': '个函数',
+        'dash.stat.circuitBreaker': '熔断器',
+        'dash.stat.failed': '失败',
+        'dash.stat.times': '次',
+        'dash.systemResources': '系统资源',
+        'dash.alerts': '告警',
+        'dash.notes': '备注',
+        'dash.recentSessions': '最近会话',
+        'dash.emptySessions': '还没有会话数据。先运行 demo 或接入你的工作流。',
+        'dash.unnamedSession': '未命名会话',
+        'dash.openLatestSyncOf': '打开最新同步 ·',
+        'dash.syncs': '次同步',
+        'dash.records': '条记录',
+        'dash.lastSync': '最近同步',
+        'dash.functionMetrics': '函数指标 (OTel)',
+        'dash.workers': '工作进程',
+        'dash.circuitBreakerDetail': '熔断器详情',
+        'dash.semanticMemory': '语义记忆',
+        'dash.emptySemantic': '还没有语义记忆，系统会逐步从观察中沉淀。',
+        'dash.proceduralMemory': '流程记忆',
+        'dash.emptyProcedural': '还没有流程记忆，重复模式会自动提炼。',
+        'dash.consolidationStatus': '归并状态',
+        'dash.memoryRelations': '记忆关系'
       }
     };
     var I18N_LANG = 'zh';
@@ -5385,32 +5463,32 @@
       // First-run hero: empty dashboard = guided next step
       if (d.sessions.length === 0) {
         html += '<div class="card" style="margin-bottom:14px;padding:24px 28px;background:var(--bg-subtle);border-left:3px solid var(--accent);">' +
-          '<div style="font-family:var(--font-ui);font-size:11px;letter-spacing:0.15em;text-transform:uppercase;color:var(--accent);font-weight:700;margin-bottom:8px;">首次使用</div>' +
-          '<div style="font-family:var(--font-display,Lora,Georgia,serif);font-size:22px;font-weight:700;color:var(--ink);margin-bottom:8px;">先导入示例数据</div>' +
-          '<div style="font-size:13px;color:var(--ink-muted);margin-bottom:12px;line-height:1.5;max-width:640px;">目前还没有会话数据。先运行 demo，页面就会出现可浏览的记忆与活动。</div>' +
+          '<div style="font-family:var(--font-ui);font-size:11px;letter-spacing:0.15em;text-transform:uppercase;color:var(--accent);font-weight:700;margin-bottom:8px;">' + t('dash.firstRun.kicker') + '</div>' +
+          '<div style="font-family:var(--font-display,Lora,Georgia,serif);font-size:22px;font-weight:700;color:var(--ink);margin-bottom:8px;">' + t('dash.firstRun.title') + '</div>' +
+          '<div style="font-size:13px;color:var(--ink-muted);margin-bottom:12px;line-height:1.5;max-width:640px;">' + t('dash.firstRun.body') + '</div>' +
           '<pre style="display:inline-block;margin:0;padding:10px 14px;background:var(--bg);border:1px solid var(--border);border-radius:4px;font-family:var(--font-mono);font-size:12px;color:var(--ink);">node dist/cli.mjs demo</pre>' +
-          '<div style="margin-top:10px;"><a class="empty-link" href="https://github.com/MaimoryLab/agentmemory-lab#quick-start" target="_blank" rel="noopener" style="font-size:12px;">查看快速开始 &rarr;</a></div>' +
+          '<div style="margin-top:10px;"><a class="empty-link" href="https://github.com/MaimoryLab/agentmemory-lab#quick-start" target="_blank" rel="noopener" style="font-size:12px;">' + t('dash.firstRun.link') + '</a></div>' +
           '</div>';
       }
       html += '<div class="stats-grid">';
-      var latestSessionTime = d.sessions.length ? shortDateTime(sessionRecordTime(d.sessions.slice().sort(function(a, b) { return (sessionRecordTime(b) || '').localeCompare(sessionRecordTime(a) || ''); })[0])) : '暂无记录';
-      html += '<div class="stat-card"><div class="label">会话</div><div class="value">' + d.sessions.length + '</div><div class="sub">最近 ' + esc(latestSessionTime) + '</div></div>';
-      html += '<div class="stat-card"><div class="label">记忆</div><div class="value">' + d.memories.length + '</div><div class="sub">最新版本</div></div>';
+      var latestSessionTime = d.sessions.length ? shortDateTime(sessionRecordTime(d.sessions.slice().sort(function(a, b) { return (sessionRecordTime(b) || '').localeCompare(sessionRecordTime(a) || ''); })[0])) : t('dash.noRecord');
+      html += '<div class="stat-card"><div class="label">' + t('dash.stat.sessions') + '</div><div class="value">' + d.sessions.length + '</div><div class="sub">' + t('dash.stat.recent') + ' ' + esc(latestSessionTime) + '</div></div>';
+      html += '<div class="stat-card"><div class="label">' + t('dash.stat.memories') + '</div><div class="value">' + d.memories.length + '</div><div class="sub">' + t('dash.stat.latestVersion') + '</div></div>';
       var lessonCount = (d.lessons || []).length;
-      html += '<div class="stat-card"><div class="label">经验</div><div class="value">' + lessonCount + '</div><div class="sub">可整理经验</div></div>';
+      html += '<div class="stat-card"><div class="label">' + t('dash.stat.lessons') + '</div><div class="value">' + lessonCount + '</div><div class="sub">' + t('dash.stat.lessonsSub') + '</div></div>';
       if (nodeCount > 0 || edgeCount > 0) {
-        html += '<div class="stat-card"><div class="label">关系节点</div><div class="value">' + nodeCount + '</div><div class="sub">连线 ' + edgeCount + '</div></div>';
+        html += '<div class="stat-card"><div class="label">' + t('dash.stat.graphNodes') + '</div><div class="value">' + nodeCount + '</div><div class="sub">' + t('dash.stat.edges') + ' ' + edgeCount + '</div></div>';
       }
-      html += '<div class="stat-card"><div class="label">状态</div><div class="value"><div class="health-bar"><span class="health-dot ' + dotClass + '"></span> ' + esc(healthStatus) + '</div></div>';
+      html += '<div class="stat-card"><div class="label">' + t('dash.stat.status') + '</div><div class="value"><div class="health-bar"><span class="health-dot ' + dotClass + '"></span> ' + esc(healthStatus) + '</div></div>';
       html += '<div class="sub">' + esc(snap.connectionState || 'unknown') + '</div></div>';
       if (showDebug) {
         var totalCalls = fMetrics.reduce(function(a, m) { return a + (m.totalCalls || 0); }, 0);
-        html += '<div class="stat-card"><div class="label">工具调用</div><div class="value">' + totalCalls + '</div><div class="sub">追踪 ' + fMetrics.length + ' 个函数</div></div>';
+        html += '<div class="stat-card"><div class="label">' + t('dash.stat.toolCalls') + '</div><div class="value">' + totalCalls + '</div><div class="sub">' + t('dash.stat.tracking') + ' ' + fMetrics.length + ' ' + t('dash.stat.functions') + '</div></div>';
       }
       if (showDebug && cb) {
         var cbClass = cb.state === 'closed' ? 'cb-closed' : cb.state === 'open' ? 'cb-open' : 'cb-half-open';
-        html += '<div class="stat-card"><div class="label">熔断器</div><div class="value"><span class="cb-indicator ' + cbClass + '">' + esc(cb.state) + '</span></div>';
-        html += '<div class="sub">失败 ' + (cb.failures || 0) + ' 次</div></div>';
+        html += '<div class="stat-card"><div class="label">' + t('dash.stat.circuitBreaker') + '</div><div class="value"><span class="cb-indicator ' + cbClass + '">' + esc(cb.state) + '</span></div>';
+        html += '<div class="sub">' + t('dash.stat.failed') + ' ' + (cb.failures || 0) + ' ' + t('dash.stat.times') + '</div></div>';
       }
       var totalObs = d.sessions.reduce(function(a, s) { return a + (s.observationCount || 0); }, 0);
       var tokenBudget = parseInt(new URLSearchParams(window.location.search).get('tokenBudget') || '2000', 10) || 2000;
@@ -5423,7 +5501,7 @@
       html += renderDeliveryStatusCard(d.delivery, { debug: showDebug });
 
       if (showDebug && (snap.memory || snap.cpu)) {
-        html += '<div class="card" style="margin-bottom:16px"><div class="card-title">系统资源</div>';
+        html += '<div class="card" style="margin-bottom:16px"><div class="card-title">' + t('dash.systemResources') + '</div>';
         if (snap.memory) {
           var heapUsed = Math.round((snap.memory.heapUsed || 0) / 1024 / 1024);
           var heapTotal = Math.round((snap.memory.heapTotal || 0) / 1024 / 1024);
@@ -5458,7 +5536,7 @@
       }
 
       if (showDebug && snap.alerts && snap.alerts.length > 0) {
-        html += '<div class="card" style="margin-bottom:16px;border-color:var(--accent);border-width:2px;"><div class="card-title" style="color:var(--accent);border-bottom-color:var(--accent);">告警 (' + snap.alerts.length + ')</div>';
+        html += '<div class="card" style="margin-bottom:16px;border-color:var(--accent);border-width:2px;"><div class="card-title" style="color:var(--accent);border-bottom-color:var(--accent);">' + t('dash.alerts') + ' (' + snap.alerts.length + ')</div>';
         snap.alerts.forEach(function(al) {
           html += '<div style="font-size:12px;color:var(--accent);padding:4px 0;border-bottom:1px solid var(--border-light);font-family:var(--font-ui);">' + esc(al) + '</div>';
         });
@@ -5466,31 +5544,31 @@
       }
 
       if (showDebug && snap.notes && snap.notes.length > 0) {
-        html += '<div class="card" style="margin-bottom:16px;"><div class="card-title" style="color:var(--ink-muted);">备注 (' + snap.notes.length + ')</div>';
+        html += '<div class="card" style="margin-bottom:16px;"><div class="card-title" style="color:var(--ink-muted);">' + t('dash.notes') + ' (' + snap.notes.length + ')</div>';
         snap.notes.forEach(function(n) {
           html += '<div style="font-size:12px;color:var(--ink-muted);padding:4px 0;border-bottom:1px solid var(--border-light);font-family:var(--font-ui);">' + esc(n) + '</div>';
         });
         html += '</div>';
       }
 
-      html += '<div class="card"><div class="card-title">最近会话</div>';
+      html += '<div class="card"><div class="card-title">' + t('dash.recentSessions') + '</div>';
       if (d.sessions.length === 0) {
-        html += '<div class="empty-state"><p>还没有会话数据。先运行 demo 或接入你的工作流。</p></div>';
+        html += '<div class="empty-state"><p>' + t('dash.emptySessions') + '</p></div>';
       } else {
         var recentGroups = groupSessionsByProject(d.sessions).slice(0, 5);
         html += '<div class="folder-grid">';
         recentGroups.forEach(function(g) {
           var latest = g.sessions && g.sessions[0];
           var latestId = sessionId(latest);
-          var cardName = g.hasMissingId ? '未命名会话' : g.name;
-          html += '<button type="button" class="folder-card" data-action="open-session-group" data-session-id="' + esc(latestId || '') + '" title="' + esc(g.key) + '" aria-label="打开 ' + esc(cardName) + ' 的最新同步">';
+          var cardName = g.hasMissingId ? t('dash.unnamedSession') : g.name;
+          html += '<button type="button" class="folder-card" data-action="open-session-group" data-session-id="' + esc(latestId || '') + '" title="' + esc(g.key) + '" aria-label="' + t('dash.openLatestSyncOf') + ' ' + esc(cardName) + '">';
           html += '<div class="folder-title">' + esc(cardName) + '</div>';
           html += '<div class="folder-path">' + esc(g.key) + '</div>';
           html += '<div class="folder-meta">';
-          html += '<span><svg viewBox="0 0 24 24" fill="none" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="5" width="16" height="14" rx="2"/><path d="M8 9h8M8 13h5"/></svg>' + g.count + ' 次同步</span>';
-          html += '<span><svg viewBox="0 0 24 24" fill="none" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 4.5A2.5 2.5 0 0 1 7.5 2H19v20H7.5A2.5 2.5 0 0 1 5 19.5z"/><path d="M5 19.5A2.5 2.5 0 0 1 7.5 17H19"/></svg>' + g.observations + ' 条记录</span>';
+          html += '<span><svg viewBox="0 0 24 24" fill="none" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="5" width="16" height="14" rx="2"/><path d="M8 9h8M8 13h5"/></svg>' + g.count + ' ' + t('dash.syncs') + '</span>';
+          html += '<span><svg viewBox="0 0 24 24" fill="none" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 4.5A2.5 2.5 0 0 1 7.5 2H19v20H7.5A2.5 2.5 0 0 1 5 19.5z"/><path d="M5 19.5A2.5 2.5 0 0 1 7.5 17H19"/></svg>' + g.observations + ' ' + t('dash.records') + '</span>';
           html += '</div>';
-          html += '<div class="folder-time">最近同步 ' + esc(shortDateTime(g.latest)) + '</div>';
+          html += '<div class="folder-time">' + t('dash.lastSync') + ' ' + esc(shortDateTime(g.latest)) + '</div>';
           html += '</button>';
         });
         html += '</div>';
@@ -5499,7 +5577,7 @@
 
       if (showDebug && fMetrics.length > 0) {
         var sorted = fMetrics.slice().sort(function(a, b) { return (b.totalCalls || 0) - (a.totalCalls || 0); });
-        html += '<div class="card" style="margin-top:16px"><div class="card-title">函数指标 (OTel)</div>';
+        html += '<div class="card" style="margin-top:16px"><div class="card-title">' + t('dash.functionMetrics') + '</div>';
         html += '<table class="metric-table"><tr><th>Function</th><th style="text-align:right">Calls</th><th style="text-align:right">Success</th><th style="text-align:right">Fail</th><th style="text-align:right">Avg Latency</th><th style="text-align:right">Quality</th></tr>';
         sorted.forEach(function(m) {
           var successRate = m.totalCalls > 0 ? Math.round((m.successCount / m.totalCalls) * 100) : 0;
@@ -5518,7 +5596,7 @@
       }
 
       if (showDebug && workers.length > 0) {
-        html += '<div class="card" style="margin-top:16px"><div class="card-title">工作进程</div>';
+        html += '<div class="card" style="margin-top:16px"><div class="card-title">' + t('dash.workers') + '</div>';
         workers.forEach(function(w) {
           var statusClass = w.status === 'running' ? 'running' : w.status === 'starting' ? 'starting' : 'stopped';
           html += '<div class="worker-row"><span class="worker-dot ' + statusClass + '"></span>';
@@ -5530,7 +5608,7 @@
       }
 
       if (showDebug && cb && cb.state !== 'closed') {
-        html += '<div class="card" style="margin-top:16px;border-color:var(--accent);border-width:2px;"><div class="card-title" style="color:var(--accent);">熔断器详情</div>';
+        html += '<div class="card" style="margin-top:16px;border-color:var(--accent);border-width:2px;"><div class="card-title" style="color:var(--accent);">' + t('dash.circuitBreakerDetail') + '</div>';
         html += '<div class="detail-row"><div class="dl">State</div><div class="dv"><span class="cb-indicator ' + (cb.state === 'open' ? 'cb-open' : 'cb-half-open') + '">' + esc(cb.state) + '</span></div></div>';
         html += '<div class="detail-row"><div class="dl">Failures</div><div class="dv" style="color:var(--accent);font-family:var(--font-mono);">' + (cb.failures || 0) + '</div></div>';
         if (cb.lastFailureAt) html += '<div class="detail-row"><div class="dl">Last Failure</div><div class="dv" style="font-family:var(--font-mono);font-size:12px;">' + esc(formatTime(cb.lastFailureAt)) + '</div></div>';
@@ -5546,9 +5624,9 @@
       html += '<hr class="section-rule">';
       html += '<div class="two-col">';
 
-      html += '<div class="card"><div class="card-title">语义记忆</div>';
+      html += '<div class="card"><div class="card-title">' + t('dash.semanticMemory') + '</div>';
       if (semFacts.length === 0) {
-        html += '<div style="font-size:13px;color:var(--ink-faint);font-style:italic;">还没有语义记忆，系统会逐步从观察中沉淀。</div>';
+        html += '<div style="font-size:13px;color:var(--ink-faint);font-style:italic;">' + t('dash.emptySemantic') + '</div>';
       } else {
           semFacts.slice(0, 5).forEach(function(f) {
             var conf = typeof f.confidence === 'number' ? Math.round(f.confidence * 100) : null;
@@ -5564,9 +5642,9 @@
         }
         html += '</div>';
 
-        html += '<div class="card"><div class="card-title">流程记忆</div>';
+        html += '<div class="card"><div class="card-title">' + t('dash.proceduralMemory') + '</div>';
       if (procItems.length === 0) {
-        html += '<div style="font-size:13px;color:var(--ink-faint);font-style:italic;">还没有流程记忆，重复模式会自动提炼。</div>';
+        html += '<div style="font-size:13px;color:var(--ink-faint);font-style:italic;">' + t('dash.emptyProcedural') + '</div>';
       } else {
           procItems.slice(0, 5).forEach(function(p) {
             html += '<div class="procedure-item">';
@@ -5586,14 +5664,14 @@
 
       html += '</div>';
 
-      html += '<div class="card" style="margin-top:16px;"><div class="card-title">归并状态</div>';
+      html += '<div class="card" style="margin-top:16px;"><div class="card-title">' + t('dash.consolidationStatus') + '</div>';
       html += '<div class="consolidation-row"><span class="cl">Semantic facts</span><span class="cv">' + semFacts.length + '</span></div>';
       html += '<div class="consolidation-row"><span class="cl">Procedures</span><span class="cv">' + procItems.length + '</span></div>';
       html += '<div class="consolidation-row"><span class="cl">Relations</span><span class="cv">' + relItems.length + '</span></div>';
       html += '</div>';
 
       if (relItems.length > 0) {
-        html += '<div class="card" style="margin-top:16px;"><div class="card-title">记忆关系</div>';
+        html += '<div class="card" style="margin-top:16px;"><div class="card-title">' + t('dash.memoryRelations') + '</div>';
         relItems.slice(0, 8).forEach(function(r) {
           var relType = r.type || r.relationType || 'related';
           var badgeClass = relType === 'supersedes' ? 'badge-red' : relType === 'extends' ? 'badge-green' : relType === 'contradicts' ? 'badge-yellow' : 'badge-muted';

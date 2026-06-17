@@ -79,4 +79,14 @@ describe("viewer i18n base", () => {
     // render still keys display off the stored enum, so filtering/storage is untouched
     expect(html).toContain("statusLabel(a.status)");
   });
+
+  it("dashboard strings are externalized to the catalog (PLAN-001 STEP-02a)", () => {
+    const { html } = renderViewerDocument();
+    // dashboard render routes through t(), not inline Chinese
+    expect(html).toContain("t('dash.recentSessions')");
+    expect(html).toContain("t('dash.firstRun.title')");
+    // the catalog carries both locales for a dashboard key
+    expect(html).toContain("'dash.recentSessions': 'Recent sessions'");
+    expect(html).toContain("'dash.recentSessions': '最近会话'");
+  });
 });
