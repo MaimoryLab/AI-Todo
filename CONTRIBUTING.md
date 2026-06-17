@@ -35,6 +35,7 @@ If it's a feature: describe the user problem before the implementation. "I could
 ## Pull request flow
 
 - Keep PRs small and focused. One logical change per PR.
+- Substantial new features need a reviewed feature doc first — copy [`docs/features/template.md`](docs/features/template.md), get it signed off, then open the implementation PR linking it (see [`docs/features/index.md`](docs/features/index.md)). Bug fixes and small obvious changes don't need one.
 - Write a clear description: what it does, why, and how to verify.
 - Link the issue the PR resolves (`Fixes #NNN` / `Closes #NNN`).
 - Expect CodeRabbit to review automatically. Address its comments before asking a human.

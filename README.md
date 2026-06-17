@@ -77,6 +77,7 @@ Under the hood, the current prototype still exposes the full implementation surf
 - [Rules](RULES.md)
 - [Roadmap](ROADMAP.md)
 - [Development](docs/development.md)
+- [Features](docs/features/index.md)
 
 ## License
 
