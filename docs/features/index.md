@@ -19,7 +19,7 @@ checklist in [RULES.md](../../RULES.md).
 | Feature | Status | Priority | Doc | Notes |
 |---|---|---|---|---|
 | Viewer i18n base | Done | P0 | shipped | Inline `{en, zh}` catalog + `t()` |
-| Codex source scanner | Planned | P0 | [example-feature.md](example-feature.md) | First local source; incremental, no re-reads |
+| Codex source scanner | In Progress | P0 | [codex-source-scanner.md](codex-source-scanner.md) | First local source; incremental, no re-reads |
 
 ### Status
 
