@@ -69,7 +69,7 @@ Built on iii-engine (file-based SQLite state), with a local REST API + MCP serve
 
 ## Under the hood
 
-Under the hood, the current prototype still exposes the full implementation surface: **55 MCP tools** (8 visible by default — 55 tools, 6 resources, 3 prompts over MCP) and a local REST API serving **137 endpoints on port** 3111. These counts track the implementation that is mid-rename to AI Todo.
+Under the hood, the current prototype still exposes the full implementation surface: **55 MCP tools** (8 visible by default — 55 tools, 6 resources, 3 prompts over MCP) and a local REST API serving **138 endpoints on port** 3111. These counts track the implementation that is mid-rename to AI Todo.
 
 ## Documentation
 
