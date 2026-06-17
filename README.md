@@ -34,8 +34,9 @@ Then refresh the viewer: the dashboard fills with browsable sessions, memory, an
 
 ## Use your own data
 
-- **Codex sessions (local):** the daemon scans your Codex session directories (`~/.codex/sessions` and `~/.codex/archived_sessions`) on startup and on an interval, and extracts todos automatically. Toggle with `AGENTMEMORY_CODEX_AUTOSCAN=false`; tune the cadence with `AGENTMEMORY_CODEX_SCAN_INTERVAL_MS` (default 5 min). You can also import a transcript on demand with `agentmemory import-jsonl <path>`.
+- **Codex sessions (local):** the daemon scans your Codex session directories (`~/.codex/sessions` and `~/.codex/archived_sessions`) on startup and on an interval. Toggle with `AGENTMEMORY_CODEX_AUTOSCAN=false`; tune the cadence with `AGENTMEMORY_CODEX_SCAN_INTERVAL_MS` (default 5 min). You can also import a transcript on demand with `agentmemory import-jsonl <path>`.
 - **Browser AI conversations:** load the browser extension under [`browser-extension/`](browser-extension/); it captures supported AI sites and posts them to the local daemon, which extracts todos into the same queue.
+- **LangExtract extraction (optional):** install `python3 -m pip install "langextract[openai]"`, set `AGENTMEMORY_TODO_EXTRACTOR=langextract`, `LANGEXTRACT_PROVIDER=openai`, `LANGEXTRACT_MODEL=pa/gpt-5.5`, `LANGEXTRACT_BASE_URL=https://api.novita.ai/openai/v1`, and provide `LANGEXTRACT_API_KEY` only in your runtime environment. Trigger it manually with `POST /agentmemory/todo-extract/generate`.
 
 Everything stays on your machine — see [Privacy](#privacy).
 
@@ -43,11 +44,11 @@ Everything stays on your machine — see [Privacy](#privacy).
 
 ```
 local agent sessions ─┐
-                       ├─▶ normalize ─▶ rule-based extractor ─▶ local DB ─▶ local API ─▶ web UI
-browser AI capture ───┘                                          (todos + evidence)
+                       ├─▶ normalize ─▶ extractor ─▶ local DB ─▶ local API ─▶ web UI
+browser AI capture ───┘                         (rules or manual LangExtract)
 ```
 
-Built on iii-engine (file-based SQLite state), with a local REST API + MCP server + web UI. v1 uses a deterministic rule-based extractor (no LLM classifier). See [ARCHITECTURE.md](ARCHITECTURE.md) for detail.
+Built on iii-engine (file-based SQLite state), with a local REST API + MCP server + web UI. The default extractor is deterministic rules; LangExtract is opt-in and manually triggered. See [ARCHITECTURE.md](ARCHITECTURE.md) for detail.
 
 ## Core todo statuses
 
