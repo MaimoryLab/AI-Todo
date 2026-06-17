@@ -38,10 +38,11 @@ AI Todo v1 focuses on the current core product plus the required launch constrai
 ## Product Documents
 
 - [PRD](PRD.md)
+- [Architecture](ARCHITECTURE.md)
+- [Rules](RULES.md)
+- [Roadmap](ROADMAP.md)
+- [Development](docs/development.md)
 - `FEATURES.md` - planned
-- `ARCHITECTURE.md` - planned
-- `RULES.md` - planned
-- `ROADMAP.md` - planned
 
 ## Core Todo Statuses
 

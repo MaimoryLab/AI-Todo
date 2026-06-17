@@ -59,5 +59,6 @@ npm run test:integration # integration tests
 3. Fix the cause, not the symptom.
 4. Add a regression test when possible.
 
-> `ARCHITECTURE.md` (data flow, design principles) is planned — PLAN-003 STEP-01.
-> Until it lands, see the Architecture section of [AGENTS.md](../AGENTS.md).
+> See [ARCHITECTURE.md](../ARCHITECTURE.md) for the architecture overview, data
+> flow, and design principles, and [AGENTS.md](../AGENTS.md) for code patterns
+> and consistency rules.
