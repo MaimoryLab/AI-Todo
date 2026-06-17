@@ -588,6 +588,20 @@ async function main() {
     bootLog(`Auto-consolidation: enabled (every ${consolidationIntervalMs / 60000}m)`);
   }
 
+  if (process.env.AGENTMEMORY_CODEX_AUTOSCAN !== "false") {
+    const codexScanIntervalMs = parseInt(
+      process.env.AGENTMEMORY_CODEX_SCAN_INTERVAL_MS || "300000",
+      10,
+    );
+    const scanCodex = () => {
+      sdk.trigger({ function_id: "mem::source-scan::codex", payload: {} }).catch(() => {});
+    };
+    scanCodex(); // load history at startup; later runs are incremental (the checkpoint skips unchanged files)
+    const codexScanTimer = setInterval(scanCodex, codexScanIntervalMs);
+    codexScanTimer.unref();
+    bootLog(`Codex auto-scan: enabled (every ${codexScanIntervalMs / 60000}m)`);
+  }
+
   // Line D / STEP-D5b — Feishu reply loop. Default OFF; only spawns the
   // long-running `lark-cli event consume` subscriber when explicitly enabled
   // and a target user is configured.

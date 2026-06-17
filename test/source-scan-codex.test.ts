@@ -3,7 +3,7 @@ import { mkdtemp, writeFile, rm } from "node:fs/promises";
 import { readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { mockKV } from "./helpers/mocks.js";
+import { mockKV, mockSdk } from "./helpers/mocks.js";
 import { KV } from "../src/state/schema.js";
 import type { ScanCheckpoint } from "../src/types.js";
 import { getSearchIndex } from "../src/functions/search.js";
@@ -22,7 +22,11 @@ vi.mock("../src/functions/replay.js", async (importOriginal) => {
   return { ...actual, ingestJsonlFile: ingestSpy };
 });
 
-import { scanCodexSource } from "../src/functions/source-scan-codex.js";
+import {
+  registerSourceScanFunctions,
+  scanCodexSource,
+  type CodexScanResult,
+} from "../src/functions/source-scan-codex.js";
 
 const fixture = readFileSync(join(__dirname, "fixtures/jsonl", "codex-session.jsonl"), "utf-8");
 
@@ -91,5 +95,17 @@ describe("scanCodexSource", () => {
     ingestSpy.mockClear();
     await scanCodexSource(kv as never, { path: dir });
     expect(ingestSpy).toHaveBeenCalledTimes(1); // the previously-failed file is retried
+  });
+
+  it("runs via the registered mem::source-scan::codex trigger (what auto-scan invokes)", async () => {
+    const sdk = mockSdk();
+    const kv = mockKV();
+    registerSourceScanFunctions(sdk as never, kv as never);
+    await writeFile(join(dir, "rollout-1.jsonl"), fixture);
+
+    const res = (await sdk.trigger("mem::source-scan::codex", { path: dir })) as CodexScanResult;
+    expect(res.success).toBe(true);
+    expect(res.imported).toBe(1);
+    expect(res.sessionIds).toEqual(["codex-real-session"]);
   });
 });
