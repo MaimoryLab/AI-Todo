@@ -33,5 +33,6 @@ Linked issue: Fixes #
 - [ ] `npm run pre-pr` is green locally (consistency + build + test)
 - [ ] No attribution headers in the commits or PR description (no "Generated with Claude Code", no "Co-Authored-By: Claude")
 - [ ] If this touches MCP tools / REST endpoints / the version number, every linked file from the matching list in AGENTS.md (Consistency Rules) was updated in lockstep
+- [ ] For a substantial new feature: a reviewed feature doc exists under `docs/features/` (from `template.md`) and is linked here
 - [ ] User-facing strings and public docs are in English (PRD default language is English)
 - [ ] The corresponding issue is linked above (`Fixes #NNN` / `Closes #NNN`)
