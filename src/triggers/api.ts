@@ -1055,6 +1055,35 @@ export function registerApiTriggers(
     config: { api_path: "/agentmemory/sessions", http_method: "GET" },
   });
 
+  sdk.registerFunction("api::sessions::delete",
+    async (req: ApiRequest): Promise<Response> => {
+      const authErr = checkAuth(req, secret);
+      if (authErr) return authErr;
+      const project = asNonEmptyString(req.query_params?.["project"]);
+      if (!project) {
+        return { status_code: 400, body: { error: "project is required" } };
+      }
+      const sessions = await kv.list<Session>(KV.sessions);
+      // Scope deletes to the calling agent when isolation is on, mirroring GET /sessions.
+      const filterAgentId = isAgentScopeIsolated() ? getAgentId() : undefined;
+      const targets = sessions.filter(
+        (s) => s.project === project && (!filterAgentId || s.agentId === filterAgentId),
+      );
+      for (const s of targets) {
+        await kv.delete(KV.sessions, s.id);
+      }
+      // ponytail: removes session records only; their observations/memories
+      // remain (use governance bulk-delete for those). Enough to clear the
+      // sessions `demo` seeds, which is what advertises this route.
+      return { status_code: 200, body: { success: true, deleted: targets.length } };
+    },
+  );
+  sdk.registerTrigger({
+    type: "http",
+    function_id: "api::sessions::delete",
+    config: { api_path: "/agentmemory/sessions", http_method: "DELETE" },
+  });
+
   sdk.registerFunction("api::session::highlights",
     async (req: ApiRequest): Promise<Response> => {
       const authErr = checkAuth(req, secret);
