@@ -79,8 +79,7 @@ def extract_kwargs(lx, model_id: str, model_config_cls=None) -> dict:
             provider="openai",
             provider_kwargs=provider_kwargs,
         )
-        if model_id.startswith("deepseek/"):
-            params["use_schema_constraints"] = False
+        params["use_schema_constraints"] = False
     else:
         params["model_id"] = model_id
     return params
@@ -185,6 +184,8 @@ if __name__ == "__main__":
         assert config.provider == "openai"
         assert config.provider_kwargs["base_url"] == "https://api.novita.ai/openai/v1"
         assert config.provider_kwargs["reasoning_effort"] == "medium"
+        assert params["use_schema_constraints"] is False
+        params = extract_kwargs(DummyLx, "custom/openai-compatible-model", DummyConfig)
         assert params["use_schema_constraints"] is False
         print("ok")
         raise SystemExit(0)
