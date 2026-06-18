@@ -300,7 +300,7 @@ describe("viewer request handler DNS rebinding defence (e2e)", () => {
         cwd: "/repo",
         startedAt: "2026-06-17T08:00:00.000Z",
         endedAt: "2026-06-17T09:00:00.000Z",
-        status: "completed",
+        status: "active",
         observationCount: 1,
       };
       const observation: CompressedObservation = {

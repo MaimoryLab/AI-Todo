@@ -54,7 +54,7 @@ describe("todo extraction", () => {
   });
 
   it("falls back to rules and directly creates high-confidence todos with evidence metadata", async () => {
-    await kv.set(KV.sessions, "ses_1", session());
+    await kv.set(KV.sessions, "ses_1", session({ status: "active" }));
     await kv.set(KV.observations("ses_1"), "obs_1", obs());
 
     const result = await generateTodosFromSessions(kv as never, { force: true });
