@@ -53,6 +53,7 @@ describe("doctor v2 diagnostic catalog", () => {
   it("exports a stable list of diagnostic ids", () => {
     expect(DIAGNOSTIC_IDS).toContain("env-missing");
     expect(DIAGNOSTIC_IDS).toContain("no-llm-provider-key");
+    expect(DIAGNOSTIC_IDS).toContain("todo-extractor-llm-not-ready");
     expect(DIAGNOSTIC_IDS).toContain("engine-version-mismatch");
     expect(DIAGNOSTIC_IDS).toContain("viewer-unreachable");
     expect(DIAGNOSTIC_IDS).toContain("stale-pidfile");
@@ -110,6 +111,39 @@ describe("doctor v2 diagnostic catalog", () => {
     const check = diagnostics.find((d) => d.id === "no-llm-provider-key")!;
     const status = await check.check(stubCtx());
     expect(status.ok).toBe(true);
+  });
+
+  it("todo-extractor-llm-not-ready fails when LANGEXTRACT_API_KEY is missing", async () => {
+    const diagnostics = buildDiagnostics(
+      stubEffects({
+        readEnvFile: () => ({
+          ANTHROPIC_API_KEY: "sk-ant-real-key-value",
+          LANGEXTRACT_PROVIDER: "openai",
+          LANGEXTRACT_BASE_URL: "https://api.novita.ai/openai/v1",
+        }),
+      }),
+    );
+    const check = diagnostics.find((d) => d.id === "todo-extractor-llm-not-ready")!;
+    const status = await check.check(stubCtx());
+    expect(status.ok).toBe(false);
+    expect(status.detail).toContain("LANGEXTRACT_API_KEY missing");
+    expect(check.manualOnly).toBe(true);
+  });
+
+  it("todo-extractor-llm-not-ready passes with OpenAI-compatible LangExtract config", async () => {
+    const diagnostics = buildDiagnostics(
+      stubEffects({
+        readEnvFile: () => ({
+          LANGEXTRACT_API_KEY: "sk-real",
+          LANGEXTRACT_PROVIDER: "openai",
+          LANGEXTRACT_BASE_URL: "https://api.novita.ai/openai/v1",
+        }),
+      }),
+    );
+    const check = diagnostics.find((d) => d.id === "todo-extractor-llm-not-ready")!;
+    const status = await check.check(stubCtx());
+    expect(status.ok).toBe(true);
+    expect(status.detail).toBe("LANGEXTRACT_* ready");
   });
 
   it("engine-version-mismatch fails when iii reports the wrong version", async () => {

@@ -63,6 +63,7 @@ export type Diagnostic = {
 export const DIAGNOSTIC_IDS = [
   "env-missing",
   "no-llm-provider-key",
+  "todo-extractor-llm-not-ready",
   "engine-version-mismatch",
   "viewer-unreachable",
   "stale-pidfile",
@@ -94,6 +95,16 @@ const PROVIDER_KEY_NAMES = [
   "OPENROUTER_API_KEY",
   "MINIMAX_API_KEY",
 ] as const;
+
+const TODO_EXTRACTOR_PLACEHOLDER_VALUES = new Set([
+  "",
+  "your-key-here",
+  "sk-...",
+  "<runtime secret>",
+  "changeme",
+  "todo",
+  "xxx",
+]);
 
 export function parseEnvFile(content: string): Record<string, string> {
   const out: Record<string, string> = {};
@@ -137,6 +148,31 @@ export function placeholderProviderKeys(env: Record<string, string>): string[] {
     if (/^x+$/i.test(v.replace(/[-_]/g, ""))) return true;
     return false;
   });
+}
+
+function hasRealTodoExtractorKey(env: Record<string, string>): boolean {
+  const v = (env["LANGEXTRACT_API_KEY"] ?? "").trim();
+  if (!v) return false;
+  if (TODO_EXTRACTOR_PLACEHOLDER_VALUES.has(v.toLowerCase())) return false;
+  if (/^x+$/i.test(v.replace(/[-_]/g, ""))) return false;
+  return true;
+}
+
+function todoExtractorConfigProblems(env: Record<string, string>): string[] {
+  const problems: string[] = [];
+  const mode = (env["AGENTMEMORY_TODO_EXTRACTOR"] || "auto").trim().toLowerCase();
+  const provider = (env["LANGEXTRACT_PROVIDER"] || "").trim().toLowerCase();
+  const baseUrl = (env["LANGEXTRACT_BASE_URL"] || "").trim();
+
+  if (mode === "rules") problems.push("AGENTMEMORY_TODO_EXTRACTOR=rules");
+  if (!hasRealTodoExtractorKey(env)) problems.push("LANGEXTRACT_API_KEY missing");
+  if (!provider || provider === "novita" || provider === "deepseek") {
+    problems.push("LANGEXTRACT_PROVIDER should be openai");
+  } else if (provider !== "openai") {
+    problems.push(`LANGEXTRACT_PROVIDER=${provider}`);
+  }
+  if (!baseUrl) problems.push("LANGEXTRACT_BASE_URL missing");
+  return problems;
 }
 
 /**
@@ -209,6 +245,30 @@ export function buildDiagnostics(effects: DoctorEffects): Diagnostic[] {
         return {
           ok: real.length > 0,
           detail: real.length > 0 ? `found: ${real.join(", ")}` : "no provider key set",
+        };
+      },
+      fix: (ctx) => effects.openEditor(ctx.envPath),
+    },
+    {
+      id: "todo-extractor-llm-not-ready",
+      message: "To-Do LLM extraction is not ready.",
+      fixPreview:
+        "Open ~/.agentmemory/.env and set LANGEXTRACT_API_KEY plus Novita/OpenAI-compatible LANGEXTRACT_* values.",
+      moreInfo:
+        "The first-run provider key is for memory compression/consolidation. " +
+        "To-Do extraction uses LANGEXTRACT_* separately. For the current default path, set " +
+        "AGENTMEMORY_TODO_EXTRACTOR=langextract, LANGEXTRACT_PROVIDER=openai, " +
+        "LANGEXTRACT_BASE_URL=https://api.novita.ai/openai/v1, and LANGEXTRACT_API_KEY.",
+      manualOnly: true,
+      check: async () => {
+        if (!effects.envFileExists()) {
+          return { ok: false, detail: "env file missing (run env-missing fix first)" };
+        }
+        const env = effects.readEnvFile();
+        const problems = todoExtractorConfigProblems(env);
+        return {
+          ok: problems.length === 0,
+          detail: problems.length === 0 ? "LANGEXTRACT_* ready" : problems.join(", "),
         };
       },
       fix: (ctx) => effects.openEditor(ctx.envPath),
