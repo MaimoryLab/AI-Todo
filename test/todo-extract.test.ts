@@ -71,7 +71,7 @@ describe("todo extraction", () => {
     expect(actions[0]).toMatchObject({
       status: "pending",
       project: "agentmemory-lab",
-      tags: expect.arrayContaining(["todo-extracted", "time:recent", "type:follow_up"]),
+      tags: expect.arrayContaining(["todo-extracted", "time:current", "type:follow_up"]),
       sourceObservationIds: ["obs_1"],
     });
     expect(actions[0].metadata?.todoExtraction).toMatchObject({

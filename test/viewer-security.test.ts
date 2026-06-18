@@ -334,7 +334,7 @@ describe("viewer request handler DNS rebinding defence (e2e)", () => {
       expect(JSON.parse(res.body)).toMatchObject({ success: true, directCreated: 1 });
       expect(JSON.parse(actions.body).actions[0]).toMatchObject({
         title: expect.any(String),
-        tags: expect.arrayContaining(["todo-extracted", "time:recent", "type:follow_up"]),
+        tags: expect.arrayContaining(["todo-extracted", "time:current", "type:follow_up"]),
         sourceObservationIds: ["obs_todo"],
       });
     } finally {
