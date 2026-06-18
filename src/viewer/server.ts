@@ -13,6 +13,7 @@ import { renderViewerDocument } from "./document.js";
 import type { Action, CompressedObservation, Memory, ReviewQueueItem, Session } from "../types.js";
 import { KV } from "../state/schema.js";
 import { buildTurnActionDrafts } from "../functions/action-candidates.js";
+import { generateTodosFromSessions } from "../functions/todo-extract.js";
 import { getTodoExtractorUserConfig, getUserEnvPath, writeUserEnv } from "../config.js";
 
 // Self-host the viewer favicon at /favicon.svg instead of an inline
@@ -612,6 +613,7 @@ type ViewerKv = {
   get<T = unknown>(scope: string, key: string): Promise<T | null>;
   set<T = unknown>(scope: string, key: string, value: T): Promise<T>;
   list<T = unknown>(scope: string): Promise<T[]>;
+  delete(scope: string, key: string): Promise<void>;
 };
 
 function asText(value: unknown): string {
@@ -1404,6 +1406,14 @@ export function startViewerServer(
       action.updatedAt = new Date().toISOString();
       await (kv as ViewerKv).set(KV.actions, action.id, action);
       json(res, 200, { success: true, action }, req);
+      return;
+    }
+
+    if (method === "POST" && pathname === "/agentmemory/todo-extract/generate") {
+      const raw = await readBody(req);
+      const body = raw ? JSON.parse(raw) as Record<string, unknown> : {};
+      const result = await generateTodosFromSessions(kv as ViewerKv, body);
+      json(res, 200, result, req);
       return;
     }
 

@@ -10,6 +10,8 @@ artifacts/
 *.log
 .DS_Store
 .claude/
+# lark-cli local credentials — never commit
+.lark-auth/
 
 plugin/scripts/*.map
 plugin/scripts/*.d.mts

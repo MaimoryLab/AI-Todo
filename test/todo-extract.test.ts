@@ -11,7 +11,7 @@ vi.mock("../src/config.js", () => ({
   },
 }));
 
-import { cleanTodoTitle, generateTodosFromSessions, validateTodoEvidence, runLangExtractSidecar, type ExtractedTodo } from "../src/functions/todo-extract.js";
+import { cleanPollutedTodoCards, cleanTodoTitle, generateTodosFromSessions, validateTodoEvidence, runLangExtractSidecar, type ExtractedTodo } from "../src/functions/todo-extract.js";
 import type { Action, CompressedObservation, ReviewQueueItem, Session } from "../src/types.js";
 import { KV } from "../src/state/schema.js";
 import { mockKV } from "./helpers/mocks.js";
@@ -167,5 +167,51 @@ describe("todo extraction", () => {
     await expect(runLangExtractSidecar({ blocks: [{ text: "后续需要修复 CI。", sourceObservationId: "obs_1" }] }, { timeoutMs: 500 }))
       .rejects.toBeTruthy();
     delete process.env.LANGEXTRACT_PYTHON;
+  });
+
+  it("cleans generated command-log cards from actions and review queue", async () => {
+    await kv.set<Action>(KV.actions, "act_bad", {
+      id: "act_bad",
+      title: "json nameWithOwner",
+      description: "gh pr list --json number,title --limit 20",
+      status: "pending",
+      priority: 5,
+      createdAt: "2026-06-17T08:00:00.000Z",
+      updatedAt: "2026-06-17T08:00:00.000Z",
+      createdBy: "todo-extract",
+      tags: ["todo-extracted"],
+      sourceObservationIds: [],
+      sourceMemoryIds: [],
+    });
+    await kv.set<Action>(KV.actions, "act_good", {
+      id: "act_good",
+      title: "整理首版功能文档",
+      description: "整理首版功能文档并给 Steve review。",
+      status: "pending",
+      priority: 5,
+      createdAt: "2026-06-17T08:00:00.000Z",
+      updatedAt: "2026-06-17T08:00:00.000Z",
+      createdBy: "todo-extract",
+      tags: ["todo-extracted"],
+      sourceObservationIds: [],
+      sourceMemoryIds: [],
+    });
+    await kv.set<ReviewQueueItem>(KV.reviewQueue, "review_bad", {
+      id: "review_bad",
+      createdAt: "2026-06-17T08:00:00.000Z",
+      updatedAt: "2026-06-17T08:00:00.000Z",
+      status: "pending",
+      kind: "action",
+      title: "limit 20",
+      content: "{\"cmd\":\"gh pr list --json number\"}",
+      source: "viewer",
+      payload: { tags: ["todo-extracted"], actionCandidate: { reason: "todo" } },
+    });
+
+    const result = await cleanPollutedTodoCards(kv as never);
+
+    expect(result).toEqual({ cleanedActions: 1, cleanedReviews: 1 });
+    expect((await kv.list<Action>(KV.actions)).map((a) => a.id)).toEqual(["act_good"]);
+    expect(await kv.list<ReviewQueueItem>(KV.reviewQueue)).toEqual([]);
   });
 });

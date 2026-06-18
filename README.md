@@ -36,7 +36,7 @@ Then refresh the viewer: the dashboard fills with browsable sessions, memory, an
 
 - **Codex sessions (local):** the daemon scans your Codex session directories (`~/.codex/sessions` and `~/.codex/archived_sessions`) on startup and on an interval. Toggle with `AGENTMEMORY_CODEX_AUTOSCAN=false`; tune the cadence with `AGENTMEMORY_CODEX_SCAN_INTERVAL_MS` (default 5 min). You can also import a transcript on demand with `agentmemory import-jsonl <path>`.
 - **Browser AI conversations:** load the browser extension under [`browser-extension/`](browser-extension/); it captures supported AI sites and posts them to the local daemon, which extracts todos into the same queue.
-- **LangExtract extraction (optional):** install `python3 -m pip install "langextract[openai]"`, set `AGENTMEMORY_TODO_EXTRACTOR=langextract`, `LANGEXTRACT_PROVIDER=openai`, `LANGEXTRACT_MODEL=pa/gpt-5.5`, `LANGEXTRACT_BASE_URL=https://api.novita.ai/openai/v1`, and provide `LANGEXTRACT_API_KEY` only in your runtime environment. Trigger it manually with `POST /agentmemory/todo-extract/generate`.
+- **LangExtract extraction (optional):** install a Python environment with `python3 -m pip install "langextract[openai]"` (add `socksio` if your network uses a SOCKS proxy). Configure it from the viewer Settings panel or `~/.agentmemory/.env`: `AGENTMEMORY_TODO_EXTRACTOR=langextract`, `LANGEXTRACT_PYTHON=/path/to/python`, `LANGEXTRACT_PROVIDER=openai`, `LANGEXTRACT_MODEL=pa/gpt-5.5`, `LANGEXTRACT_BASE_URL=https://api.novita.ai/openai/v1`, `LANGEXTRACT_API_KEY=<runtime secret>`, and optionally `AGENTMEMORY_TODO_EXTRACT_TIMEOUT_MS=120000`. Trigger it from the To-Do tab or with `POST /agentmemory/todo-extract/generate`.
 
 Everything stays on your machine — see [Privacy](#privacy).
 

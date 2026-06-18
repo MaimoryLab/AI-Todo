@@ -58,6 +58,13 @@ export function getUserEnvPath(): string {
   return ENV_FILE;
 }
 
+function maskSecret(value: string | undefined): string {
+  if (!hasRealValue(value)) return "";
+  const secret = value.trim();
+  if (secret.length <= 8) return `${secret.slice(0, 2)}****${secret.slice(-2)}`;
+  return `${secret.slice(0, 3)}****${secret.slice(-4)}`;
+}
+
 export function getTodoExtractorUserConfig(): Record<string, string | boolean> {
   const env = getMergedEnv();
   return {
@@ -68,6 +75,7 @@ export function getTodoExtractorUserConfig(): Record<string, string | boolean> {
     LANGEXTRACT_BASE_URL: env["LANGEXTRACT_BASE_URL"] || "",
     LANGEXTRACT_THINKING_DEPTH: env["LANGEXTRACT_THINKING_DEPTH"] || "medium",
     LANGEXTRACT_API_KEY_CONFIGURED: hasRealValue(env["LANGEXTRACT_API_KEY"]),
+    LANGEXTRACT_API_KEY_MASKED: maskSecret(env["LANGEXTRACT_API_KEY"]),
   };
 }
 

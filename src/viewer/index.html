@@ -524,6 +524,24 @@
     .btn-danger:hover { background: var(--accent); color: white; box-shadow: rgba(0, 0, 0, 0.05) -2px 2px 4px 0px; }
     .btn-primary { background: var(--accent); color: #fff; border-color: var(--accent); }
     .btn-primary:hover { background: var(--ink); box-shadow: none; }
+    .btn-soft-alert {
+      border-color: var(--accent);
+      color: var(--ink);
+      background: var(--bg-warm);
+    }
+    .btn-working::after {
+      content: '';
+      display: inline-block;
+      width: 7px;
+      height: 7px;
+      margin-left: 6px;
+      border: 2px solid currentColor;
+      border-right-color: transparent;
+      border-radius: 999px;
+      vertical-align: -1px;
+      animation: button-spin 0.7s linear infinite;
+    }
+    @keyframes button-spin { to { transform: rotate(360deg); } }
 
     .graph-container {
       display: flex;
@@ -1758,9 +1776,23 @@
     .action-overview-card {
       padding: 12px 14px;
     }
+    button.action-overview-card {
+      width: 100%;
+      text-align: left;
+      cursor: pointer;
+      font: inherit;
+    }
+    button.action-overview-card:hover {
+      border-color: var(--accent);
+      background: var(--bg-alt);
+    }
     .action-overview-card.primary {
       border-color: var(--accent);
       background: var(--bg-warm);
+    }
+    .action-overview-card.active {
+      border-color: var(--ink);
+      box-shadow: inset 0 0 0 1px var(--ink);
     }
     .action-overview-label {
       color: var(--ink-muted);
@@ -3101,6 +3133,100 @@
       justify-content: flex-end;
       gap: 8px;
     }
+    .settings-gear {
+      position: fixed;
+      left: 18px;
+      bottom: 18px;
+      z-index: 90;
+      width: 46px;
+      height: 46px;
+      border: 1px solid var(--border-heavy);
+      border-radius: 50%;
+      background: var(--surface-card);
+      color: var(--ink);
+      box-shadow: 0 12px 28px rgba(0,0,0,0.12);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: transform 0.15s, background 0.15s, border-color 0.15s;
+    }
+    .settings-gear:hover,
+    .settings-gear:focus-visible {
+      transform: translateY(-1px) rotate(12deg);
+      background: var(--bg-subtle);
+      outline: 2px solid var(--border);
+      outline-offset: 2px;
+    }
+    .settings-gear svg {
+      width: 22px;
+      height: 22px;
+      stroke: currentColor;
+    }
+    .settings-panel {
+      display: none;
+      position: fixed;
+      left: 18px;
+      bottom: 76px;
+      z-index: 89;
+      width: min(430px, calc(100vw - 36px));
+      max-height: min(720px, calc(100vh - 96px));
+      overflow: auto;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--surface-card);
+      box-shadow: 0 18px 42px rgba(0,0,0,0.14);
+      padding: 18px;
+    }
+    .settings-panel.open { display: block; }
+    .settings-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 12px;
+      margin-bottom: 14px;
+    }
+    .settings-title {
+      font-family: var(--font-display);
+      font-size: 20px;
+      font-weight: 600;
+      color: var(--ink);
+      letter-spacing: 0;
+    }
+    .settings-sub {
+      margin-top: 4px;
+      font-size: 12px;
+      color: var(--ink-muted);
+      line-height: 1.45;
+    }
+    .settings-section {
+      border-top: 1px solid var(--border-light);
+      padding-top: 14px;
+      margin-top: 14px;
+    }
+    .settings-section:first-of-type { margin-top: 0; }
+    .settings-section-title {
+      font-family: var(--font-ui);
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--ink);
+      margin-bottom: 10px;
+    }
+    .settings-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 10px;
+    }
+    .settings-language {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .settings-language .btn.active {
+      background: var(--ink);
+      border-color: var(--ink);
+      color: #fff;
+    }
     .selected-node-info {
       margin-top: 16px;
       padding-top: 16px;
@@ -3790,6 +3916,13 @@
   <div id="modal-overlay" class="modal-overlay">
     <div class="modal" id="modal"></div>
   </div>
+  <button id="settings-gear" class="settings-gear" data-action="toggle-settings" type="button" aria-label="设置" aria-expanded="false" title="设置">
+    <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="M12 15.5A3.5 3.5 0 1 0 12 8a3.5 3.5 0 0 0 0 7.5Z"></path>
+      <path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06A1.7 1.7 0 0 0 15 19.4a1.7 1.7 0 0 0-1 .6l-.03.08a2 2 0 0 1-3.94 0L10 20a1.7 1.7 0 0 0-1-.6 1.7 1.7 0 0 0-1.88.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-.6-1l-.08-.03a2 2 0 0 1 0-3.94L4 10a1.7 1.7 0 0 0 .6-1 1.7 1.7 0 0 0-.34-1.88l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-.6l.03-.08a2 2 0 0 1 3.94 0L14 4a1.7 1.7 0 0 0 1 .6 1.7 1.7 0 0 0 1.88-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.7 1.7 0 0 0 19.4 9c.07.37.27.7.6 1l.08.03a2 2 0 0 1 0 3.94L20 14c-.33.3-.53.63-.6 1Z"></path>
+    </svg>
+  </button>
+  <aside id="settings-panel" class="settings-panel" aria-hidden="true"></aside>
 
   <script nonce="__AGENTMEMORY_VIEWER_NONCE__">
     // 通过 file:// 打开时会触发跨域限制，导致本地接口数据不可用。
@@ -4025,7 +4158,7 @@
     /* i18n-core:end */
     (function () {
       try {
-        var lang = new URLSearchParams(window.location.search).get('lang');
+        var lang = new URLSearchParams(window.location.search).get('lang') || localStorage.getItem('agentmemory-lang');
         if (lang === 'en' || lang === 'zh') I18N_LANG = lang;
       } catch (e) { /* no URL access — keep default */ }
     })();
@@ -4136,13 +4269,14 @@
       audit: { loaded: false, entries: [], opFilter: '' },
       activity: { loaded: false, observations: [], sessions: [], typeFilter: '', loadingPhase: '', warnings: [] },
       lessons: { loaded: false, items: [], search: '', skillSearch: '', skillRootFilter: 'all', mode: 'explicit', projects: [] },
-      actions: { loaded: false, items: [], reviewItems: [], frontier: [], statusFilter: '', search: '', doneExpanded: false, extractStatus: '', extractMessage: '', extractInFlight: false, stale: false, config: null, configOpen: false, configSaving: false },
+      actions: { loaded: false, items: [], reviewItems: [], frontier: [], statusFilter: '', search: '', doneExpanded: false, extractStatus: '', extractMessage: '', extractInFlight: false, stale: false, config: null, configSaving: false, configDraft: {} },
       inbox: { loaded: false, items: [], awaitingItems: [], answeredItems: [], dismissedItems: [], replyingId: null, pendingById: {}, briefingExpanded: false, answeredExpanded: false },
       crystals: { loaded: false, items: [], search: '', lessonMap: {} },
       profile: { loaded: false, projects: [], selectedProject: '', data: null },
       replay: { loaded: false, sessions: [], selectedId: '', timeline: null, cursor: 0, playing: false, speed: 1, timer: null, startAt: 0, offsetAt: 0 },
       flagsConfig: null,
       flagsDismissed: {},
+      settings: { open: false },
       ws: null
     };
 
@@ -4696,6 +4830,11 @@
       if (/please implement this plan/i.test(trimmed)) return true;
       if (/"plan"\s*:/.test(trimmed) && /"status"\s*:/.test(trimmed) && /"step"\s*:/.test(trimmed)) return true;
       if (/"command"\s*:|toolinput|tooloutput|function_id/.test(lower)) return true;
+      if (/"(?:cmd|workdir|yield_time_ms|max_output_tokens)"\s*:/.test(lower)) return true;
+      if (/\b(tooluseid|tooluse|call_[a-z0-9]+|chunk id|wall time|process exited)\b/i.test(trimmed)) return true;
+      if (/^(?:json|state|limit)\s+[\w.-]+/i.test(trimmed)) return true;
+      if (/\b(?:namewithowner|headrefname|baserefname|databaseid)\b/i.test(lower)) return true;
+      if (/^\s*(?:gh|git|npm|pnpm|yarn|python3?|node|curl)\s+[^\n]*(?:--json|--limit|--workdir|--max-output|--yield-time|status|show|list|run|test|install|build)\b/i.test(trimmed)) return true;
       if (/审查结果\s*\[[Pp]\d+\]/.test(trimmed) && /(?:src|test)\/[^\s]+(?:\s*\(line\s+\d+\))?/.test(trimmed)) return true;
       if (/^src\/[^\s]+/m.test(trimmed) && /\bnpm\s+(test|run|install|build)\b/i.test(trimmed)) return true;
       if (/^\s*(npm|pnpm|yarn)\s+(test|run|install|build)\b/im.test(trimmed)) return true;
@@ -4707,7 +4846,22 @@
     }
     function isActionReviewRenderable(item) {
       if (!item) return false;
-      return isReviewItemDisplayable(item) || isMarkdownPlanText((item && item.content) || '');
+      return isReviewItemDisplayable(item);
+    }
+    function actionTags(action) {
+      return Array.isArray(action && action.tags) ? action.tags.map(String) : [];
+    }
+    function isGeneratedAction(action) {
+      var tags = actionTags(action);
+      return (action && action.createdBy === 'todo-extract') ||
+        tags.indexOf('todo-extracted') >= 0 ||
+        tags.indexOf('action-candidate') >= 0 ||
+        !!(action && action.metadata && action.metadata.todoExtraction);
+    }
+    function isActionRenderable(action) {
+      if (!action) return false;
+      if (!isGeneratedAction(action)) return true;
+      return !isReviewTextPolluted(action.title) && !isReviewTextPolluted(action.description);
     }
     function reviewKindLabel(kind) {
       if (kind === 'lesson') return '经验';
@@ -8242,15 +8396,29 @@
       state.inbox.items = state.inbox.awaitingItems;
       state.inbox.loaded = true;
       renderActions();
-      if (!state.actions.config) loadTodoExtractorConfig().then(function() {
-        if (state.activeTab === 'actions' && state.actions.configOpen) renderActions();
-      }).catch(function() {});
+      if (state.settings.open) {
+        loadTodoExtractorConfig().then(renderSettingsPanel).catch(function() {});
+      }
       if (opts.generate !== false) startTodoExtraction(opts.force === true);
     }
 
     function todoExtractionDelta(result) {
       if (!result || result.success !== true) return 0;
       return Number(result.directCreated || 0) + Number(result.reviewCreated || 0);
+    }
+
+    function todoExtractionSummary(result) {
+      if (!result || result.success !== true) return '抽取失败，已显示现有待办';
+      var delta = todoExtractionDelta(result);
+      var hidden = Number(result.hiddenHistory || 0);
+      var discarded = Number(result.discarded || 0);
+      var cleaned = Number(result.cleanedActions || 0) + Number(result.cleanedReviews || 0);
+      var engine = result.engine || 'rules';
+      var prefix = engine === 'langextract' ? '大模型整理完成' : (engine === 'mixed' ? '部分大模型整理完成' : '未走大模型，已用规则整理');
+      var parts = [prefix, '新增 ' + delta, '历史 ' + hidden, '丢弃 ' + discarded];
+      if (cleaned > 0) parts.push('清理 ' + cleaned);
+      if (result.fallbackReason) parts.push('原因: ' + result.fallbackReason);
+      return parts.join(' · ');
     }
 
     function refreshActionListsAfterExtract() {
@@ -8287,6 +8455,72 @@
       });
     }
 
+    function renderSettingsPanel() {
+      var panel = document.getElementById('settings-panel');
+      var gear = document.getElementById('settings-gear');
+      if (!panel) return;
+      if (gear) gear.setAttribute('aria-expanded', state.settings.open ? 'true' : 'false');
+      panel.setAttribute('aria-hidden', state.settings.open ? 'false' : 'true');
+      panel.classList.toggle('open', !!state.settings.open);
+      if (!state.settings.open) {
+        panel.innerHTML = '';
+        return;
+      }
+      var cfg = (state.actions.config && state.actions.config.config) || {};
+      var draft = state.actions.configDraft || {};
+      var value = function(key, fallback) {
+        if (Object.prototype.hasOwnProperty.call(draft, key)) return esc(draft[key] || '');
+        return esc(cfg[key] || fallback || '');
+      };
+      var keyLabel = cfg.LANGEXTRACT_API_KEY_CONFIGURED ? '输入新 API key 覆盖，留空保持不变' : '未配置';
+      var maskedKey = cfg.LANGEXTRACT_API_KEY_MASKED || '';
+      var html = '<div class="settings-head">';
+      html += '<div><div class="settings-title">设置</div><div class="settings-sub">本机配置会写入用户配置文件，重启服务后生效。</div></div>';
+      html += '<button class="btn" data-action="close-settings" type="button">关闭</button>';
+      html += '</div>';
+      html += '<section class="settings-section"><div class="settings-section-title">界面语言</div>';
+      html += '<div class="settings-language">';
+      html += '<button class="btn' + (I18N_LANG === 'zh' ? ' active' : '') + '" data-action="set-ui-language" data-lang="zh" type="button">中文</button>';
+      html += '<button class="btn' + (I18N_LANG === 'en' ? ' active' : '') + '" data-action="set-ui-language" data-lang="en" type="button">English</button>';
+      html += '</div></section>';
+      html += '<section class="settings-section"><div class="settings-section-title">大模型抽取配置</div>';
+      html += '<div class="settings-grid">';
+      html += '<input id="todo-config-AGENTMEMORY_TODO_EXTRACTOR" class="search-input" value="' + value('AGENTMEMORY_TODO_EXTRACTOR', 'auto') + '" placeholder="auto|rules|langextract" />';
+      html += '<input id="todo-config-LANGEXTRACT_PYTHON" class="search-input" value="' + value('LANGEXTRACT_PYTHON', 'python3') + '" placeholder="python3" />';
+      html += '<input id="todo-config-LANGEXTRACT_PROVIDER" class="search-input" value="' + value('LANGEXTRACT_PROVIDER', 'openai') + '" placeholder="openai" />';
+      html += '<input id="todo-config-LANGEXTRACT_MODEL" class="search-input" value="' + value('LANGEXTRACT_MODEL', 'pa/gpt-5.5') + '" placeholder="model" />';
+      html += '<input id="todo-config-LANGEXTRACT_BASE_URL" class="search-input" value="' + value('LANGEXTRACT_BASE_URL', '') + '" placeholder="https://api.novita.ai/openai/v1" />';
+      html += '<input id="todo-config-LANGEXTRACT_THINKING_DEPTH" class="search-input" value="' + value('LANGEXTRACT_THINKING_DEPTH', 'medium') + '" placeholder="medium" />';
+      html += '<div><input id="todo-config-LANGEXTRACT_API_KEY" class="search-input" type="password" placeholder="' + esc(keyLabel) + '" />';
+      if (maskedKey) html += '<div class="action-meta-text" style="margin-top:4px;">API key: ' + esc(maskedKey) + '</div>';
+      html += '</div></div>';
+      html += '<div style="display:flex;gap:8px;margin-top:12px;align-items:center;flex-wrap:wrap;">';
+      html += '<button class="btn btn-primary" data-action="save-todo-config" type="button"' + (state.actions.configSaving ? ' disabled' : '') + '>' + (state.actions.configSaving ? '保存中...' : '保存配置') + '</button>';
+      if (state.actions.config && state.actions.config.envPath) html += '<span class="action-meta-text">' + esc(state.actions.config.envPath) + '</span>';
+      html += '</div>';
+      if (state.actions.extractMessage) html += '<div class="settings-sub" style="margin-top:8px;">' + esc(state.actions.extractMessage) + '</div>';
+      html += '</section>';
+      panel.innerHTML = html;
+    }
+
+    function captureTodoConfigDraft() {
+      var draft = state.actions.configDraft || {};
+      [
+        'AGENTMEMORY_TODO_EXTRACTOR',
+        'LANGEXTRACT_PYTHON',
+        'LANGEXTRACT_PROVIDER',
+        'LANGEXTRACT_MODEL',
+        'LANGEXTRACT_BASE_URL',
+        'LANGEXTRACT_THINKING_DEPTH',
+        'LANGEXTRACT_API_KEY'
+      ].forEach(function(key) {
+        var el = document.getElementById('todo-config-' + key);
+        if (el) draft[key] = String(el.value || '');
+      });
+      state.actions.configDraft = draft;
+      return draft;
+    }
+
     function saveTodoExtractorConfig() {
       var fields = [
         'AGENTMEMORY_TODO_EXTRACTOR',
@@ -8298,20 +8532,22 @@
         'LANGEXTRACT_API_KEY'
       ];
       var body = {};
+      var draft = captureTodoConfigDraft();
       fields.forEach(function(key) {
-        var el = document.getElementById('todo-config-' + key);
-        if (el && String(el.value || '').trim()) body[key] = String(el.value || '').trim();
+        if (String(draft[key] || '').trim()) body[key] = String(draft[key] || '').trim();
       });
       state.actions.configSaving = true;
-      renderActions();
+      renderSettingsPanel();
       apiPost('config/todo-extractor', body).then(function(res) {
         if (res && res.config) state.actions.config = res;
+        state.actions.configDraft = {};
         state.actions.extractMessage = '配置已保存，重启后生效。';
       }).catch(function() {
         state.actions.extractStatus = 'error';
         state.actions.extractMessage = '配置保存失败';
       }).then(function() {
         state.actions.configSaving = false;
+        renderSettingsPanel();
         if (state.activeTab === 'actions') renderActions();
       });
     }
@@ -8373,7 +8609,7 @@
           return null;
         }
         state.actions.extractStatus = 'done';
-        state.actions.extractMessage = delta > 0 ? '已更新 ' + delta + ' 张待办' : '最近会话没有新的待办';
+        state.actions.extractMessage = todoExtractionSummary(result);
         if (actionsScrolledAway()) {
           state.actions.stale = delta > 0;
           return null;
@@ -8860,7 +9096,7 @@
 
     function renderActions() {
       var el = document.getElementById('view-actions');
-      var items = (state.actions.items || []).slice();
+      var items = (state.actions.items || []).filter(isActionRenderable).slice();
       var reviewItems = (state.actions.reviewItems || []).filter(isActionReviewRenderable);
       var search = state.actions.search.toLowerCase();
       var statusFilter = state.actions.statusFilter;
@@ -9015,15 +9251,16 @@
       }
       function actionMetricCards(counts, reviewCount, waitingCount) {
         var metrics = [
-          { label: t('act.metric.waiting'), value: waitingCount, primary: waitingCount > 0 },
-          { label: t('act.metric.review'), value: reviewCount, primary: waitingCount === 0 && reviewCount > 0 },
-          { label: t('act.metric.followUp'), value: counts.pending + counts.blocked, primary: waitingCount === 0 && reviewCount === 0 && (counts.pending + counts.blocked) > 0 },
-          { label: t('act.metric.active'), value: counts.active, primary: false },
-          { label: t('act.metric.done'), value: counts.done, primary: false }
+          { label: t('act.metric.waiting'), value: waitingCount, filter: '', primary: waitingCount > 0 },
+          { label: t('act.metric.review'), value: reviewCount, filter: 'review', primary: waitingCount === 0 && reviewCount > 0 },
+          { label: t('act.metric.followUp'), value: counts.pending + counts.blocked, filter: 'pending', primary: waitingCount === 0 && reviewCount === 0 && (counts.pending + counts.blocked) > 0 },
+          { label: t('act.metric.active'), value: counts.active, filter: 'active', primary: false },
+          { label: t('act.metric.done'), value: counts.done, filter: 'done', primary: false }
         ];
         var html = '<div class="action-overview">';
         metrics.forEach(function(m) {
-          html += '<div class="action-overview-card' + (m.primary ? ' primary' : '') + '"><div class="action-overview-label">' + esc(m.label) + '</div><div class="action-overview-value">' + m.value + '</div></div>';
+          var active = (state.actions.statusFilter || '') === m.filter;
+          html += '<button class="action-overview-card' + (m.primary ? ' primary' : '') + (active ? ' active' : '') + '" data-action="filter-actions-status" data-status="' + esc(m.filter) + '" type="button"><div class="action-overview-label">' + esc(m.label) + '</div><div class="action-overview-value">' + m.value + '</div></button>';
         });
         html += '</div>';
         return html;
@@ -9045,41 +9282,15 @@
         });
         html += '</div>';
         html += '<span style="font-size:12px;color:var(--ink-faint);align-self:center;">' + reviewItems.length + ' ' + t('act.nToConfirm') + ' · ' + items.length + ' ' + t('act.nConfirmed') + '</span>';
-        html += '<button class="btn btn-primary" data-action="extract-actions" type="button" style="margin-left:auto;"' + (state.actions.extractInFlight ? ' disabled' : '') + '>用大模型整理</button>';
-        html += '<button class="btn" data-action="toggle-todo-config" type="button">配置</button>';
-        html += '<button class="btn" data-action="refresh-actions" type="button">' + t('act.refresh') + '</button>';
+        var extractTitle = state.actions.extractMessage || '调用大模型整理最近会话';
+        var extractLabel = '用大模型整理';
+        if (state.actions.extractInFlight) extractLabel = '整理中...';
+        else if (state.actions.extractStatus === 'done') extractLabel = /未走大模型/.test(state.actions.extractMessage || '') ? '未走大模型' : '已整理';
+        else if (state.actions.extractStatus === 'error') extractLabel = '整理失败';
+        html += '<button class="btn btn-primary' + (state.actions.extractInFlight ? ' btn-working' : '') + '" data-action="extract-actions" type="button" title="' + esc(extractTitle) + '" style="margin-left:auto;"' + (state.actions.extractInFlight ? ' disabled aria-busy="true"' : '') + '>' + esc(extractLabel) + '</button>';
+        html += '<button class="btn' + (state.actions.stale ? ' btn-soft-alert' : '') + '" data-action="refresh-actions" type="button">' + (state.actions.stale ? '刷新待办' : t('act.refresh')) + '</button>';
         html += '</div>';
         return html;
-      }
-      function renderActionsStaleNotice() {
-        if (!state.actions.stale) return '';
-        return '<div class="activity-status-card activity-status-warning" style="margin-bottom:12px;"><div class="activity-status-main"><span class="activity-status-dot"></span><span>有新记录，待办列表暂未自动刷新。</span></div><button class="btn btn-primary" data-action="refresh-actions" type="button">刷新待办</button></div>';
-      }
-      function renderTodoConfigPanel() {
-        if (!state.actions.configOpen) return '';
-        var cfg = (state.actions.config && state.actions.config.config) || {};
-        var value = function(key, fallback) { return esc(cfg[key] || fallback || ''); };
-        var keyLabel = cfg.LANGEXTRACT_API_KEY_CONFIGURED ? '已配置，留空保持不变' : '未配置';
-        var html = '<section class="card memory-section" style="padding:14px 16px;margin-bottom:14px;background:#ffffff;">';
-        html += '<div class="memory-section-head"><div><div class="memory-section-title">大模型抽取配置</div><div class="memory-section-sub">保存到用户配置，重启后生效。</div></div></div>';
-        html += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;">';
-        html += '<input id="todo-config-AGENTMEMORY_TODO_EXTRACTOR" class="search-input" value="' + value('AGENTMEMORY_TODO_EXTRACTOR', 'auto') + '" placeholder="auto|rules|langextract" />';
-        html += '<input id="todo-config-LANGEXTRACT_PYTHON" class="search-input" value="' + value('LANGEXTRACT_PYTHON', 'python3') + '" placeholder="python3" />';
-        html += '<input id="todo-config-LANGEXTRACT_PROVIDER" class="search-input" value="' + value('LANGEXTRACT_PROVIDER', 'openai') + '" placeholder="openai" />';
-        html += '<input id="todo-config-LANGEXTRACT_MODEL" class="search-input" value="' + value('LANGEXTRACT_MODEL', 'pa/gpt-5.5') + '" placeholder="model" />';
-        html += '<input id="todo-config-LANGEXTRACT_BASE_URL" class="search-input" value="' + value('LANGEXTRACT_BASE_URL', '') + '" placeholder="https://api.novita.ai/openai/v1" />';
-        html += '<input id="todo-config-LANGEXTRACT_THINKING_DEPTH" class="search-input" value="' + value('LANGEXTRACT_THINKING_DEPTH', 'medium') + '" placeholder="medium" />';
-        html += '<input id="todo-config-LANGEXTRACT_API_KEY" class="search-input" type="password" placeholder="' + esc(keyLabel) + '" />';
-        html += '</div><div style="display:flex;gap:8px;margin-top:10px;align-items:center;">';
-        html += '<button class="btn btn-primary" data-action="save-todo-config" type="button"' + (state.actions.configSaving ? ' disabled' : '') + '>保存配置</button>';
-        if (state.actions.config && state.actions.config.envPath) html += '<span class="action-meta-text">' + esc(state.actions.config.envPath) + '</span>';
-        html += '</div></section>';
-        return html;
-      }
-      function renderTodoExtractStatus() {
-        if (!state.actions.extractMessage) return '';
-        var cls = state.actions.extractStatus === 'error' ? ' activity-status-warning' : '';
-        return '<div class="activity-status-card' + cls + '" style="margin-bottom:12px;"><div class="activity-status-main"><span class="activity-status-dot"></span><span>' + esc(state.actions.extractMessage) + '</span></div></div>';
       }
       function renderActionCandidateCard(item) {
         var priority = reviewActionPriority(item);
@@ -9140,7 +9351,7 @@
       var awaitingBriefingsHtml = renderAwaitingBriefingSection();
       var inboxArchiveHtml = renderInboxArchiveSection();
 
-      var html = renderTodoExtractStatus() + renderActionsStaleNotice() + renderTodoConfigPanel() + renderActionFilters();
+      var html = renderActionFilters();
       html += actionMetricCards(statusCounts, reviewItems.length, waitingCount);
       html += awaitingQuestionsHtml;
 
@@ -9920,10 +10131,30 @@
         startTodoExtraction(true);
         return;
       }
-      if (action === 'toggle-todo-config') {
-        state.actions.configOpen = !state.actions.configOpen;
-        if (state.actions.configOpen && !state.actions.config) loadTodoExtractorConfig().then(function() { renderActions(); });
-        renderActions();
+      if (action === 'toggle-settings') {
+        state.settings.open = !state.settings.open;
+        renderSettingsPanel();
+        if (state.settings.open && !state.actions.config) {
+          loadTodoExtractorConfig().then(renderSettingsPanel).catch(function() {});
+        }
+        return;
+      }
+      if (action === 'close-settings') {
+        state.settings.open = false;
+        renderSettingsPanel();
+        return;
+      }
+      if (action === 'set-ui-language') {
+        var lang = target.getAttribute('data-lang') || '';
+        if (lang === 'zh' || lang === 'en') {
+          I18N_LANG = lang;
+          try { localStorage.setItem('agentmemory-lang', lang); } catch (_) {}
+          applyI18n(document);
+          renderSettingsPanel();
+          if (state.activeTab === 'actions') renderActions();
+          if (state.activeTab === 'dashboard') renderDashboard();
+          if (state.activeTab === 'sessions') renderSessions();
+        }
         return;
       }
       if (action === 'save-todo-config') {
@@ -10199,6 +10430,12 @@
     });
     document.getElementById('modal-overlay').addEventListener('click', function(e) {
       if (e.target === this) closeModal();
+    });
+    document.addEventListener('input', function(e) {
+      var target = e.target;
+      if (!target || !target.id || String(target.id).indexOf('todo-config-') !== 0) return;
+      state.actions.configDraft = state.actions.configDraft || {};
+      state.actions.configDraft[String(target.id).slice('todo-config-'.length)] = String(target.value || '');
     });
 
     async function loadReplay() {

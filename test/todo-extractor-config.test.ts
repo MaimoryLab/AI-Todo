@@ -46,6 +46,7 @@ describe("todo extractor user config", () => {
     const cfg = getTodoExtractorUserConfig();
     expect(cfg.LANGEXTRACT_MODEL).toBe("pa/gpt-5.5");
     expect(cfg.LANGEXTRACT_API_KEY_CONFIGURED).toBe(true);
+    expect(cfg.LANGEXTRACT_API_KEY_MASKED).toBe("se****et");
     expect(cfg).not.toHaveProperty("LANGEXTRACT_API_KEY");
   });
 });

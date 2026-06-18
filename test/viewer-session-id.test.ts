@@ -833,7 +833,7 @@ describe("viewer session rendering", () => {
       maxObservationsPerSession: 120,
       force: true,
     });
-    expect(sandbox.state.actions.extractMessage).toBe("已更新 1 张待办");
+    expect(sandbox.state.actions.extractMessage).toContain("新增 1");
   });
 
   it("does not start duplicate todo extraction while one is in flight", async () => {
@@ -884,6 +884,31 @@ describe("viewer session rendering", () => {
     expect(loadCalls).toBe(0);
     expect(sandbox.state.actions.stale).toBe(true);
     expect(getElement("view-actions").innerHTML).not.toContain("有新记录");
+  });
+
+  it("shows stale actions only on the refresh button when the list can rerender", () => {
+    const { sandbox, getElement } = loadViewerSandbox();
+    sandbox.state.activeTab = "actions";
+    sandbox.window.pageYOffset = 0;
+    sandbox.state.actions = {
+      loaded: true,
+      items: [{ id: "act-1", title: "Keep scroll", status: "pending" }],
+      frontier: [],
+      statusFilter: "",
+      search: "",
+      reviewItems: [],
+      extractStatus: "",
+      extractMessage: "",
+      extractInFlight: false,
+      stale: false,
+    };
+    sandbox.state.inbox = { loaded: true, items: [] };
+    sandbox.renderActions();
+    sandbox.routeWsMessage({ observation: { id: "obs-1", sessionId: "s1", timestamp: "2026-06-17T10:00:00Z" } });
+
+    expect(sandbox.state.actions.stale).toBe(true);
+    expect(getElement("view-actions").innerHTML).not.toContain("有新记录");
+    expect(getElement("view-actions").innerHTML).toContain("刷新待办");
   });
 
   it("uses the explicit LLM extract button instead of refresh for generation", () => {
@@ -952,7 +977,7 @@ describe("viewer session rendering", () => {
     expect(sandbox.state.actions.items[0].status).toBe("done");
   });
 
-  it("renders and saves todo extractor config from the actions page", async () => {
+  it("renders and saves todo extractor config from the global settings panel", async () => {
     const { sandbox, getElement, dispatchDocumentClick } = loadViewerSandbox();
     const posts: any[] = [];
     sandbox.fetch = async (input: unknown, init?: { body?: string }) => {
@@ -971,12 +996,15 @@ describe("viewer session rendering", () => {
       statusFilter: "",
       search: "",
       reviewItems: [],
-      configOpen: true,
       config: { envPath: "/tmp/.env", config: { LANGEXTRACT_MODEL: "pa/gpt-5.5", LANGEXTRACT_API_KEY_CONFIGURED: false } },
     };
     sandbox.state.inbox = { loaded: true, items: [] };
     sandbox.renderActions();
-    expect(getElement("view-actions").innerHTML).toContain("大模型抽取配置");
+    expect(getElement("view-actions").innerHTML).not.toContain("大模型抽取配置");
+    expect(getElement("view-actions").innerHTML).not.toContain("LANGEXTRACT_API_KEY=secret");
+    sandbox.state.settings.open = true;
+    sandbox.renderSettingsPanel();
+    expect(getElement("settings-panel").innerHTML).toContain("大模型抽取配置");
 
     getElement("todo-config-LANGEXTRACT_MODEL").value = "pa/gpt-5.5";
     getElement("todo-config-LANGEXTRACT_API_KEY").value = "secret";
@@ -988,6 +1016,87 @@ describe("viewer session rendering", () => {
 
     expect(posts[0]).toMatchObject({ LANGEXTRACT_MODEL: "pa/gpt-5.5", LANGEXTRACT_API_KEY: "secret" });
     expect(sandbox.state.actions.extractMessage).toBe("配置已保存，重启后生效。");
+  });
+
+  it("keeps unsaved todo extractor config while the settings panel rerenders", () => {
+    const { sandbox, getElement, dispatchDocumentEvent } = loadViewerSandbox();
+    sandbox.state.activeTab = "actions";
+    sandbox.state.actions = {
+      loaded: true,
+      items: [],
+      frontier: [],
+      statusFilter: "",
+      search: "",
+      reviewItems: [],
+      config: { envPath: "/tmp/.env", config: { LANGEXTRACT_BASE_URL: "", LANGEXTRACT_API_KEY_CONFIGURED: false } },
+      configDraft: {},
+    };
+    sandbox.state.inbox = { loaded: true, items: [] };
+    sandbox.state.settings.open = true;
+    sandbox.renderSettingsPanel();
+
+    getElement("todo-config-LANGEXTRACT_BASE_URL").value = "https://api.example.test/openai/v1";
+    dispatchDocumentEvent("input", { target: getElement("todo-config-LANGEXTRACT_BASE_URL") });
+    getElement("todo-config-LANGEXTRACT_API_KEY").value = "secret";
+    dispatchDocumentEvent("input", { target: getElement("todo-config-LANGEXTRACT_API_KEY") });
+
+    sandbox.renderSettingsPanel();
+
+    expect(sandbox.state.actions.configDraft.LANGEXTRACT_BASE_URL).toBe("https://api.example.test/openai/v1");
+    expect(sandbox.state.actions.configDraft.LANGEXTRACT_API_KEY).toBe("secret");
+    expect(getElement("settings-panel").innerHTML).toContain("https://api.example.test/openai/v1");
+  });
+
+  it("shows masked API key in settings and running state on the extract button", () => {
+    const { sandbox, getElement } = loadViewerSandbox();
+    sandbox.state.activeTab = "actions";
+    sandbox.state.actions = {
+      loaded: true,
+      items: [],
+      frontier: [],
+      statusFilter: "",
+      search: "",
+      reviewItems: [],
+      extractInFlight: true,
+      extractMessage: "正在从最近会话整理待办...",
+      config: { envPath: "/tmp/.env", config: { LANGEXTRACT_API_KEY_CONFIGURED: true, LANGEXTRACT_API_KEY_MASKED: "sk_****7890" } },
+    };
+    sandbox.state.inbox = { loaded: true, items: [] };
+    sandbox.renderActions();
+    sandbox.state.settings.open = true;
+    sandbox.renderSettingsPanel();
+    const html = getElement("view-actions").innerHTML;
+    const settingsHtml = getElement("settings-panel").innerHTML;
+    expect(html).toContain("整理中...");
+    expect(html).toContain('title="正在从最近会话整理待办..."');
+    expect(settingsHtml).toContain("API key: sk_****7890");
+  });
+
+  it("filters actions from metric cards", () => {
+    const { sandbox, getElement, dispatchDocumentClick } = loadViewerSandbox();
+    sandbox.state.activeTab = "actions";
+    sandbox.state.actions = {
+      loaded: true,
+      items: [{ id: "act-1", title: "Doing", status: "active", tags: [] }],
+      frontier: [],
+      statusFilter: "",
+      search: "",
+      reviewItems: [],
+    };
+    sandbox.state.inbox = { loaded: true, items: [] };
+    sandbox.renderActions();
+    expect(getElement("view-actions").innerHTML).toContain('data-status="active"');
+
+    const target = Object.create(sandbox.Element.prototype);
+    target.getAttribute = (name: string) => {
+      if (name === "data-action") return "filter-actions-status";
+      if (name === "data-status") return "active";
+      return null;
+    };
+    target.closest = (selector: string) => selector === "[data-action]" ? target : null;
+    dispatchDocumentClick(target);
+
+    expect(sandbox.state.actions.statusFilter).toBe("active");
   });
 
   it("soft-refreshes actions while todo extraction is still running", async () => {
@@ -1082,6 +1191,56 @@ describe("viewer session rendering", () => {
     expect(html).toContain("todo-extracted");
     expect(html).toContain("time:current");
     expect(html).toContain("type:to_start");
+  });
+
+  it("hides generated command-log action cards from the todo view", () => {
+    const { sandbox, getElement } = loadViewerSandbox();
+    sandbox.state.activeTab = "actions";
+    sandbox.state.actions = {
+      loaded: true,
+      items: [
+        {
+          id: "act_bad",
+          title: "json nameWithOwner",
+          description: "gh pr list --json number,title --limit 20",
+          status: "pending",
+          priority: "normal",
+          createdBy: "todo-extract",
+          tags: ["todo-extracted", "time:current", "type:to_start"],
+        },
+        {
+          id: "act_good",
+          title: "整理验收截图",
+          description: "打开待办页后确认自动抽取生成的卡片。",
+          status: "pending",
+          priority: "normal",
+          createdBy: "todo-extract",
+          tags: ["todo-extracted", "time:current", "type:to_start"],
+        },
+      ],
+      frontier: [],
+      statusFilter: "",
+      search: "",
+      reviewItems: [
+        {
+          id: "review_bad",
+          status: "pending",
+          kind: "action",
+          title: "limit 20",
+          content: "{\"cmd\":\"gh pr list --json number\"}",
+          source: "viewer",
+          payload: { actionCandidate: { reason: "todo" }, tags: ["todo-extracted"] },
+        },
+      ],
+    };
+    sandbox.state.inbox = { loaded: true, items: [] };
+
+    sandbox.renderActions();
+    const html = getElement("view-actions").innerHTML;
+
+    expect(html).toContain("整理验收截图");
+    expect(html).not.toContain("json nameWithOwner");
+    expect(html).not.toContain("limit 20");
   });
 
   it("keeps review candidates out of the default action view", () => {
@@ -1183,9 +1342,9 @@ describe("viewer session rendering", () => {
     expect(html).toContain("待确认");
     expect(html).toContain("确认");
     expect(html).toContain("忽略");
-    expect(html).toContain("查看原文");
-    expect(html).toContain("待办生成链路与前端展示修复计划");
-    expect(html.indexOf("## Summary")).toBeGreaterThan(html.indexOf("<summary>查看原文</summary>"));
+    expect(html).not.toContain("查看原文");
+    expect(html).not.toContain("待办生成链路与前端展示修复计划");
+    expect(html).not.toContain("## Summary");
     expect(html).not.toContain("src/functions/action-candidates.ts");
     expect(html).not.toContain(">action-candidate<");
   });

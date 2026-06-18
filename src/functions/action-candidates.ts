@@ -52,7 +52,13 @@ function isJsonShaped(text: string): boolean {
 function isToolTrace(text: string): boolean {
   const lower = normalizeText(text).toLowerCase();
   if (!lower || isJsonShaped(lower)) return true;
-  return /"command"\s*:|toolinput|tooloutput|function_id/.test(lower);
+  if (/"(?:cmd|command|workdir|yield_time_ms|max_output_tokens)"\s*:/.test(lower)) return true;
+  if (/toolinput|tooloutput|function_id|tooluseid|tooluse|call_[a-z0-9]+|chunk id|wall time|process exited/.test(lower)) return true;
+  if (/^\/(?:tmp|users|var|private|volumes)\//i.test(lower)) return true;
+  if (/^\s*(?:gh|git|npm|pnpm|yarn|python3?|node|curl)\s+[^\n]*(?:--json|--limit|--workdir|--max-output|--yield-time|status|show|list|run|test|install|build)\b/i.test(lower)) return true;
+  if (/^(?:json|state|limit)\s+[\w.-]+/i.test(lower)) return true;
+  if (/\b(?:namewithowner|headrefname|baserefname|databaseid|tooluseid)\b/i.test(lower)) return true;
+  return false;
 }
 
 function candidateText(obs: CompressedObservation): string {

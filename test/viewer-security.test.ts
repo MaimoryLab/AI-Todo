@@ -3,7 +3,7 @@ import type { AddressInfo } from "node:net";
 import { request as httpRequest } from "node:http";
 import { renderViewerDocument } from "../src/viewer/document.js";
 import { KV } from "../src/state/schema.js";
-import type { Action } from "../src/types.js";
+import type { Action, CompressedObservation, Session } from "../src/types.js";
 import {
   buildAllowedHosts,
   isHostAllowed,
@@ -168,6 +168,9 @@ describe("viewer request handler DNS rebinding defence (e2e)", () => {
         return value;
       },
       list: async (scope: string) => Object.values(kvData[scope] || {}),
+      delete: async (scope: string, key: string) => {
+        if (kvData[scope]) delete kvData[scope][key];
+      },
     };
     const server = startViewerServer(0, kv, {}, undefined, 0);
     await new Promise<void>((resolve) => server.once("listening", () => resolve()));
@@ -186,6 +189,8 @@ describe("viewer request handler DNS rebinding defence (e2e)", () => {
     port: number,
     hostHeader: string,
     pathname = "/agentmemory/livez",
+    method = "GET",
+    body = "",
   ): Promise<{ status: number; body: string; headers: Record<string, string | string[] | undefined> }> {
     return new Promise((resolve, reject) => {
       const req = httpRequest(
@@ -193,8 +198,11 @@ describe("viewer request handler DNS rebinding defence (e2e)", () => {
           host: "127.0.0.1",
           port,
           path: pathname,
-          method: "GET",
-          headers: { Host: hostHeader },
+          method,
+          headers: {
+            Host: hostHeader,
+            ...(body ? { "Content-Type": "application/json", "Content-Length": Buffer.byteLength(body) } : {}),
+          },
         },
         (res) => {
           let body = "";
@@ -211,6 +219,7 @@ describe("viewer request handler DNS rebinding defence (e2e)", () => {
         },
       );
       req.on("error", reject);
+      if (body) req.write(body);
       req.end();
     });
   }
@@ -277,5 +286,68 @@ describe("viewer request handler DNS rebinding defence (e2e)", () => {
     expect(JSON.parse(actions.body).actions[0].title).toBe("整理验收截图");
     expect(frontier.status).toBe(200);
     expect(JSON.parse(frontier.body).frontier[0].action.title).toBe("整理验收截图");
+  });
+
+  it("generates todos through the viewer fallback endpoint when REST proxy misses", async () => {
+    const previousExtractor = process.env.AGENTMEMORY_TODO_EXTRACTOR;
+    const previousDirectConfidence = process.env.AGENTMEMORY_TODO_DIRECT_CONFIDENCE;
+    process.env.AGENTMEMORY_TODO_EXTRACTOR = "rules";
+    process.env.AGENTMEMORY_TODO_DIRECT_CONFIDENCE = "0.6";
+    try {
+      const session: Session = {
+        id: "ses_todo",
+        project: "ai-todo",
+        cwd: "/repo",
+        startedAt: "2026-06-17T08:00:00.000Z",
+        endedAt: "2026-06-17T09:00:00.000Z",
+        status: "completed",
+        observationCount: 1,
+      };
+      const observation: CompressedObservation = {
+        id: "obs_todo",
+        sessionId: "ses_todo",
+        timestamp: "2026-06-17T08:10:00.000Z",
+        type: "conversation",
+        title: "assistant",
+        subtitle: "",
+        facts: [],
+        narrative: "下一步请修复 CI 失败，并重新跑测试。",
+        concepts: [],
+        files: [],
+        importance: 5,
+      };
+      const { port } = await spinUpViewer({
+        [KV.sessions]: { [session.id]: session },
+        [KV.observations(session.id)]: { [observation.id]: observation },
+      });
+
+      const res = await request(
+        port,
+        `localhost:${port}`,
+        "/agentmemory/todo-extract/generate",
+        "POST",
+        JSON.stringify({ force: true }),
+      );
+      const actions = await request(port, `localhost:${port}`, "/agentmemory/actions");
+
+      expect(res.status).toBe(200);
+      expect(JSON.parse(res.body)).toMatchObject({ success: true, directCreated: 1 });
+      expect(JSON.parse(actions.body).actions[0]).toMatchObject({
+        title: expect.any(String),
+        tags: expect.arrayContaining(["todo-extracted", "time:current", "type:follow_up"]),
+        sourceObservationIds: ["obs_todo"],
+      });
+    } finally {
+      if (previousExtractor === undefined) {
+        delete process.env.AGENTMEMORY_TODO_EXTRACTOR;
+      } else {
+        process.env.AGENTMEMORY_TODO_EXTRACTOR = previousExtractor;
+      }
+      if (previousDirectConfidence === undefined) {
+        delete process.env.AGENTMEMORY_TODO_DIRECT_CONFIDENCE;
+      } else {
+        process.env.AGENTMEMORY_TODO_DIRECT_CONFIDENCE = previousDirectConfidence;
+      }
+    }
   });
 });

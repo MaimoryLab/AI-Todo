@@ -49,6 +49,16 @@ type TodoExtractOptions = {
 const TIME_BUCKETS = new Set(["current", "recent", "history"]);
 const TYPE_BUCKETS = new Set(["pending", "to_start", "follow_up", "in_progress", "done", "processing"]);
 const SIDE_CAR = "todo-extract-langextract.py";
+const SIDE_CAR_ENV_KEYS = [
+  "LANGEXTRACT_API_KEY",
+  "LANGEXTRACT_BASE_URL",
+  "LANGEXTRACT_MODEL",
+  "LANGEXTRACT_PROVIDER",
+  "LANGEXTRACT_THINKING_DEPTH",
+  "LANGEXTRACT_PASSES",
+  "LANGEXTRACT_MAX_WORKERS",
+  "LANGEXTRACT_MAX_CHAR_BUFFER",
+];
 
 function envNumber(key: string, fallback: number): number {
   const parsed = Number(getEnvVar(key));
@@ -115,9 +125,31 @@ function looksLikeBadTitle(value: string): boolean {
   if (/^\/(?:tmp|users|var|private|volumes)\//i.test(text)) return true;
   if (/^[\w.-]+\/(?:\.\.\.|[\w.-]+\/)/.test(text)) return true;
   if ((/\/|\\/.test(text)) && /\.(png|jpe?g|gif|webp|json|ya?ml|ts|tsx|js|py|md)\b/i.test(text)) return true;
+  if (/^\s*(?:gh|git|npm|pnpm|yarn|python3?|node|curl)\s+[^\n]*(?:--json|--limit|--workdir|--max-output|--yield-time|status|show|list|run|test|install|build)\b/i.test(text)) return true;
+  if (/^(?:json|state|limit)\s+[\w.-]+/i.test(text)) return true;
+  if (/\b(?:nameWithOwner|headRefName|baseRefName|databaseId)\b/.test(text)) return true;
+  if (/\b--(?:json|limit|state|repo|workdir|max-output|yield-time)\b/i.test(text)) return true;
   const punctuation = (text.match(/[{}[\]":,]/g) || []).length;
   if (text.length >= 24 && punctuation / text.length > 0.2) return true;
   return lower === "untitled todo" || lower === "untitled candidate";
+}
+
+function isPollutedTodoText(value: string | undefined): boolean {
+  const text = normalizeText(value);
+  const lower = text.toLowerCase();
+  if (!text) return false;
+  if (text.length <= 90 && looksLikeBadTitle(text)) return true;
+  if (/please implement this plan/i.test(text)) return true;
+  if (/^#{1,3}\s+.*(?:计划|Plan)\s*$/im.test(text) && /#{1,3}\s+(?:Summary|Key Changes|Test Plan|Assumptions|Implementation|执行步骤|验证命令)\b/im.test(text)) return true;
+  if (/"(?:plan|status|step)"\s*:/.test(text) && /"step"\s*:/.test(text)) return true;
+  if (/审查结果\s*\[[Pp]\d+\]/.test(text) && /(?:src|test)\/[^\s]+/.test(text)) return true;
+  if (/toolinput|tooloutput|function_id|tooluseid|tooluse|call_[a-z0-9]+|chunk id|wall time|process exited/i.test(text)) return true;
+  if (/"(?:cmd|command|workdir|yield_time_ms|max_output_tokens)"\s*:/.test(text)) return true;
+  if (/^\/(?:tmp|users|var|private|volumes)\//i.test(text)) return true;
+  if (/^\s*(?:gh|git|npm|pnpm|yarn|python3?|node|curl)\s+[^\n]*(?:--json|--limit|--workdir|--max-output|--yield-time|status|show|list|run|test|install|build)\b/i.test(text)) return true;
+  if (/^(?:json|state|limit)\s+[\w.-]+/i.test(lower)) return true;
+  if (/\b(?:namewithowner|headrefname|baserefname|databaseid)\b/i.test(lower)) return true;
+  return false;
 }
 
 export function cleanTodoTitle(title: string, description = "", quote = ""): string | null {
@@ -133,6 +165,7 @@ function todoForStorage(todo: ExtractedTodo): ExtractedTodo | null {
   if (!title) return null;
   const description = normalizeText(todo.description || todo.evidence?.quote).slice(0, 1000);
   if (!description) return null;
+  if (isPollutedTodoText(title) || isPollutedTodoText(description) || isPollutedTodoText(todo.evidence?.quote)) return null;
   const rawDedupe = normalizeText(todo.dedupeKey);
   const dedupeKey = rawDedupe && !looksLikeBadTitle(rawDedupe)
     ? normalizedKey(rawDedupe)
@@ -194,9 +227,14 @@ export async function runLangExtractSidecar(
   const script = sidecarPath();
   if (!script) throw new Error("langextract sidecar not found");
   const python = getEnvVar("LANGEXTRACT_PYTHON") || "python3";
+  const env = { ...process.env };
+  for (const key of SIDE_CAR_ENV_KEYS) {
+    const value = getEnvVar(key);
+    if (value) env[key] = value;
+  }
   const timeoutMs = opts.timeoutMs ?? envNumber("AGENTMEMORY_TODO_EXTRACT_TIMEOUT_MS", 30_000);
   return new Promise((resolvePromise, reject) => {
-    const child = spawn(python, [script], { stdio: ["pipe", "pipe", "pipe"] });
+    const child = spawn(python, [script], { stdio: ["pipe", "pipe", "pipe"], env });
     let stdout = "";
     let stderr = "";
     const timer = setTimeout(() => {
@@ -358,13 +396,59 @@ function makeReview(todo: ExtractedTodo, session: Session, now: string): ReviewQ
   };
 }
 
+function actionLooksGenerated(action: Action): boolean {
+  const tags = Array.isArray(action.tags) ? action.tags : [];
+  return action.createdBy === "todo-extract" ||
+    tags.includes("todo-extracted") ||
+    tags.includes("action-candidate") ||
+    !!action.metadata?.todoExtraction;
+}
+
+function reviewLooksGenerated(item: ReviewQueueItem): boolean {
+  const payload = item.payload || {};
+  const tags = Array.isArray(payload.tags) ? payload.tags.map(String) : [];
+  return item.kind === "action" && (
+    tags.includes("todo-extracted") ||
+    tags.includes("action-candidate") ||
+    !!payload.todoExtraction ||
+    !!payload.actionCandidate
+  );
+}
+
+function actionIsPolluted(action: Action): boolean {
+  return actionLooksGenerated(action) &&
+    (isPollutedTodoText(action.title) || isPollutedTodoText(action.description));
+}
+
+function reviewIsPolluted(item: ReviewQueueItem): boolean {
+  return reviewLooksGenerated(item) &&
+    (isPollutedTodoText(item.title) || isPollutedTodoText(item.content));
+}
+
+export async function cleanPollutedTodoCards(
+  kv: Pick<StateKV, "list" | "delete">,
+): Promise<{ cleanedActions: number; cleanedReviews: number }> {
+  const [actions, reviews] = await Promise.all([
+    kv.list<Action>(KV.actions).catch(() => []),
+    kv.list<ReviewQueueItem>(KV.reviewQueue).catch(() => []),
+  ]);
+  const pollutedActions = actions.filter(actionIsPolluted);
+  const pollutedReviews = reviews.filter(reviewIsPolluted);
+  await Promise.all([
+    ...pollutedActions.map((action) => kv.delete(KV.actions, action.id)),
+    ...pollutedReviews.map((item) => kv.delete(KV.reviewQueue, item.id)),
+  ]);
+  return { cleanedActions: pollutedActions.length, cleanedReviews: pollutedReviews.length };
+}
+
 async function extractForSession(
   session: Session,
   observations: CompressedObservation[],
   mode: string,
-): Promise<{ todos: ExtractedTodo[]; engine: "langextract" | "rules" }> {
+): Promise<{ todos: ExtractedTodo[]; engine: "langextract" | "rules"; fallbackReason?: string }> {
   const blocks = observations.map(blockFor).filter((block) => block.text);
   const bucket = timeBucketFor(session);
+  let fallbackReason = "";
   if (mode !== "rules" && blocks.length > 0) {
     try {
       const todos = await runLangExtractSidecar({
@@ -376,7 +460,8 @@ async function extractForSession(
         blocks,
       });
       return { todos: todos.map((todo) => safeTodo(todo, session)), engine: "langextract" };
-    } catch {
+    } catch (err) {
+      fallbackReason = err instanceof Error ? err.message : String(err || "langextract failed");
       // Fall back to rules even in langextract mode; the sidecar is optional.
     }
   }
@@ -384,11 +469,12 @@ async function extractForSession(
   return {
     todos: candidates.map((candidate) => candidateToTodo(candidate, session, bucket)).filter((todo): todo is ExtractedTodo => !!todo),
     engine: "rules",
+    ...(fallbackReason ? { fallbackReason } : {}),
   };
 }
 
 export async function generateTodosFromSessions(
-  kv: Pick<StateKV, "get" | "set" | "list">,
+  kv: Pick<StateKV, "get" | "set" | "list" | "delete">,
   data: TodoExtractOptions = {},
 ): Promise<{
   success: true;
@@ -399,6 +485,9 @@ export async function generateTodosFromSessions(
   reviewCreated: number;
   hiddenHistory: number;
   discarded: number;
+  cleanedActions: number;
+  cleanedReviews: number;
+  fallbackReason?: string;
 }> {
   const maxSessions = clampPositiveInt(data.maxSessions, 20, 100);
   const maxObservationsPerSession = clampPositiveInt(data.maxObservationsPerSession, 300, 1000);
@@ -410,7 +499,10 @@ export async function generateTodosFromSessions(
     kv.list<ReviewQueueItem>(KV.reviewQueue).catch(() => []),
     kv.list<Session>(KV.sessions).catch(() => []),
   ]);
-  const existing = existingDedupeKeys(actions, reviews);
+  const cleanup = await cleanPollutedTodoCards(kv);
+  const remainingActions = cleanup.cleanedActions > 0 ? await kv.list<Action>(KV.actions).catch(() => []) : actions;
+  const remainingReviews = cleanup.cleanedReviews > 0 ? await kv.list<ReviewQueueItem>(KV.reviewQueue).catch(() => []) : reviews;
+  const existing = existingDedupeKeys(remainingActions, remainingReviews);
   const checkpointId = `todo-extract:${data.project || "all"}`;
   const checkpoint = await kv.get<ScanCheckpoint>(KV.scanCheckpoints, checkpointId).catch(() => null);
   const processed = parseCheckpoint(checkpoint?.cursor);
@@ -424,6 +516,7 @@ export async function generateTodosFromSessions(
   let hiddenHistory = 0;
   let discarded = 0;
   const engines = new Set<"langextract" | "rules">();
+  const fallbackReasons = new Set<string>();
   const now = new Date().toISOString();
 
   for (const session of sessions) {
@@ -434,8 +527,9 @@ export async function generateTodosFromSessions(
       .slice(0, maxObservationsPerSession);
     scannedObservations += observations.length;
     const blockMap = new Map(observations.map((obs) => [obs.id, blockFor(obs)]));
-    const { todos, engine } = await extractForSession(session, observations, mode);
+    const { todos, engine, fallbackReason } = await extractForSession(session, observations, mode);
     engines.add(engine);
+    if (fallbackReason) fallbackReasons.add(fallbackReason.slice(0, 240));
     for (const rawTodo of todos) {
       const todo = todoForStorage(rawTodo);
       if (!todo || !validateTodoEvidence(todo, blockMap)) {
@@ -486,6 +580,9 @@ export async function generateTodosFromSessions(
     reviewCreated,
     hiddenHistory,
     discarded,
+    cleanedActions: cleanup.cleanedActions,
+    cleanedReviews: cleanup.cleanedReviews,
+    ...(fallbackReasons.size ? { fallbackReason: Array.from(fallbackReasons)[0] } : {}),
   };
 }
 
