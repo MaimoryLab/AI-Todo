@@ -23,7 +23,7 @@ export const DEFAULT_LANGEXTRACT_PROVIDER = "openai";
 export const DEFAULT_LANGEXTRACT_BASE_URL = "https://api.novita.ai/openai/v1";
 export const DEFAULT_TODO_EXTRACT_TIMEOUT_MS = 120_000;
 const LEGACY_LANGEXTRACT_MODELS = new Set(["pa/gpt-5.5"]);
-const WRITABLE_TODO_EXTRACT_KEYS = new Set([
+export const WRITABLE_TODO_EXTRACT_KEYS = new Set([
   "AGENTMEMORY_TODO_EXTRACTOR",
   "LANGEXTRACT_PYTHON",
   "LANGEXTRACT_MODEL",
@@ -96,11 +96,11 @@ export function normalizeTodoExtractorProvider(value: string | undefined): strin
   return provider;
 }
 
-export function writeUserEnv(updates: Record<string, string>): void {
+export function writeUserEnv(updates: Record<string, string>): string[] {
   const cleanEntries = Object.entries(updates).filter(
     ([key, value]) => WRITABLE_TODO_EXTRACT_KEYS.has(key) && value.trim().length > 0 && !/[\r\n]/.test(value),
   );
-  if (!cleanEntries.length) return;
+  if (!cleanEntries.length) return [];
   mkdirSync(DATA_DIR, { recursive: true });
   const current = existsSync(ENV_FILE) ? readFileSync(ENV_FILE, "utf-8") : "";
   const lines = current ? current.split("\n") : [];
@@ -118,6 +118,7 @@ export function writeUserEnv(updates: Record<string, string>): void {
     if (!seen.has(key)) next.push(`${key}=${value}`);
   });
   writeFileSync(ENV_FILE, next.join("\n").replace(/\n*$/, "\n"), { mode: 0o600 });
+  return cleanEntries.map(([key]) => key);
 }
 
 function hasRealValue(v: string | undefined): v is string {

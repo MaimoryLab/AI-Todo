@@ -43,7 +43,7 @@ import { isFirstRun, readPrefs, resetPrefs, writePrefs } from "./cli/preferences
 import { runOnboarding } from "./cli/onboarding.js";
 import { setBootVerbose } from "./logger.js";
 import { VERSION } from "./version.js";
-import { getTodoExtractorUserConfig, getUserEnvPath, writeUserEnv } from "./config.js";
+import { getTodoExtractorUserConfig, getUserEnvPath, writeUserEnv, WRITABLE_TODO_EXTRACT_KEYS } from "./config.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const args = process.argv.slice(2);
@@ -2333,8 +2333,14 @@ async function runConfig(): Promise<void> {
     }
     const key = pair.slice(0, eq);
     const value = pair.slice(eq + 1);
-    writeUserEnv({ [key]: value });
-    p.log.success(`Updated ${key}. Restart Agent Memory Lab to use it.`);
+    const applied = writeUserEnv({ [key]: value });
+    if (applied.includes(key)) {
+      p.log.success(`Updated ${key}. Restart Agent Memory Lab to use it.`);
+    } else {
+      p.log.warn(
+        `Did not write '${key}'. Only these keys are writable (non-empty, single-line):\n  ${[...WRITABLE_TODO_EXTRACT_KEYS].join(", ")}`,
+      );
+    }
     return;
   }
   p.log.info("Usage: agentmemory-lab config get | config set KEY=value");
@@ -2678,6 +2684,17 @@ const commands: Record<string, () => Promise<void>> = {
   "import-jsonl": runImportJsonl,
 };
 
+const firstArg = args[0];
+if (
+  firstArg &&
+  !firstArg.startsWith("-") &&
+  !Object.prototype.hasOwnProperty.call(commands, firstArg)
+) {
+  p.log.error(
+    `Unknown command '${firstArg}'. Run \`agentmemory-lab --help\` for the list of commands.`,
+  );
+  process.exit(1);
+}
 const handler = commands[args[0] ?? ""] ?? main;
 handler().catch((err) => {
   p.log.error(err instanceof Error ? err.message : String(err));
