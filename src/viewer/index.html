@@ -4016,7 +4016,7 @@
         'tab.dashboard': 'Overview', 'tab.actions': 'To-Do', 'tab.sessions': 'Evidence',
         'status.pending': 'Pending', 'status.active': 'In progress', 'status.done': 'Done',
         'status.blocked': 'Blocked', 'status.cancelled': 'Cancelled',
-        'filter.review': 'Review', 'filter.all': 'All',
+        'filter.review': 'To confirm', 'filter.all': 'All',
         'dash.firstRun.kicker': 'First run',
         'dash.firstRun.title': 'Import sample data first',
         'dash.firstRun.body': 'No session data yet. Run the demo and the page will fill with browsable memory and activity.',
@@ -4024,6 +4024,11 @@
         'dash.noRecord': 'No records yet',
         'dash.stat.sessions': 'Sessions',
         'dash.stat.recent': 'Latest',
+        'dash.stat.todos': 'Todos',
+        'dash.stat.openWorkbench': 'Open workbench',
+        'dash.stat.replyQueue': 'Reply queue',
+        'dash.stat.actionCandidates': 'Action candidates',
+        'dash.stat.pendingActions': 'Pending actions',
         'dash.stat.memories': 'Memories',
         'dash.stat.latestVersion': 'Latest version',
         'dash.stat.lessons': 'Lessons',
@@ -4208,6 +4213,11 @@
         'dash.noRecord': '暂无记录',
         'dash.stat.sessions': '会话',
         'dash.stat.recent': '最近',
+        'dash.stat.todos': '待办',
+        'dash.stat.openWorkbench': '打开工作台',
+        'dash.stat.replyQueue': '待回复队列',
+        'dash.stat.actionCandidates': '行动候选',
+        'dash.stat.pendingActions': '待跟进行动',
         'dash.stat.memories': '记忆',
         'dash.stat.latestVersion': '最新版本',
         'dash.stat.lessons': '经验',
@@ -4482,7 +4492,7 @@
 
     var state = {
       activeTab: 'dashboard',
-      dashboard: { loaded: false, health: null, sessions: [], memories: [], graphStats: null, recentAudit: [], lessons: [], crystals: [], delivery: null },
+      dashboard: { loaded: false, health: null, sessions: [], memories: [], actions: [], actionReviews: [], inboxAwaiting: [], graphStats: null, recentAudit: [], lessons: [], crystals: [], delivery: null },
       dashboardRefresh: { enabled: true, intervalMs: 30000 },
       graph: { loaded: false, nodes: [], edges: [], stats: null, filters: {}, selectedNode: null },
       memories: { loaded: false, items: [], reviewItems: [], search: '', typeFilter: '', sourceFilter: '' },
@@ -5741,29 +5751,40 @@
     async function loadDashboard() {
       var el = document.getElementById('view-dashboard');
       el.innerHTML = '<div class="loading">加载总览中...</div>';
+      var showDebug = new URLSearchParams(window.location.search).get('debug') === '1';
       try {
-        var results = await Promise.all([
+        var baseResults = await Promise.all([
           apiGet('health'),
           apiGet('sessions'),
-          apiGet('memories?latest=true&limit=500'),
-          apiGet('graph/stats'),
-          apiGet('audit?limit=5'),
-          apiGet('semantic'),
-          apiGet('procedural'),
-          apiGet('relations'),
-          apiGet('lessons'),
-          apiGet('delivery-status')
+          apiGet('actions'),
+          apiGet('review?status=pending&kind=action&limit=200'),
+          apiGet('inbox?status=awaiting&limit=50')
         ]);
-        state.dashboard.health = results[0];
-        state.dashboard.sessions = ((results[1] && results[1].sessions) || []).filter(function(s) { return !isDemoSession(s); });
-        state.dashboard.memories = (results[2] && results[2].memories) || [];
-        state.dashboard.graphStats = results[3];
-        state.dashboard.recentAudit = (results[4] && results[4].entries) || [];
-        state.dashboard.semantic = (results[5] && results[5].facts) || (results[5] && results[5].semantic) || [];
-        state.dashboard.procedural = (results[6] && results[6].procedures) || (results[6] && results[6].procedural) || [];
-        state.dashboard.lessons = (results[8] && results[8].lessons) || [];
-        state.dashboard.relations = (results[7] && results[7].relations) || [];
-        state.dashboard.delivery = results[9] || null;
+        state.dashboard.health = baseResults[0];
+        state.dashboard.sessions = ((baseResults[1] && baseResults[1].sessions) || []).filter(function(s) { return !isDemoSession(s); });
+        state.dashboard.actions = ((baseResults[2] && baseResults[2].actions) || []).filter(isActionRenderable);
+        state.dashboard.actionReviews = ((baseResults[3] && baseResults[3].items) || []).filter(isActionReviewRenderable);
+        state.dashboard.inboxAwaiting = (baseResults[4] && baseResults[4].items) || [];
+        if (showDebug) {
+          var debugResults = await Promise.all([
+            apiGet('memories?latest=true&limit=500'),
+            apiGet('graph/stats'),
+            apiGet('audit?limit=5'),
+            apiGet('semantic'),
+            apiGet('procedural'),
+            apiGet('relations'),
+            apiGet('lessons'),
+            apiGet('delivery-status')
+          ]);
+          state.dashboard.memories = (debugResults[0] && debugResults[0].memories) || [];
+          state.dashboard.graphStats = debugResults[1];
+          state.dashboard.recentAudit = (debugResults[2] && debugResults[2].entries) || [];
+          state.dashboard.semantic = (debugResults[3] && debugResults[3].facts) || (debugResults[3] && debugResults[3].semantic) || [];
+          state.dashboard.procedural = (debugResults[4] && debugResults[4].procedures) || (debugResults[4] && debugResults[4].procedural) || [];
+          state.dashboard.relations = (debugResults[5] && debugResults[5].relations) || [];
+          state.dashboard.lessons = (debugResults[6] && debugResults[6].lessons) || [];
+          state.dashboard.delivery = debugResults[7] || null;
+        }
         state.dashboard.loaded = true;
         renderDashboard();
       } catch (err) {
@@ -5875,6 +5896,10 @@
       var fMetrics = h.functionMetrics || [];
       var cb = h.circuitBreaker || null;
       var workers = snap.workers || [];
+      var actions = (d.actions || []).filter(isActionRenderable);
+      var actionReviews = (d.actionReviews || []).filter(isActionReviewRenderable);
+      var awaitingReplies = (d.inboxAwaiting || []).filter(function(i) { return i && i.kind === 'question'; });
+      var followUps = actions.filter(function(a) { return a.status === 'pending' || a.status === 'blocked'; });
 
       var html = '';
 
@@ -5891,14 +5916,22 @@
       html += '<div class="stats-grid">';
       var latestSessionTime = d.sessions.length ? shortDateTime(sessionRecordTime(d.sessions.slice().sort(function(a, b) { return (sessionRecordTime(b) || '').localeCompare(sessionRecordTime(a) || ''); })[0])) : t('dash.noRecord');
       html += '<div class="stat-card"><div class="label">' + t('dash.stat.sessions') + '</div><div class="value">' + d.sessions.length + '</div><div class="sub">' + t('dash.stat.recent') + ' ' + esc(latestSessionTime) + '</div></div>';
-      html += '<div class="stat-card"><div class="label">' + t('dash.stat.memories') + '</div><div class="value">' + d.memories.length + '</div><div class="sub">' + t('dash.stat.latestVersion') + '</div></div>';
+      html += '<div class="stat-card"><div class="label">' + t('dash.stat.todos') + '</div><div class="value">' + actions.length + '</div><div class="sub"><a href="#actions">' + t('dash.stat.openWorkbench') + '</a></div></div>';
+      html += '<div class="stat-card"><div class="label">' + t('act.metric.waiting') + '</div><div class="value">' + awaitingReplies.length + '</div><div class="sub"><a href="#actions">' + t('dash.stat.replyQueue') + '</a></div></div>';
+      html += '<div class="stat-card"><div class="label">' + t('act.metric.review') + '</div><div class="value">' + actionReviews.length + '</div><div class="sub"><a href="#actions">' + t('dash.stat.actionCandidates') + '</a></div></div>';
+      html += '<div class="stat-card"><div class="label">' + t('act.metric.followUp') + '</div><div class="value">' + followUps.length + '</div><div class="sub"><a href="#actions">' + t('dash.stat.pendingActions') + '</a></div></div>';
       var lessonCount = (d.lessons || []).length;
-      html += '<div class="stat-card"><div class="label">' + t('dash.stat.lessons') + '</div><div class="value">' + lessonCount + '</div><div class="sub">' + t('dash.stat.lessonsSub') + '</div></div>';
-      if (nodeCount > 0 || edgeCount > 0) {
+      if (showDebug) {
+        html += '<div class="stat-card"><div class="label">' + t('dash.stat.memories') + '</div><div class="value">' + d.memories.length + '</div><div class="sub">' + t('dash.stat.latestVersion') + '</div></div>';
+        html += '<div class="stat-card"><div class="label">' + t('dash.stat.lessons') + '</div><div class="value">' + lessonCount + '</div><div class="sub">' + t('dash.stat.lessonsSub') + '</div></div>';
+      }
+      if (showDebug && (nodeCount > 0 || edgeCount > 0)) {
         html += '<div class="stat-card"><div class="label">' + t('dash.stat.graphNodes') + '</div><div class="value">' + nodeCount + '</div><div class="sub">' + t('dash.stat.edges') + ' ' + edgeCount + '</div></div>';
       }
-      html += '<div class="stat-card"><div class="label">' + t('dash.stat.status') + '</div><div class="value"><div class="health-bar"><span class="health-dot ' + dotClass + '"></span> ' + esc(healthStatus) + '</div></div>';
-      html += '<div class="sub">' + esc(snap.connectionState || 'unknown') + '</div></div>';
+      if (showDebug) {
+        html += '<div class="stat-card"><div class="label">' + t('dash.stat.status') + '</div><div class="value"><div class="health-bar"><span class="health-dot ' + dotClass + '"></span> ' + esc(healthStatus) + '</div></div>';
+        html += '<div class="sub">' + esc(snap.connectionState || 'unknown') + '</div></div>';
+      }
       if (showDebug) {
         var totalCalls = fMetrics.reduce(function(a, m) { return a + (m.totalCalls || 0); }, 0);
         html += '<div class="stat-card"><div class="label">' + t('dash.stat.toolCalls') + '</div><div class="value">' + totalCalls + '</div><div class="sub">' + t('dash.stat.tracking') + ' ' + fMetrics.length + ' ' + t('dash.stat.functions') + '</div></div>';
@@ -6871,7 +6904,6 @@
       // corpora. Older endpoints returned the full unbounded list which
       // hit the iii invocation timeout and the UI fell through to 0.
       var result = await apiGet('memories?latest=true&limit=2000');
-      var reviewResult = await apiGet('review?status=pending&kind=memory,lesson&limit=50');
       var items = (result && result.memories) || [];
       // Newest first — server returns KV-insertion order.
       items.sort(function(a, b) {
@@ -6880,7 +6912,7 @@
         return bc.localeCompare(ac);
       });
       state.memories.items = items;
-      state.memories.reviewItems = (reviewResult && reviewResult.items) || [];
+      state.memories.reviewItems = [];
       state.memories.total = (result && typeof result.total === 'number') ? result.total : items.length;
       state.memories.loaded = true;
       renderMemories();
@@ -6965,8 +6997,6 @@
       html += '<div class="memory-summary" style="background:#ffffff;margin-bottom:14px;">';
       html += '<div><div class="memory-summary-title">自动整理中</div><div class="memory-summary-sub">新的聊天记录会作为记忆线索；你可以在这里审阅、编辑或删除。</div></div>';
       html += '</div>';
-
-      html += renderReviewQueue(state.memories.reviewItems || []);
 
       if (filtered.length === 0) {
         html += '<div class="empty-state">' +
@@ -9306,7 +9336,7 @@
       var items = (state.actions.items || []).filter(isActionRenderable).slice();
       var reviewItems = (state.actions.reviewItems || []).filter(isActionReviewRenderable);
       var search = state.actions.search.toLowerCase();
-      var statusFilter = state.actions.statusFilter;
+      var statusFilter = state.actions.statusFilter === 'all' ? '' : state.actions.statusFilter;
       var frontierIds = new Set((state.actions.frontier || []).map(function(a) { return a.id; }));
 
       if (search) {
@@ -9317,17 +9347,17 @@
           return ((item.title || '') + ' ' + (item.content || '') + ' ' + (reviewProject(item) || '') + ' ' + reviewTags(item).join(' ')).toLowerCase().indexOf(search) >= 0;
         });
       }
-      if (statusFilter && statusFilter !== 'review' && statusFilter !== 'all') {
+      var metricItems = items.slice();
+      var metricReviewItems = reviewItems.slice();
+      if (statusFilter && statusFilter !== 'review' && statusFilter !== 'awaiting') {
         items = items.filter(function(a) { return a.status === statusFilter; });
-        if (statusFilter !== 'pending') reviewItems = [];
       }
-      if (statusFilter === 'review') {
+      if (statusFilter === 'review' || statusFilter === 'awaiting') {
         items = [];
       }
-      if (statusFilter === 'all') {
-        statusFilter = '';
-      }
       var showReviewItems = statusFilter === 'review';
+      var showAwaitingItems = !statusFilter || statusFilter === 'awaiting';
+      var showBriefingItems = !statusFilter;
 
       function actionAttentionKey(a, isFrontier) {
         if (a.status === 'done' || a.status === 'cancelled') return '';
@@ -9458,7 +9488,7 @@
       }
       function actionMetricCards(counts, reviewCount, waitingCount) {
         var metrics = [
-          { label: t('act.metric.waiting'), value: waitingCount, filter: '', primary: waitingCount > 0 },
+          { label: t('act.metric.waiting'), value: waitingCount, filter: 'awaiting', primary: waitingCount > 0 },
           { label: t('act.metric.review'), value: reviewCount, filter: 'review', primary: waitingCount === 0 && reviewCount > 0 },
           { label: t('act.metric.followUp'), value: counts.pending + counts.blocked, filter: 'pending', primary: waitingCount === 0 && reviewCount === 0 && (counts.pending + counts.blocked) > 0 },
           { label: t('act.metric.active'), value: counts.active, filter: 'active', primary: false },
@@ -9488,7 +9518,7 @@
           html += '<button class="actions-filter-chip' + (active ? ' active' : '') + '" data-action="filter-actions-status" data-status="' + esc(chip.value) + '" type="button">' + esc(chip.label) + '</button>';
         });
         html += '</div>';
-        html += '<span style="font-size:12px;color:var(--ink-faint);align-self:center;">' + reviewItems.length + ' ' + t('act.nToConfirm') + ' · ' + items.length + ' ' + t('act.nConfirmed') + '</span>';
+        html += '<span style="font-size:12px;color:var(--ink-faint);align-self:center;">' + metricReviewItems.length + ' ' + t('act.nToConfirm') + ' · ' + metricItems.length + ' ' + t('act.nConfirmed') + '</span>';
         var extractTitle = state.actions.extractMessage || t('act.extract.title');
         var extractLabel = t('act.extract.run');
         if (state.actions.extractInFlight) extractLabel = t('act.extract.running');
@@ -9551,15 +9581,15 @@
         return html;
       }
       var statusCounts = { active: 0, blocked: 0, pending: 0, done: 0, cancelled: 0 };
-      items.forEach(function(a) { if (statusCounts[a.status] !== undefined) statusCounts[a.status] += 1; });
+      metricItems.forEach(function(a) { if (statusCounts[a.status] !== undefined) statusCounts[a.status] += 1; });
       var searchForInbox = (state.actions.search || '').toLowerCase();
       var waitingCount = filterInboxItems(sortInboxItems(inboxAwaiting()), searchForInbox).filter(function(i) { return i && i.kind === 'question'; }).length;
-      var awaitingQuestionsHtml = renderAwaitingQuestionSection();
-      var awaitingBriefingsHtml = renderAwaitingBriefingSection();
-      var inboxArchiveHtml = renderInboxArchiveSection();
+      var awaitingQuestionsHtml = showAwaitingItems ? renderAwaitingQuestionSection() : '';
+      var awaitingBriefingsHtml = showBriefingItems ? renderAwaitingBriefingSection() : '';
+      var inboxArchiveHtml = showBriefingItems ? renderInboxArchiveSection() : '';
 
       var html = renderActionFilters();
-      html += actionMetricCards(statusCounts, reviewItems.length, waitingCount);
+      html += actionMetricCards(statusCounts, metricReviewItems.length, waitingCount);
       html += awaitingQuestionsHtml;
 
       if (showReviewItems && reviewItems.length) {

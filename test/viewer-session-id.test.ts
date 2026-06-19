@@ -232,6 +232,9 @@ describe("viewer session rendering", () => {
       health: { status: "healthy", health: {} },
       sessions: [{ status: "active", observationCount: 3, startedAt: "2026-05-13T12:00:00Z" }],
       memories: [],
+      actions: [{ id: "act-1", title: "Ship todo", status: "pending", tags: [] }],
+      actionReviews: [{ id: "review-1", status: "pending", kind: "action", title: "Confirm todo", content: "Confirm this todo." }],
+      inboxAwaiting: [{ id: "q1", kind: "question", body: "Need input?", status: "awaiting" }],
       graphStats: null,
       recentAudit: [],
       lessons: [],
@@ -239,7 +242,38 @@ describe("viewer session rendering", () => {
     };
 
     expect(() => sandbox.renderDashboard()).not.toThrow();
-    expect(getElement("view-dashboard").innerHTML).toContain("Unnamed session");
+    const html = getElement("view-dashboard").innerHTML;
+    expect(html).toContain("Unnamed session");
+    expect(html).toContain("Todos");
+    expect(html).toContain("Awaiting reply");
+    expect(html).toContain("To confirm");
+    expect(html).toContain("To follow up");
+    expect(html).not.toContain("Memories");
+    expect(html).not.toContain("Lessons");
+    expect(html).not.toContain("Graph nodes");
+  });
+
+  it("loads dashboard product data without old memory debug endpoints by default", async () => {
+    const { sandbox } = loadViewerSandbox();
+    const urls: string[] = [];
+    sandbox.fetch = async (input: unknown) => {
+      const url = String(input);
+      urls.push(url);
+      if (url.includes("sessions")) return { ok: true, json: async () => ({ sessions: [] }) };
+      if (url.includes("actions")) return { ok: true, json: async () => ({ actions: [] }) };
+      if (url.includes("review?status=pending&kind=action")) return { ok: true, json: async () => ({ items: [] }) };
+      if (url.includes("inbox?status=awaiting")) return { ok: true, json: async () => ({ items: [] }) };
+      return { ok: true, json: async () => ({}) };
+    };
+
+    await sandbox.loadDashboard();
+
+    expect(urls.some((url) => url.includes("actions"))).toBe(true);
+    expect(urls.some((url) => url.includes("review?status=pending&kind=action"))).toBe(true);
+    expect(urls.some((url) => url.includes("inbox?status=awaiting"))).toBe(true);
+    expect(urls.some((url) => url.includes("memories?latest=true"))).toBe(false);
+    expect(urls.some((url) => url.includes("graph/stats"))).toBe(false);
+    expect(urls.some((url) => url.includes("lessons"))).toBe(false);
   });
 
   it("does not throw when timeline and sessions tabs receive sessions missing ids", () => {
@@ -1409,7 +1443,7 @@ describe("viewer session rendering", () => {
     expect(html).toContain("修复待办候选展示");
     expect(html).toContain("action-candidate-card");
     expect(html).not.toContain("记忆总结卡片");
-    expect(html).toContain("Review");
+    expect(html).toContain("To confirm");
     expect(html).toContain("Confirm");
     expect(html).toContain("Ignore");
     expect(html).not.toContain("View original");
@@ -1417,5 +1451,63 @@ describe("viewer session rendering", () => {
     expect(html).not.toContain("## Summary");
     expect(html).not.toContain("src/functions/action-candidates.ts");
     expect(html).not.toContain(">action-candidate<");
+  });
+
+  it("keeps action metric filters exclusive", () => {
+    const { sandbox, getElement } = loadViewerSandbox();
+    sandbox.state.activeTab = "actions";
+    sandbox.state.actions = {
+      loaded: true,
+      items: [{ id: "act-1", title: "Follow up", status: "pending", tags: [] }],
+      frontier: [],
+      statusFilter: "awaiting",
+      search: "",
+      reviewItems: [{ id: "review-1", status: "pending", kind: "action", title: "Confirm me", content: "Confirm this todo." }],
+    };
+    sandbox.state.inbox = { loaded: true, items: [{ id: "q1", kind: "question", body: "Need an answer?", status: "awaiting" }] };
+
+    sandbox.renderActions();
+    let html = getElement("view-actions").innerHTML;
+    expect(html).toContain("Need an answer?");
+    expect(html).not.toContain("Follow up");
+    expect(html).not.toContain("action-candidate-card");
+
+    sandbox.state.actions.statusFilter = "review";
+    sandbox.renderActions();
+    html = getElement("view-actions").innerHTML;
+    expect(html).toContain("action-candidate-card");
+    expect(html).toContain('<div class="action-overview-label">To follow up</div><div class="action-overview-value">1</div>');
+    expect(html).toContain('<div class="action-overview-label">To confirm</div><div class="action-overview-value">1</div>');
+    expect(html).not.toContain("Need an answer?");
+    expect(html).not.toContain("Follow up");
+
+    sandbox.state.actions.statusFilter = "pending";
+    sandbox.renderActions();
+    html = getElement("view-actions").innerHTML;
+    expect(html).toContain("Follow up");
+    expect(html).not.toContain("Need an answer?");
+    expect(html).not.toContain("action-candidate-card");
+  });
+
+  it("does not load memory or lesson review candidates in the frontend", async () => {
+    const { sandbox, getElement } = loadViewerSandbox();
+    const urls: string[] = [];
+    sandbox.fetch = async (input: unknown) => {
+      const url = String(input);
+      urls.push(url);
+      if (url.includes("memories?latest=true")) {
+        return { ok: true, json: async () => ({ memories: [] }) };
+      }
+      if (url.includes("review?status=pending")) {
+        return { ok: true, json: async () => ({ items: [{ id: "mem-review", kind: "memory", title: "Memory candidate" }] }) };
+      }
+      return { ok: true, json: async () => ({}) };
+    };
+
+    await sandbox.loadMemories();
+
+    expect(urls.some((url) => url.includes("review?status=pending"))).toBe(false);
+    expect(sandbox.state.memories.reviewItems).toEqual([]);
+    expect(getElement("view-memories").innerHTML).not.toContain("Memory candidate");
   });
 });
