@@ -41,29 +41,12 @@ function homeDir(): string {
 // first-party integration. Glyphs match SkillKit's published set
 // where they overlap; the rest fall back to the generic `◇`.
 const NATIVE_AGENTS: { value: string; label: string; glyph: string }[] = [
-  { value: "claude-code", label: "Claude Code", glyph: "⟁" },
-  { value: "copilot-cli", label: "GitHub Copilot CLI", glyph: "◈" },
   { value: "codex", label: "Codex", glyph: "◎" },
-  { value: "openhuman", label: "OpenHuman", glyph: "◇" },
-  { value: "openclaw", label: "OpenClaw", glyph: "◇" },
-  { value: "hermes", label: "Hermes", glyph: "◇" },
-  { value: "pi", label: "Pi", glyph: "◇" },
-  { value: "cursor", label: "Cursor", glyph: "◫" },
-  { value: "gemini-cli", label: "Gemini CLI", glyph: "✦" },
 ];
 
-// MCP-only row — these agents use the MCP server we ship rather than
-// a native plugin.
-const MCP_AGENTS: { value: string; label: string; glyph: string }[] = [
-  { value: "opencode", label: "OpenCode", glyph: "⬡" },
-  { value: "cline", label: "Cline", glyph: "◇" },
-  { value: "goose", label: "Goose", glyph: "◇" },
-  { value: "kilo", label: "Kilo", glyph: "◇" },
-  { value: "aider", label: "Aider", glyph: "◇" },
-  { value: "claude-desktop", label: "Claude Desktop", glyph: "⟁" },
-  { value: "windsurf", label: "Windsurf", glyph: "◇" },
-  { value: "roo", label: "Roo", glyph: "◇" },
-];
+// MCP-only row — emptied by PLAN-006 P2 (the inherited MCP-agent
+// connectors were removed; Codex is the sole supported target).
+const MCP_AGENTS: { value: string; label: string; glyph: string }[] = [];
 
 const PROVIDERS: { value: string; label: string; envKey: string | null }[] = [
   { value: "anthropic", label: "Anthropic — claude", envKey: "ANTHROPIC_API_KEY" },
@@ -99,12 +82,11 @@ export function buildAgentOptions(): { value: string; label: string; hint?: stri
 }
 
 export function getInitialAgentValues(
-  env: Record<string, string | undefined> = process.env,
+  _env: Record<string, string | undefined> = process.env,
 ): string[] {
-  if (env["COPILOT_CLI"] === "1" || env["COPILOT_AGENT_SESSION_ID"]) {
-    return ["copilot-cli"];
-  }
-  return ["claude-code"];
+  // Codex is the only wireable agent after PLAN-006 P2 removed the
+  // inherited connector stack.
+  return ["codex"];
 }
 
 // Mirror src/cli.ts findEnvExample so onboarding ships the same .env

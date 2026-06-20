@@ -126,11 +126,9 @@ Usage: agentmemory-lab [command] [options]
 Commands:
   (default)          Start Agent Memory Lab worker
   init               Copy bundled .env.example to ~/.agentmemory/.env if absent
-  connect [agent]    Wire agentmemory into an installed agent. No arg = interactive
-                     picker listing all supported agents (claude-code, codex, cursor,
-                     copilot-cli, gemini-cli, qwen, cline, zed, droid, …).
-                     --all wires every detected agent. --dry-run shows what would
-                     change. --force re-installs.
+  connect [agent]    Wire agentmemory into an installed agent (codex). --all wires
+                     every detected agent. --dry-run shows what would change.
+                     --force re-installs.
   status             Show connection status, memory count, flags, and health
   config get|set     Read or update user Todo extractor config in ~/.agentmemory/.env
   doctor             Interactive diagnostic + fixer. [F]ix · [S]kip · [?]more · [Q]uit

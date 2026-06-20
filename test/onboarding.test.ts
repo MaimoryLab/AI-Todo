@@ -4,26 +4,22 @@ import { describe, expect, it } from "vitest";
 import { buildAgentOptions, getInitialAgentValues } from "../src/cli/onboarding.js";
 
 describe("first-run onboarding", () => {
-  it("offers GitHub Copilot CLI as a native setup target", () => {
+  it("offers Codex as a native setup target", () => {
     const options = buildAgentOptions();
     expect(options).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          value: "copilot-cli",
-          label: expect.stringContaining("GitHub Copilot CLI"),
+          value: "codex",
+          label: expect.stringContaining("Codex"),
           hint: "native plugin",
         }),
       ]),
     );
   });
 
-  it("selects GitHub Copilot CLI by default when running inside Copilot CLI", () => {
-    expect(getInitialAgentValues({ COPILOT_CLI: "1" })).toEqual(["copilot-cli"]);
-    expect(getInitialAgentValues({ COPILOT_AGENT_SESSION_ID: "session" })).toEqual(["copilot-cli"]);
-  });
-
-  it("keeps Claude Code as the default outside known agent environments", () => {
-    expect(getInitialAgentValues({})).toEqual(["claude-code"]);
+  it("selects Codex by default (the only wireable agent after PLAN-006 P2)", () => {
+    expect(getInitialAgentValues({ COPILOT_CLI: "1" })).toEqual(["codex"]);
+    expect(getInitialAgentValues({})).toEqual(["codex"]);
   });
 
   it("makes clear that first-run provider setup is not To-Do extraction", () => {
