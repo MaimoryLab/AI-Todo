@@ -258,7 +258,7 @@ describe("OpenAIProvider timeout env precedence (#446)", () => {
     expect(ms).toBe(60_000);
   });
 
-  it("rejects malformed env values like '30ms' or '1_000' (CodeRabbit catch)", () => {
+  it("rejects malformed env values like '30ms' or '1_000'", () => {
     // parseInt would have silently returned 30 / 1 for these typos —
     // strict parse now rejects them and the provider falls back to
     // the 60 000 ms default so a malformed env doesn't masquerade as

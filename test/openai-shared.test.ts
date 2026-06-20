@@ -61,7 +61,7 @@ describe("_openai-shared — buildChatUrl", () => {
     expect(url).toContain("api-version=preview%2Fwith%2Fslashes");
   });
 
-  it("preserves pre-existing query params on the base URL (CodeRabbit catch)", () => {
+  it("preserves pre-existing query params on the base URL", () => {
     // A corporate proxy or diagnostics endpoint might already carry
     // query parameters on the base URL. String-concat would have
     // interpolated the route path into the query string; URL-API

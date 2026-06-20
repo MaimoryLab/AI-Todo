@@ -438,7 +438,7 @@ describe("RetentionScoring", () => {
       "../src/functions/retention.js"
     );
 
-    // The actual nasty case from CodeRabbit's review: a pre-0.8.10
+    // The actual nasty case from a prior review: a pre-0.8.10
     // store that had a semantic memory scored by the old code path.
     // The retention row has NO source field and the memory lives in
     // mem:semantic. If the eviction path blindly defaults missing
