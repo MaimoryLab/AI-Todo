@@ -72,7 +72,6 @@ PRs with commits lacking sign-off will not merge.
 | `src/hooks/` | The 12 auto-hooks that capture sessions in agents. |
 | `src/health/` | Liveness + readiness + alert thresholds. |
 | `src/state/` | KV schema, keyed mutex, access log. |
-| `integrations/` | First-party plugins: `filesystem-watcher/`. |
 | `plugin/` | Claude Code plugin (`agentmemory@agentmemory`). |
 | `website/` | Marketing site (Next.js 16). |
 | `test/` | Vitest test suite. |
@@ -105,7 +104,7 @@ Maintainers cut releases. Every bump touches 8 files in lockstep:
 7. `src/functions/export-import.ts` (`supportedVersions` Set)
 8. `test/export-import.test.ts` (assertion)
 
-Then: CHANGELOG section, PR, merge, tag, GitHub release. The `Publish to npm` workflow picks up the release trigger and publishes `@agentmemory/agentmemory`, `@agentmemory/mcp`, and `@agentmemory/fs-watcher` to npm with provenance.
+Then: CHANGELOG section, PR, merge, tag, GitHub release. The `Publish to npm` workflow picks up the release trigger and publishes `@agentmemory/agentmemory` and `@agentmemory/mcp` to npm with provenance.
 
 ## Security issues
 

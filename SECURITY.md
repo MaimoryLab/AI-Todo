@@ -40,8 +40,6 @@ In scope:
 
 - The `@agentmemory/agentmemory` server (REST + MCP surface, hook handlers, state store).
 - The `@agentmemory/mcp` standalone MCP server.
-- The `@agentmemory/fs-watcher` connector.
-- First-party integrations under `integrations/` (`filesystem-watcher/`).
 - The Claude Code plugin under `plugin/`.
 
 Out of scope:
