@@ -19,6 +19,13 @@ updates:
         update-types:
           - minor
           - patch
+    ignore:
+      # tsdown >= 0.21 breaks `npm run build` on Node 20 (rolldown/tsdown:
+      # "Failed to import module 'unrun'"). We still support Node >=20, so
+      # hold tsdown at 0.20.x until upstream restores Node 20 support, then
+      # remove this ignore. 0.20.x patches and all other deps still update.
+      - dependency-name: "tsdown"
+        versions: [">=0.21.0"]
 
   - package-ecosystem: npm
     directory: /website
