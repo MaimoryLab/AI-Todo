@@ -1,6 +1,6 @@
 import type { ISdk } from "iii-sdk";
 import type { StateKV } from "../state/kv.js";
-import { KV } from "../state/schema.js";
+import { KV, nearDuplicateTitle } from "../state/schema.js";
 import type { Action, CompressedObservation, ReviewQueueItem, Session } from "../types.js";
 
 export interface ActionCandidate {
@@ -36,6 +36,14 @@ function normalizedKey(value: string): string {
     .toLowerCase()
     .replace(/[，。！？；：,.!?;:]/g, "")
     .replace(/\s+/g, " ");
+}
+
+// STEP-08 PR 4/5: suppress near-identical titles the exact-key dedup misses
+// (reworded CJK clusters). nearDuplicateTitle (schema.ts) is the shared policy
+// — similarity bar plus discriminator vetoes for negation / number / Latin
+// content-word differences — so both extractors stay in lockstep.
+function isNearDuplicateTitle(normalizedTitle: string, seenTitles: string[]): boolean {
+  return seenTitles.some((seen) => nearDuplicateTitle(normalizedTitle, seen));
 }
 
 function isJsonShaped(text: string): boolean {
@@ -230,17 +238,41 @@ function existingKeys(options: ActionCandidateOptions): Set<string> {
   return keys;
 }
 
+// Seed the near-dup guard only from still-open work — pending/active/blocked
+// actions and non-terminal action reviews. (Unlike existingKeys, which applies
+// no status filter to reviews: exact-dup suppression keeps matching every
+// review, but a near-dup of an approved/dismissed review may reappear since the
+// work could have regressed.)
+function existingActiveTitles(options: ActionCandidateOptions): string[] {
+  const titles: string[] = [];
+  for (const action of options.existingActions || []) {
+    if (action.status !== "pending" && action.status !== "active" && action.status !== "blocked") continue;
+    const title = normalizedKey(action.title);
+    if (title) titles.push(title);
+  }
+  for (const item of options.existingReviewItems || []) {
+    if (item.kind !== "action") continue;
+    if (item.status === "approved" || item.status === "dismissed") continue;
+    const title = normalizedKey(item.title);
+    if (title) titles.push(title);
+  }
+  return titles;
+}
+
 function pushCandidate(
   output: ActionCandidate[],
   seen: Set<string>,
   existing: Set<string>,
+  seenTitles: string[],
   candidate: ActionCandidate,
 ): void {
   const key = candidateKey(candidate.title, candidate.description);
   const titleKey = normalizedKey(candidate.title);
   if (!titleKey || seen.has(key) || seen.has(titleKey) || existing.has(key) || existing.has(titleKey)) return;
+  if (isNearDuplicateTitle(titleKey, seenTitles)) return;
   seen.add(key);
   seen.add(titleKey);
+  seenTitles.push(titleKey);
   output.push(candidate);
 }
 
@@ -251,6 +283,7 @@ export function extractActionCandidatesFromObservations(
   const output: ActionCandidate[] = [];
   const seen = new Set<string>();
   const existing = existingKeys(options);
+  const seenTitles = existingActiveTitles(options);
   for (const obs of observations) {
     const text = candidateText(obs);
     if (READ_ONLY_TYPES.has(obs.type)) continue;
@@ -259,7 +292,7 @@ export function extractActionCandidatesFromObservations(
     const description = extracted?.text || "";
     if (!reason || !description) continue;
     const title = titleFromText(description, obs.title || "待处理行动");
-    pushCandidate(output, seen, existing, {
+    pushCandidate(output, seen, existing, seenTitles, {
       title,
       description,
       priority: priorityFor(reason),
@@ -280,6 +313,7 @@ export function extractActionCandidatesFromTurns(
   const output: ActionCandidate[] = [];
   const seen = new Set<string>();
   const existing = existingKeys(options);
+  const seenTitles = existingActiveTitles(options);
   for (const turn of turns) {
     if (turn.role !== "user") continue;
     const text = normalizeText(turn.text);
@@ -288,7 +322,7 @@ export function extractActionCandidatesFromTurns(
     const description = extracted?.text || "";
     if (!reason || !description) continue;
     const title = titleFromText(description, "待处理行动");
-    pushCandidate(output, seen, existing, {
+    pushCandidate(output, seen, existing, seenTitles, {
       title,
       description,
       priority: priorityFor(reason),
@@ -460,6 +494,13 @@ export function registerActionCandidateFunctions(sdk: ISdk, kv: StateKV): void {
       let scannedObservations = 0;
       const candidates: Array<{ candidate: ActionCandidate; session: Session }> = [];
       const generatedKeys = new Set<string>();
+      // Cross-session near-dup guard: per-session extraction already dedups
+      // within a session, but the same task often recurs across sessions with
+      // slight title drift. Seed from still-open existing work.
+      const generatedTitles = existingActiveTitles({
+        existingActions: actions,
+        existingReviewItems: reviewItems,
+      });
       for (const session of sessions) {
         const observations = (await kv.list<CompressedObservation>(
           KV.observations(session.id),
@@ -474,7 +515,10 @@ export function registerActionCandidateFunctions(sdk: ISdk, kv: StateKV): void {
         for (const candidate of sessionCandidates) {
           const keys = candidateKeys(candidate.title, candidate.description);
           if (keys.some((key) => generatedKeys.has(key))) continue;
+          const titleKey = normalizedKey(candidate.title);
+          if (isNearDuplicateTitle(titleKey, generatedTitles)) continue;
           keys.forEach((key) => generatedKeys.add(key));
+          if (titleKey) generatedTitles.push(titleKey);
           candidates.push({ candidate, session });
         }
       }

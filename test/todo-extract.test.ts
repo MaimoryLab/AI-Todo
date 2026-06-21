@@ -166,6 +166,41 @@ describe("todo extraction", () => {
     });
   });
 
+  it("suppresses todos that near-duplicate an existing open action but not a done one (STEP-08 PR4)", async () => {
+    const seedExisting = async (status: Action["status"]) => {
+      await kv.set<Action>(KV.actions, "act_seed", {
+        id: "act_seed",
+        title: "克隆上游项目到子目录中",
+        description: "克隆上游项目到子目录中",
+        status,
+        priority: 5,
+        createdAt: "2026-06-17T08:00:00.000Z",
+        updatedAt: "2026-06-17T08:00:00.000Z",
+        createdBy: "test",
+        tags: [],
+        sourceObservationIds: [],
+        sourceMemoryIds: [],
+      });
+    };
+
+    // Open action present → the near-dup todo is suppressed.
+    await seedExisting("pending");
+    await kv.set(KV.sessions, "ses_1", session({ status: "active" }));
+    await kv.set(KV.observations("ses_1"), "obs_1", obs({ narrative: "TODO: 克隆上游项目到子目录。" }));
+    const suppressed = await generateTodosFromSessions(kv as never, { force: true, scanSources: false });
+    expect(suppressed.directCreated).toBe(0);
+    expect((await kv.list<Action>(KV.actions)).map((a) => a.id)).toEqual(["act_seed"]);
+
+    // Same title but the existing action is done → the work may have regressed,
+    // so the todo is created again.
+    kv = mockKV();
+    await seedExisting("done");
+    await kv.set(KV.sessions, "ses_1", session({ status: "active" }));
+    await kv.set(KV.observations("ses_1"), "obs_1", obs({ narrative: "TODO: 克隆上游项目到子目录。" }));
+    const created = await generateTodosFromSessions(kv as never, { force: true, scanSources: false });
+    expect(created.directCreated).toBe(1);
+  });
+
   it("rejects extracted todos when evidence quote is not grounded", () => {
     expect(validateTodoEvidence({
       title: "修复不存在的问题",
