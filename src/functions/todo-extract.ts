@@ -202,6 +202,11 @@ function looksLikeBadTitle(value: string): boolean {
   return lower === "untitled todo" || lower === "untitled candidate";
 }
 
+// An action being requested — used to exempt status/completed-narration text
+// from the pollution filter, so a real repair that mentions a status phrase
+// ("修复服务可用性回归", "排查…失败") is not silently dropped.
+const TODO_ACTION_TRIGGER = /(?:修复|补充|实现|调整|验证|排查|定位|需要|必须|未完成|失败|阻塞|TODO|FIXME)/i;
+
 function isPollutedTodoText(value: string | undefined): boolean {
   const text = normalizeText(value);
   const lower = text.toLowerCase();
@@ -219,13 +224,14 @@ function isPollutedTodoText(value: string | undefined): boolean {
   if (/\b(?:namewithowner|headrefname|baserefname|databaseid)\b/i.test(lower)) return true;
   if (/^⏺/.test(text) || /\b(?:bash|shell|exec)\(/i.test(text)) return true;
   if (/^[a-z][a-z0-9_-]*-[0-9a-f]{6,}`?$/i.test(text)) return true;
-  if (/服务可用|页面已经能返回/.test(text)) return true;
   if (/\b(?:Viewer|Health)\b\s*[：:]\s*(?:\[|https?:\/\/)/i.test(text)) return true;
-  if (
-    /(?:都能|已(?:经)?|成功|顺利)[^。\n]{0,12}(?:显示|通过|完成|可用|生效)/.test(text) &&
-    !/(?:修复|补充|实现|调整|验证|需要|必须|未完成|失败|阻塞|TODO|FIXME)/i.test(text)
-  )
-    return true;
+  // Status-report and completed-work narration are pollution ONLY when no action
+  // is being requested. The action-verb exception keeps genuine repairs like
+  // "修复服务可用性回归" / "验证页面已经能返回后的边界问题" / "排查…失败" out of the filter.
+  if (!TODO_ACTION_TRIGGER.test(text)) {
+    if (/服务可用|页面已经能返回/.test(text)) return true;
+    if (/(?:都能|已(?:经)?|成功|顺利)[^。\n]{0,12}(?:显示|通过|完成|可用|生效)/.test(text)) return true;
+  }
   return false;
 }
 
@@ -399,7 +405,11 @@ export function validateTodoEvidence(todo: ExtractedTodo, blockMap: Map<string, 
   const block = blockMap.get(todo.evidence.sourceObservationId);
   const blockText = normalizeText(block?.text);
   const quote = normalizeText(todo.evidence.quote);
-  return !!blockText && (blockText.includes(quote) || quote.includes(blockText));
+  // The quote must be grounded IN the source observation — i.e. a substring of
+  // it. The reverse (quote ⊇ blockText) was too permissive: a model returning
+  // "[whole observation] + hallucinated extra" contains the block text and so
+  // would pass, defeating source grounding. Require quote ⊆ block only.
+  return !!blockText && !!quote && blockText.includes(quote);
 }
 
 function existingDedupeKeys(actions: Action[], reviews: ReviewQueueItem[]): Set<string> {

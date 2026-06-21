@@ -335,7 +335,10 @@ export function parseJsonlText(text: string, fallbackSessionId?: string): Parsed
   return {
     sessionId: effectiveSessionId,
     project: deriveProject(cwd),
-    cwd: cwd || process.cwd(),
+    // Don't persist a polluted cwd (a shell command captured in the cwd field):
+    // fall back to the trusted process cwd, the same fallback already used for a
+    // missing cwd. Keeps the garbage out of session metadata / UI / downstream.
+    cwd: isPlausibleCwd(cwd) ? cwd : process.cwd(),
     startedAt: firstTs || nowIso,
     endedAt: lastTs || nowIso,
     observations,
