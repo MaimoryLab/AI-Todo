@@ -119,12 +119,12 @@ function vlog(msg: string): void {
 
 if (args.includes("--help") || args.includes("-h")) {
   console.log(`
-Agent Memory Lab — local-first memory workbench for AI agents
+AI-Todo — local-first To-Do extraction from your AI agent sessions
 
 Usage: agentmemory-lab [command] [options]
 
 Commands:
-  (default)          Start Agent Memory Lab worker
+  (default)          Start AI-Todo worker
   init               Copy bundled .env.example to ~/.agentmemory/.env if absent
   connect [agent]    Wire agentmemory into an installed agent (codex). --all wires
                      every detected agent. --dry-run shows what would change.
@@ -134,7 +134,7 @@ Commands:
   doctor             Interactive diagnostic + fixer. [F]ix · [S]kip · [?]more · [Q]uit
                      --all: apply every fix without prompting (CI)
                      --dry-run: show what each fix would do, don't execute
-  remove             Cleanly uninstall Agent Memory Lab (pidfile, state, .env, binaries).
+  remove             Cleanly uninstall AI-Todo (pidfile, state, .env, binaries).
                      --force: skip confirmations · --keep-data: keep memory data
   demo               Seed sample sessions and show recall in action
   upgrade            Upgrade local deps + iii runtime (best effort)
@@ -397,7 +397,7 @@ function enforceEngineVersionPin(iiiBinPath: string | null | undefined): void {
     ? `curl -fsSL https://github.com/iii-hq/iii/releases/download/iii/v${IIPINNED_VERSION}/${asset} | tar -xz -C ~/.local/bin`
     : `download v${IIPINNED_VERSION} from https://github.com/iii-hq/iii/releases/tag/iii%2Fv${IIPINNED_VERSION}`;
   p.log.error(
-    `iii-engine on PATH is v${detected} but Agent Memory Lab v${VERSION} hard-pins v${IIPINNED_VERSION}. ` +
+    `iii-engine on PATH is v${detected} but AI-Todo v${VERSION} hard-pins v${IIPINNED_VERSION}. ` +
       `Engine API drift causes runtime failures (e.g. state::list-not-found on v0.13.0). ` +
       `Downgrade with: \`${downloadHint}\`. ` +
       `Or set AGENTMEMORY_III_VERSION=${detected} to override at your own risk.`,
@@ -988,7 +988,7 @@ function printReadyHint(consoleState: IiiConsoleState): void {
   // p.note renders a bordered panel with a title — same affordance
   // used elsewhere in this CLI for "Troubleshooting" / "Setup
   // required" blocks, so the visual language stays consistent.
-  p.note(lines.join("\n"), `Agent Memory Lab v${VERSION}`);
+  p.note(lines.join("\n"), `AI-Todo v${VERSION}`);
 
   process.stdout.write("\nTry: node dist/cli.mjs demo\n");
 }
@@ -1991,7 +1991,7 @@ async function runDemo() {
   ];
 
   p.note(lines.join("\n"), "demo complete");
-  p.log.success("Agent Memory Lab is working. Point your agent at it and get back to coding.");
+  p.log.success("AI-Todo is working. Point your agent at it and get back to coding.");
 }
 
 function runCommand(
@@ -2353,7 +2353,7 @@ async function runConfig(): Promise<void> {
     const value = pair.slice(eq + 1);
     const applied = writeUserEnv({ [key]: value });
     if (applied.includes(key)) {
-      p.log.success(`Updated ${key}. Restart Agent Memory Lab to use it.`);
+      p.log.success(`Updated ${key}. Restart AI-Todo to use it.`);
     } else {
       p.log.warn(
         `Did not write '${key}'. Only these keys are writable (non-empty, single-line):\n  ${[...WRITABLE_TODO_EXTRACT_KEYS].join(", ")}`,
@@ -2684,7 +2684,7 @@ async function runRemove(): Promise<void> {
   }
 
   p.outro(
-    "Done. Agent Memory Lab cleanly removed. The npm package itself: npm uninstall -g @maimorylab/agentmemory-lab",
+    "Done. AI-Todo cleanly removed. The npm package itself: npm uninstall -g @maimorylab/agentmemory-lab",
   );
 }
 
