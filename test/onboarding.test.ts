@@ -22,9 +22,10 @@ describe("first-run onboarding", () => {
     expect(getInitialAgentValues({})).toEqual(["codex"]);
   });
 
-  it("makes clear that first-run provider setup is not To-Do extraction", () => {
+  it("frames the first-run model selection as To-Do extraction (not memory compression)", () => {
     const source = readFileSync("src/cli/onboarding.ts", "utf-8");
-    expect(source).toContain("Not To-Do extraction");
-    expect(source).toContain("LANGEXTRACT_* settings");
+    expect(source).toContain("extract To-Dos");
+    expect(source).not.toContain("memory compression/consolidation");
+    expect(source).not.toContain("Not To-Do extraction");
   });
 });

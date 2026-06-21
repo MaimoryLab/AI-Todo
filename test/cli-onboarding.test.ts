@@ -103,9 +103,7 @@ describe("cli onboarding", () => {
   it("keeps To-Do LLM extraction off unless the user opts in", async () => {
     setTTY(true);
     prompts.multiselect.mockResolvedValueOnce([]);
-    prompts.select
-      .mockResolvedValueOnce("skip")
-      .mockResolvedValueOnce("skip");
+    prompts.select.mockResolvedValueOnce("skip");
     const { runOnboarding } = await freshOnboarding();
 
     await runOnboarding();
@@ -119,9 +117,7 @@ describe("cli onboarding", () => {
   it("writes To-Do LangExtract defaults when the user opts in", async () => {
     setTTY(true);
     prompts.multiselect.mockResolvedValueOnce([]);
-    prompts.select
-      .mockResolvedValueOnce("skip")
-      .mockResolvedValueOnce("langextract");
+    prompts.select.mockResolvedValueOnce("novita");
     const { runOnboarding } = await freshOnboarding();
 
     await runOnboarding();
