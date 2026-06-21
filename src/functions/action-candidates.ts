@@ -114,7 +114,18 @@ function cleanTitle(text: string): string {
     .replace(/^(请|需要|必须)\s*/u, "")
     .replace(/^(follow up|follow-up|fix)\s*[:：-]?\s*/i, "");
   const first = stripped.split(/[。！？\n]/u)[0] || stripped;
-  return first.replace(/[。！？；;,.，]+$/u, "").trim().slice(0, 80);
+  const trimmed = first.replace(/[。！？；;,.，]+$/u, "").trim();
+  const chars = Array.from(trimmed);
+  if (chars.length <= 80) return trimmed;
+  const head = chars.slice(0, 80);
+  let boundary = -1;
+  for (let i = head.length - 1; i >= 24; i--) {
+    if (/[，,；;、\s]/u.test(head[i])) {
+      boundary = i;
+      break;
+    }
+  }
+  return (boundary > 0 ? head.slice(0, boundary) : head).join("").replace(/[，,；;：:\s]+$/u, "");
 }
 
 function titleFromText(text: string, fallback: string): string {

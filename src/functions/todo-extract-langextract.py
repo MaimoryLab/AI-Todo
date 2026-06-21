@@ -142,9 +142,14 @@ def main() -> int:
         end = getattr(interval, "end_pos", None)
         prefix = text[: start if isinstance(start, int) else text.find(quote)]
         obs_marker = prefix.rsplit("[obs:", 1)[-1].split("]", 1)[0] if "[obs:" in prefix else ""
+        title = attrs.get("title")
+        if not title:
+            # No model-provided title → skip rather than emit a hard-cut
+            # quote slice (which produced mid-sentence fragment cards).
+            continue
         todos.append(
             {
-                "title": attrs.get("title") or quote[:80],
+                "title": title,
                 "description": attrs.get("description") or quote,
                 "confidence": attrs.get("confidence", 0.6),
                 "timeBucket": attrs.get("timeBucket", "recent"),
@@ -156,7 +161,7 @@ def main() -> int:
                     "charStart": start,
                     "charEnd": end,
                 },
-                "dedupeKey": attrs.get("dedupeKey") or quote.lower(),
+                "dedupeKey": attrs.get("dedupeKey") or "",
             }
         )
 

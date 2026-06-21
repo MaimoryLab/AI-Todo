@@ -201,6 +201,27 @@ describe("todo extraction", () => {
     expect(cleaned).toBe("再等一轮");
   });
 
+  it("anti-truncation: skips fragment titles and trims on a boundary (STEP-08)", () => {
+    // HTTP-status cut "返回 4" is a truncation fragment → fall through to the
+    // clean description rather than emitting it as a card title.
+    expect(cleanTodoTitle("返回 4", "修复老路由返回 404 的问题。")).toBe(
+      "修复老路由返回 404 的问题",
+    );
+    // a list cut to "…、/he" is a fragment → fall through.
+    expect(cleanTodoTitle("老的 /actions、/sessions、/he", "修复老路由 404。")).toBe(
+      "修复老路由 404",
+    );
+    // a long no-comma title trims to <=42 chars without a dangling boundary char
+    // and without splitting a word.
+    const t = cleanTodoTitle(
+      "investigate the failing classification boundary detector here now please",
+      "",
+    );
+    expect(t).toBeTruthy();
+    expect(Array.from(t!).length).toBeLessThanOrEqual(42);
+    expect(t).not.toMatch(/[，,；;、\s]$/u);
+  });
+
   it("sidecar failures are explicit so auto mode can fall back", async () => {
     process.env.LANGEXTRACT_PYTHON = "__missing_python__";
     await expect(runLangExtractSidecar({ blocks: [{ text: "后续需要修复 CI。", sourceObservationId: "obs_1" }] }, { timeoutMs: 500 }))

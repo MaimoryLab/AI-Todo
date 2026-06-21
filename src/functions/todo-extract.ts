@@ -102,6 +102,37 @@ function stripTitleNoise(value: string): string {
   return text;
 }
 
+// Trim a title to `cap` characters without splitting a word / CJK char /
+// surrogate pair: prefer the last clause boundary (，,；;、 or whitespace)
+// at or before the cap; never hard-cut mid-token (the old `.slice(0, n)`
+// produced fragments like "返回 4" / "…/he").
+function trimToTitleBoundary(text: string, cap: number): string {
+  const chars = Array.from(text);
+  if (chars.length <= cap) return text.replace(/[，,；;：:\s]+$/u, "");
+  const head = chars.slice(0, cap);
+  let boundary = -1;
+  for (let i = head.length - 1; i >= Math.min(12, cap >> 1); i--) {
+    if (/[，,；;、\s]/u.test(head[i])) {
+      boundary = i;
+      break;
+    }
+  }
+  const cut = (boundary > 0 ? head.slice(0, boundary) : head).join("");
+  return cut.replace(/[，,；;：:\s]+$/u, "");
+}
+
+// Reject a title that is obviously a truncation fragment rather than a real
+// todo (HTTP status cut to "返回 4", a list cut to "…、/he", or a dangling
+// URL). Such a candidate is skipped in favour of the next source field.
+function looksTruncated(text: string): boolean {
+  const t = text.trim();
+  if (!t) return false;
+  if (/(?:返回|status|code|状态码)\s*\d{1,2}$/i.test(t)) return true;
+  if (/[、,，]\s*\/[A-Za-z]{1,4}$/.test(t)) return true;
+  if (/\bhttps?:\/\/\S*[:/]$/i.test(t)) return true;
+  return false;
+}
+
 function firstTitleSentence(value: string): string {
   const text = stripTitleNoise(value).replace(/`[^`]*`/g, "").replace(/\s+/g, " ");
   const sentence = text.match(/[^。！？!?\n]+[。！？!?]?/u)?.[0] || text;
@@ -117,7 +148,7 @@ function firstTitleSentence(value: string): string {
     .replace(/^(?:我会|我要|我将|现在我会|接下来)\s*/u, "")
     .replace(/[，,；;]\s*.*$/u, "")
     .trim();
-  return (short || compact).slice(0, 42).replace(/[，,；;：:\s]+$/u, "");
+  return trimToTitleBoundary(short || compact, 42);
 }
 
 function looksLikeBadTitle(value: string): boolean {
@@ -163,7 +194,7 @@ function isPollutedTodoText(value: string | undefined): boolean {
 export function cleanTodoTitle(title: string, description = "", quote = ""): string | null {
   for (const raw of [title, description, quote]) {
     const candidate = firstTitleSentence(raw);
-    if (candidate && !looksLikeBadTitle(candidate)) return candidate;
+    if (candidate && !looksLikeBadTitle(candidate) && !looksTruncated(candidate)) return candidate;
   }
   return null;
 }
