@@ -25,10 +25,31 @@ export interface ParsedTranscript {
   observations: RawObservation[];
 }
 
+// A real cwd is an absolute filesystem path. Tool-trace pollution sometimes
+// lands a shell command in the cwd field (e.g. `pwd && echo "--- branch ---" &&
+// git branch --show-current`), which the old "last path segment" rule turned
+// into a garbage project name. Reject anything that isn't absolute or that
+// carries shell-command *shape* — operators (`&&`, `||`, `$(`, backtick), a
+// flag (`\s-x`/`\s--x`), or a metachar adjacent to whitespace. Bare punctuation
+// in a segment name is allowed: `app/(marketing)`, `q&a-service`, `cost$` are
+// legal directories, not commands.
+const SHELL_POLLUTION = /&&|\|\||\$\(|`|\s--?[A-Za-z]|\s[&|;<>(){}"$]|[&|;<>(){}"$]\s/u;
+
+function isPlausibleCwd(cwd: string): boolean {
+  if (!cwd) return false;
+  // must be absolute: POSIX (/…, ~/…), Windows drive (C:\…), or UNC (\\…)
+  if (!/^(?:\/|~(?:\/|$)|[A-Za-z]:[\\/]|\\\\)/.test(cwd)) return false;
+  if (SHELL_POLLUTION.test(cwd)) return false;
+  return true;
+}
+
 function deriveProject(cwd: string): string {
-  if (!cwd) return "unknown";
-  const parts = cwd.split("/").filter(Boolean);
-  return parts[parts.length - 1] || "unknown";
+  const trimmed = (cwd || "").trim();
+  if (!isPlausibleCwd(trimmed)) return "unknown";
+  const parts = trimmed.split(/[\\/]/).filter(Boolean);
+  const last = parts[parts.length - 1] || "";
+  if (!last || last === "~") return "unknown";
+  return last;
 }
 
 function toText(content: unknown): string {

@@ -148,6 +148,34 @@ describe("parseJsonlText", () => {
 
     expect(first.observations.map((o) => o.id)).toEqual(second.observations.map((o) => o.id));
   });
+
+  it("derives 'unknown' project when the cwd field is shell-command pollution (STEP-08 PR5)", () => {
+    const mkEntry = (cwd: string) =>
+      JSON.stringify({
+        type: "user",
+        sessionId: "sess-cwd",
+        cwd,
+        timestamp: "2026-01-01T00:00:00.000Z",
+        message: { role: "user", content: [{ type: "text", text: "hi" }] },
+      });
+
+    // a shell command captured in the cwd field must NOT become a project name
+    expect(parseJsonlText(mkEntry('pwd && echo "--- branch ---" && git branch --show-current')).project).toBe("unknown");
+    expect(parseJsonlText(mkEntry("git branch --show-current")).project).toBe("unknown");
+    expect(parseJsonlText(mkEntry("npm run build")).project).toBe("unknown"); // not absolute
+    expect(parseJsonlText(mkEntry("/tmp/x && rm -rf /")).project).toBe("unknown");
+
+    // clean absolute paths resolve to their last segment, incl. names with bare
+    // punctuation (route groups, q&a) and spaces — these are NOT pollution
+    expect(parseJsonlText(mkEntry("/Users/alice/agentmemory-lab")).project).toBe("agentmemory-lab");
+    expect(parseJsonlText(mkEntry("/repo")).project).toBe("repo");
+    expect(parseJsonlText(mkEntry("/app/(marketing)")).project).toBe("(marketing)");
+    expect(parseJsonlText(mkEntry("/data/q&a-service")).project).toBe("q&a-service");
+    expect(parseJsonlText(mkEntry("/Users/bob/My Project")).project).toBe("My Project");
+    expect(parseJsonlText(mkEntry("/Users/bob/项目-todo")).project).toBe("项目-todo");
+    expect(parseJsonlText(mkEntry("~/dev/site")).project).toBe("site");
+    expect(parseJsonlText(mkEntry("C:\\Users\\bob\\proj")).project).toBe("proj");
+  });
 });
 
 describe("projectTimeline", () => {
