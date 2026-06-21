@@ -4,22 +4,15 @@
 // have never recorded a `firstRunAt`) or when the user passes
 // `--reset`. The flow asks for:
 //
-//   1. Which agents will be wired to agentmemory (multi-select). Each
-//      option carries a small glyph that we reuse in /status output so
-//      the user recognises them later. The label mirrors README row 1
-//      (native plugins) and row 2 (MCP-only).
-//   2. Which LLM provider to use for compress / consolidate / graph.
-//   3. Whether To-Do extraction should use LangExtract. The API key is still
-//      added later in the viewer Settings panel or ~/.agentmemory/.env.
-//      "skip — BM25-only mode" is a real first-class option; lots of
-//      users want agentmemory purely as a hybrid keyword + vector
-//      memory layer without granting LLM API keys.
+//   1. Which agent sessions AI-Todo should scan for To-Dos (multi-select).
+//   2. Which model AI-Todo uses to extract To-Dos — this seeds the
+//      LangExtract (`LANGEXTRACT_*`) config. "Skip" keeps the deterministic
+//      rules extractor (no LLM key needed). The legacy memory-compression
+//      provider is NOT asked here — it's an advanced `.env`-only setting.
 //
-// We then write `~/.agentmemory/preferences.json` and seed
-// `~/.agentmemory/.env` with a commented-out `*_API_KEY=` line for the
-// chosen provider. This matches the existing `agentmemory-lab init` flow
-// closely so users who skip onboarding still get the same file via
-// `agentmemory-lab init`.
+// We then write `~/.agentmemory/preferences.json` and ensure
+// `~/.agentmemory/.env` exists (seeding the chosen extractor model's
+// `LANGEXTRACT_*` defaults). The user adds `LANGEXTRACT_API_KEY` after.
 
 import { copyFile, mkdir } from "node:fs/promises";
 import { constants as fsConstants, existsSync, readFileSync, writeFileSync } from "node:fs";
@@ -48,23 +41,62 @@ const NATIVE_AGENTS: { value: string; label: string; glyph: string }[] = [
 // connectors were removed; Codex is the sole supported target).
 const MCP_AGENTS: { value: string; label: string; glyph: string }[] = [];
 
-const PROVIDERS: { value: string; label: string; envKey: string | null }[] = [
-  { value: "anthropic", label: "Anthropic — claude", envKey: "ANTHROPIC_API_KEY" },
-  { value: "openai", label: "OpenAI — gpt", envKey: "OPENAI_API_KEY" },
-  { value: "gemini", label: "Google — gemini", envKey: "GEMINI_API_KEY" },
-  { value: "openrouter", label: "OpenRouter — multi-model", envKey: "OPENROUTER_API_KEY" },
-  { value: "minimax", label: "MiniMax — minimax-m1", envKey: "MINIMAX_API_KEY" },
-  { value: "skip", label: "Skip — BM25-only mode (no LLM key)", envKey: null },
-];
+type ExtractorModel = {
+  value: string;
+  label: string;
+  // null = "skip": keep the deterministic rules extractor (no LLM key).
+  // Otherwise the LANGEXTRACT_* config seeded into ~/.agentmemory/.env.
+  // Only the LangExtract sidecar's openai-compatible branch is offered
+  // (it is the only fully-wired path: api_key + base_url + reasoning_effort).
+  defaults: Record<string, string> | null;
+};
 
-const TODO_EXTRACT_DEFAULTS: Record<string, string> = {
+const SHARED_TODO_DEFAULTS: Record<string, string> = {
   AGENTMEMORY_TODO_EXTRACTOR: "langextract",
   LANGEXTRACT_PROVIDER: "openai",
-  LANGEXTRACT_MODEL: "deepseek/deepseek-v4-pro",
-  LANGEXTRACT_BASE_URL: "https://api.novita.ai/openai/v1",
-  LANGEXTRACT_THINKING_DEPTH: "medium",
   AGENTMEMORY_TODO_EXTRACT_TIMEOUT_MS: "120000",
 };
+
+// THINKING_DEPTH maps to the sidecar's `reasoning_effort`, which only
+// non-reasoning models reject — so it's empty for gpt-4o-mini / deepseek-chat
+// and "medium" for the reasoning-capable DeepSeek-V4 default.
+const EXTRACTOR_MODELS: ExtractorModel[] = [
+  {
+    value: "novita",
+    label: "Novita · DeepSeek-V4 (recommended)",
+    defaults: {
+      ...SHARED_TODO_DEFAULTS,
+      LANGEXTRACT_MODEL: "deepseek/deepseek-v4-pro",
+      LANGEXTRACT_BASE_URL: "https://api.novita.ai/openai/v1",
+      LANGEXTRACT_THINKING_DEPTH: "medium",
+    },
+  },
+  {
+    value: "openai",
+    label: "OpenAI · gpt-4o-mini",
+    defaults: {
+      ...SHARED_TODO_DEFAULTS,
+      LANGEXTRACT_MODEL: "gpt-4o-mini",
+      LANGEXTRACT_BASE_URL: "https://api.openai.com/v1",
+      LANGEXTRACT_THINKING_DEPTH: "",
+    },
+  },
+  {
+    value: "openrouter",
+    label: "OpenRouter · deepseek-chat",
+    defaults: {
+      ...SHARED_TODO_DEFAULTS,
+      LANGEXTRACT_MODEL: "deepseek/deepseek-chat",
+      LANGEXTRACT_BASE_URL: "https://openrouter.ai/api/v1",
+      LANGEXTRACT_THINKING_DEPTH: "",
+    },
+  },
+  {
+    value: "skip",
+    label: "Skip — rules-only extraction (no LLM key)",
+    defaults: null,
+  },
+];
 
 export function buildAgentOptions(): { value: string; label: string; hint?: string }[] {
   return [
@@ -106,7 +138,7 @@ function findEnvExample(): string | null {
   return null;
 }
 
-async function seedEnvFile(provider: string | null): Promise<string | null> {
+async function seedEnvFile(): Promise<string | null> {
   const target = join(homeDir(), ".agentmemory", ".env");
   const dir = dirname(target);
   await mkdir(dir, { recursive: true });
@@ -121,25 +153,22 @@ async function seedEnvFile(provider: string | null): Promise<string | null> {
       }
     }
   } else if (!template && !existsSync(target)) {
-    // Fall back to a minimal skeleton so users always get a `.env` to
-    // edit. This matches the shape of the bundled `.env.example`
-    // without forcing us to keep two copies in sync.
-    const lines = [
-      "# agentmemory environment — uncomment what you need",
-      "# AGENTMEMORY_URL=http://localhost:3111",
-      "",
-    ];
-    const envKey = PROVIDERS.find((x) => x.value === provider)?.envKey;
-    if (envKey) {
-      lines.push(`# ${envKey}=`);
-    }
-    writeFileSync(target, lines.join("\n"), { mode: 0o600 });
+    // Fall back to a minimal skeleton so users always get a `.env` to edit.
+    writeFileSync(
+      target,
+      [
+        "# AI-Todo environment — uncomment what you need",
+        "# AGENTMEMORY_URL=http://localhost:3111",
+        "",
+      ].join("\n"),
+      { mode: 0o600 },
+    );
   }
 
   return target;
 }
 
-function enableTodoExtractionDefaults(envPath: string): void {
+function enableTodoExtractionDefaults(envPath: string, defaults: Record<string, string>): void {
   const current = existsSync(envPath) ? readFileSync(envPath, "utf-8") : "";
   const keys = new Set(
     current
@@ -147,7 +176,7 @@ function enableTodoExtractionDefaults(envPath: string): void {
       .map((line) => line.match(/^\s*([A-Z0-9_]+)\s*=/)?.[1])
       .filter((key): key is string => !!key),
   );
-  const additions = Object.entries(TODO_EXTRACT_DEFAULTS)
+  const additions = Object.entries(defaults)
     .filter(([key]) => !keys.has(key))
     .map(([key, value]) => `${key}=${value}`);
   if (!additions.length) return;
@@ -186,18 +215,17 @@ export async function runOnboarding(): Promise<OnboardingResult> {
 
   p.note(
     [
-      "Welcome to agentmemory.",
+      "Welcome to AI-Todo.",
       "",
-      "Persistent memory for your AI coding agents. We'll pick which",
-      "agents to wire up and which provider (if any) handles memory",
-      "compression and consolidation. Todo extraction uses separate",
-      "LANGEXTRACT_* settings in the web Settings panel.",
+      "Local-first extraction of unfinished To-Dos from your AI agent",
+      "sessions, with evidence, in a local web UI. We'll pick which agent",
+      "sessions to scan and which model extracts your To-Dos.",
     ].join("\n"),
     "first-run setup",
   );
 
   const agentsPicked = await p.multiselect<string>({
-    message: "Which agents will use agentmemory? (space to toggle, enter to confirm)",
+    message: "Which agents should AI-Todo scan for To-Dos? (space to toggle, enter to confirm)",
     options: buildAgentOptions(),
     required: false,
     initialValues: getInitialAgentValues(),
@@ -212,42 +240,32 @@ export async function runOnboarding(): Promise<OnboardingResult> {
     p.note(
       [
         "━ how this works ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
-        "All selected agents share the same memory at :3111.",
-        "A memory saved by Claude Code is visible to Copilot + Codex + Cursor instantly.",
+        "AI-Todo reads these agents' sessions locally and surfaces",
+        "unfinished To-Dos — with evidence — in the web UI at :3111.",
         "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
       ].join("\n"),
     );
   }
 
-  const providerPicked = await p.select<string>({
-    message: "Which LLM provider should memory compression/consolidation use? (Not To-Do extraction)",
-    options: PROVIDERS.map(({ value, label }) => ({ value, label })),
-    initialValue: "anthropic",
+  const modelPicked = await p.select<string>({
+    message:
+      "Which model should AI-Todo use to extract To-Dos? (add the API key later in Settings or ~/.agentmemory/.env)",
+    options: EXTRACTOR_MODELS.map(({ value, label }) => ({ value, label })),
+    initialValue: "novita",
   });
-  if (p.isCancel(providerPicked)) {
+  if (p.isCancel(modelPicked)) {
     p.cancel("Setup cancelled. Re-run any time with: agentmemory --reset");
     process.exit(0);
   }
 
-  const provider = providerPicked === "skip" ? null : providerPicked;
+  const chosenModel = EXTRACTOR_MODELS.find((m) => m.value === modelPicked) ?? null;
+  const provider = modelPicked === "skip" ? null : modelPicked;
   const agents = (agentsPicked as string[]) ?? [];
 
-  const envPath = await seedEnvFile(provider);
-
-  const todoPicked = await p.select<string>({
-    message: "Enable To-Do LLM extraction with LangExtract? (API key can be added later in Settings)",
-    options: [
-      { value: "skip", label: "Skip for now — use the To-Do button after configuring Settings" },
-      { value: "langextract", label: "Enable LangExtract defaults — requires LANGEXTRACT_API_KEY" },
-    ],
-    initialValue: "skip",
-  });
-  if (p.isCancel(todoPicked)) {
-    p.cancel("Setup cancelled. Re-run any time with: agentmemory --reset");
-    process.exit(0);
+  const envPath = await seedEnvFile();
+  if (chosenModel?.defaults && envPath) {
+    enableTodoExtractionDefaults(envPath, chosenModel.defaults);
   }
-  const todoExtractionEnabled = todoPicked === "langextract";
-  if (todoExtractionEnabled && envPath) enableTodoExtractionDefaults(envPath);
 
   writePrefs({
     lastAgent: agents[0] ?? null,
@@ -260,23 +278,14 @@ export async function runOnboarding(): Promise<OnboardingResult> {
   const prefsLocation = join(homeDir(), ".agentmemory", "preferences.json");
   const lines = [`✓ Saved preferences to ${prefsLocation}`];
   if (envPath) {
-    lines.push(`✓ Wrote ${envPath} (edit to add your API key)`);
+    lines.push(`✓ Wrote ${envPath}`);
   } else {
     lines.push(`! Could not write ~/.agentmemory/.env — run \`agentmemory-lab init\` after this completes.`);
   }
-  if (provider) {
-    const envKey = PROVIDERS.find((x) => x.value === provider)?.envKey;
-    if (envKey) {
-      lines.push(`  Uncomment ${envKey}= in that file to enable memory compression/consolidation.`);
-      lines.push("  To-Do extraction uses LANGEXTRACT_* in the web Settings panel.");
-    }
+  if (chosenModel?.defaults) {
+    lines.push(`  To-Do extraction → ${chosenModel.label}. Add LANGEXTRACT_API_KEY in Settings or ~/.agentmemory/.env before running it.`);
   } else {
-    lines.push("  No provider chosen — agentmemory will run in BM25-only mode.");
-  }
-  if (todoExtractionEnabled) {
-    lines.push("  To-Do LLM extraction defaults enabled; add LANGEXTRACT_API_KEY in Settings before running it.");
-  } else {
-    lines.push("  To-Do LLM extraction not enabled during setup; configure it later in Settings.");
+    lines.push("  No model chosen — AI-Todo extracts To-Dos with the deterministic rules extractor (no LLM key needed).");
   }
   p.note(lines.join("\n"), "ready");
 
