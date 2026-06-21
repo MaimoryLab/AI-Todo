@@ -220,8 +220,9 @@ export function buildDiagnostics(effects: DoctorEffects): Diagnostic[] {
       message: "~/.agentmemory/.env is missing.",
       fixPreview: "Copy .env.example into ~/.agentmemory/.env (your keys file).",
       moreInfo:
-        "agentmemory reads provider API keys (Anthropic, OpenAI, Gemini, …) from ~/.agentmemory/.env. " +
-        "Without this file the daemon falls back to BM25-only search and no LLM-backed enrichment runs.",
+        "AI-Todo reads its config (LANGEXTRACT_* for To-Do extraction, plus optional " +
+        "memory-engine keys) from ~/.agentmemory/.env. Without this file the daemon runs " +
+        "with defaults: the deterministic rules extractor and BM25-only search.",
       check: async () => ({
         ok: effects.envFileExists(),
         detail: effects.envFileExists() ? undefined : "no env file",
@@ -230,12 +231,15 @@ export function buildDiagnostics(effects: DoctorEffects): Diagnostic[] {
     },
     {
       id: "no-llm-provider-key",
-      message: "No LLM provider API key found in ~/.agentmemory/.env.",
-      fixPreview: "Open ~/.agentmemory/.env in $EDITOR and paste your key, then re-check.",
+      message: "No memory-engine LLM provider key (optional, advanced).",
+      fixPreview: "Optional: open ~/.agentmemory/.env in $EDITOR and paste a provider key, then re-check.",
       moreInfo:
-        "Set at least one of: ANTHROPIC_API_KEY, OPENAI_API_KEY, GEMINI_API_KEY, " +
-        "OPENROUTER_API_KEY, MINIMAX_API_KEY. The daemon picks the first that resolves " +
-        "to a real (non-placeholder) value at startup.",
+        "These keys power the legacy memory engine (compression/consolidation/embeddings), " +
+        "which is OFF by default and NOT needed for AI-Todo's To-Do extraction — that uses " +
+        "LANGEXTRACT_* (see todo-extractor-llm-not-ready). Set one of ANTHROPIC_API_KEY, " +
+        "OPENAI_API_KEY, GEMINI_API_KEY, OPENROUTER_API_KEY, MINIMAX_API_KEY only if you " +
+        "want the memory engine.",
+      manualOnly: true,
       check: async () => {
         if (!effects.envFileExists()) {
           return { ok: false, detail: "env file missing (run env-missing fix first)" };
@@ -255,10 +259,10 @@ export function buildDiagnostics(effects: DoctorEffects): Diagnostic[] {
       fixPreview:
         "Open ~/.agentmemory/.env and set LANGEXTRACT_API_KEY plus Novita/OpenAI-compatible LANGEXTRACT_* values.",
       moreInfo:
-        "The first-run provider key is for memory compression/consolidation. " +
-        "To-Do extraction uses LANGEXTRACT_* separately. For the current default path, set " +
-        "AGENTMEMORY_TODO_EXTRACTOR=langextract, LANGEXTRACT_PROVIDER=openai, " +
-        "LANGEXTRACT_BASE_URL=https://api.novita.ai/openai/v1, and LANGEXTRACT_API_KEY.",
+        "To-Do extraction uses the LANGEXTRACT_* settings (first-run setup seeds them for the " +
+        "model you pick). For the default path set AGENTMEMORY_TODO_EXTRACTOR=langextract, " +
+        "LANGEXTRACT_PROVIDER=openai, LANGEXTRACT_BASE_URL=https://api.novita.ai/openai/v1, " +
+        "and LANGEXTRACT_API_KEY. Skipping these keeps the deterministic rules extractor.",
       manualOnly: true,
       check: async () => {
         if (!effects.envFileExists()) {
@@ -347,8 +351,8 @@ export function buildDiagnostics(effects: DoctorEffects): Diagnostic[] {
       fixPreview: "Open ~/.agentmemory/.env in $EDITOR to paste real values.",
       moreInfo:
         "Lines like ANTHROPIC_API_KEY=sk-ant-... or =your-key-here are treated as " +
-        "absent. The daemon will fall back to BM25-only search. Replace placeholders " +
-        "with real keys or comment the line out.",
+        "absent (these are optional memory-engine keys). Replace placeholders with real " +
+        "keys or comment the line out.",
       check: async () => {
         if (!effects.envFileExists()) {
           return { ok: true, detail: "env file missing (handled by env-missing)" };

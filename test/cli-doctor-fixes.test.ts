@@ -113,6 +113,15 @@ describe("doctor v2 diagnostic catalog", () => {
     expect(status.ok).toBe(true);
   });
 
+  it("no-llm-provider-key is advisory (manualOnly) — must not fail the first-run gate", async () => {
+    // PLAN-001 STEP-07: onboarding seeds LANGEXTRACT_* (To-Do extraction), not a
+    // compression provider key, so the legacy memory-engine key is optional and
+    // its absence must not be a primary first-run failure.
+    const diagnostics = buildDiagnostics(stubEffects());
+    const check = diagnostics.find((d) => d.id === "no-llm-provider-key")!;
+    expect(check.manualOnly).toBe(true);
+  });
+
   it("todo-extractor-llm-not-ready fails when LANGEXTRACT_API_KEY is missing", async () => {
     const diagnostics = buildDiagnostics(
       stubEffects({
