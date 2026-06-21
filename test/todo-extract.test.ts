@@ -214,6 +214,27 @@ describe("todo extraction", () => {
     }, new Map([["obs_1", { text: "普通总结，没有行动。" }]]))).toBe(false);
   });
 
+  it("requires the evidence quote to be grounded IN the observation, not merely to contain it (STEP-08)", () => {
+    const base = {
+      title: "修复 CI 失败",
+      description: "修复 CI 失败",
+      confidence: 0.95,
+      timeBucket: "current" as const,
+      typeBucket: "pending" as const,
+      sourceSessionId: "ses_1",
+      dedupeKey: "k",
+    };
+    const blocks = new Map([["obs_1", { text: "后续需要修复 CI 失败。" }]]);
+    // grounded: the quote is a substring of the observation
+    expect(validateTodoEvidence({ ...base, evidence: { sourceObservationId: "obs_1", quote: "修复 CI 失败" } }, blocks)).toBe(true);
+    // ungrounded: the quote wraps the whole observation + hallucinated extra —
+    // it CONTAINS the block text but is not grounded in it, so must be rejected
+    expect(validateTodoEvidence({
+      ...base,
+      evidence: { sourceObservationId: "obs_1", quote: "后续需要修复 CI 失败。还要重写整个部署流水线。" },
+    }, blocks)).toBe(false);
+  });
+
   it("cleans bad tool-log titles before writing todos", async () => {
     const cleaned = cleanTodoTitle(
       "langextract-demo/...`",
@@ -357,5 +378,41 @@ describe("todo extraction", () => {
 
     expect(result.cleanedActions).toBe(1);
     expect((await kv.list<Action>(KV.actions)).map((a) => a.id)).toEqual(["act_keep"]);
+  });
+
+  it("cleans status-report cards but keeps repairs that mention a status phrase (STEP-08)", async () => {
+    await kv.set<Action>(KV.actions, "act_status", {
+      id: "act_status",
+      title: "服务可用",
+      description: "服务可用：Viewer 状态正常，无需处理。",
+      status: "pending",
+      priority: 5,
+      createdAt: "2026-06-17T08:00:00.000Z",
+      updatedAt: "2026-06-17T08:00:00.000Z",
+      createdBy: "todo-extract",
+      tags: ["todo-extracted"],
+      sourceObservationIds: [],
+      sourceMemoryIds: [],
+    });
+    // contains "服务可用" but is a real repair — must NOT be filtered (regression
+    // guard for the previously-unconditional 服务可用 pollution rule)
+    await kv.set<Action>(KV.actions, "act_repair", {
+      id: "act_repair",
+      title: "修复服务可用性回归",
+      description: "修复服务可用性回归，排查压测下偶发 5xx。",
+      status: "pending",
+      priority: 6,
+      createdAt: "2026-06-17T08:00:00.000Z",
+      updatedAt: "2026-06-17T08:00:00.000Z",
+      createdBy: "todo-extract",
+      tags: ["todo-extracted"],
+      sourceObservationIds: [],
+      sourceMemoryIds: [],
+    });
+
+    const result = await cleanPollutedTodoCards(kv as never);
+
+    expect(result.cleanedActions).toBe(1);
+    expect((await kv.list<Action>(KV.actions)).map((a) => a.id)).toEqual(["act_repair"]);
   });
 });

@@ -165,6 +165,12 @@ describe("parseJsonlText", () => {
     expect(parseJsonlText(mkEntry("npm run build")).project).toBe("unknown"); // not absolute
     expect(parseJsonlText(mkEntry("/tmp/x && rm -rf /")).project).toBe("unknown");
 
+    // ...and the polluted cwd itself must not be persisted into the session
+    const polluted = parseJsonlText(mkEntry('pwd && echo "x" && git branch'));
+    expect(polluted.cwd).not.toContain("&&");
+    expect(polluted.cwd).not.toContain("echo");
+    expect(parseJsonlText(mkEntry("/tmp/x && rm -rf /")).project).toBe("unknown");
+
     // clean absolute paths resolve to their last segment, incl. names with bare
     // punctuation (route groups, q&a) and spaces — these are NOT pollution
     expect(parseJsonlText(mkEntry("/Users/alice/agentmemory-lab")).project).toBe("agentmemory-lab");
