@@ -22,9 +22,12 @@ LEGACY_MODELS = {"pa/gpt-5.5"}
 PROMPT = textwrap.dedent(
     """\
     Extract actionable todos from AI agent session text.
-    Extract only explicit next actions, follow-ups, failed validations, blocked
-    work, in-progress work, and completed work. Ignore background summaries,
-    generic facts, read-only tool traces, and anything without a source quote.
+    Extract only UNRESOLVED, actionable items: explicit next actions, follow-ups,
+    failed validations, blocked work, and in-progress work that still needs doing.
+    DO NOT extract completed work, results, status reports, confirmations, or
+    narration of what was already done (e.g. "…已通过", "…都能显示", "确认…完成").
+    Ignore background summaries, generic facts, read-only tool traces, and
+    anything without a source quote.
     Use exact source text as extraction_text. Put fields in attributes:
     title, description, confidence, timeBucket, typeBucket, dedupeKey.
     title must be a short human-readable action summary. Never use raw command
@@ -35,7 +38,7 @@ PROMPT = textwrap.dedent(
     service-status reports (e.g. "服务可用", "Viewer:"/"Health:" URL lists), or
     git-ref fragments — these are not todos.
     timeBucket must be current, recent, or history.
-    typeBucket must be pending, to_start, follow_up, in_progress, done, or processing.
+    typeBucket must be pending, to_start, follow_up, in_progress, or processing.
     """
 )
 

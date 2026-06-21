@@ -289,4 +289,38 @@ describe("todo extraction", () => {
     expect((await kv.list<Action>(KV.actions)).map((a) => a.id)).toEqual(["act_good"]);
     expect(await kv.list<ReviewQueueItem>(KV.reviewQueue)).toEqual([]);
   });
+
+  it("cleans completed-work narration cards but keeps genuine repairs (STEP-08 Layer 2)", async () => {
+    await kv.set<Action>(KV.actions, "act_done", {
+      id: "act_done",
+      title: "三个抽取标签都能显示",
+      description: "三个抽取标签都能显示，同时保持卡片不会被无关标签撑开。",
+      status: "pending",
+      priority: 5,
+      createdAt: "2026-06-17T08:00:00.000Z",
+      updatedAt: "2026-06-17T08:00:00.000Z",
+      createdBy: "todo-extract",
+      tags: ["todo-extracted"],
+      sourceObservationIds: [],
+      sourceMemoryIds: [],
+    });
+    await kv.set<Action>(KV.actions, "act_keep", {
+      id: "act_keep",
+      title: "修复登录态失效后摘要不显示的问题",
+      description: "修复登录态失效后摘要不显示的问题。",
+      status: "pending",
+      priority: 6,
+      createdAt: "2026-06-17T08:00:00.000Z",
+      updatedAt: "2026-06-17T08:00:00.000Z",
+      createdBy: "todo-extract",
+      tags: ["todo-extracted"],
+      sourceObservationIds: [],
+      sourceMemoryIds: [],
+    });
+
+    const result = await cleanPollutedTodoCards(kv as never);
+
+    expect(result.cleanedActions).toBe(1);
+    expect((await kv.list<Action>(KV.actions)).map((a) => a.id)).toEqual(["act_keep"]);
+  });
 });

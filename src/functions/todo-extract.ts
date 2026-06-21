@@ -192,6 +192,11 @@ function isPollutedTodoText(value: string | undefined): boolean {
   if (/^[a-z][a-z0-9_-]*-[0-9a-f]{6,}`?$/i.test(text)) return true;
   if (/服务可用|页面已经能返回/.test(text)) return true;
   if (/\b(?:Viewer|Health)\b\s*[：:]\s*(?:\[|https?:\/\/)/i.test(text)) return true;
+  if (
+    /(?:都能|已(?:经)?|成功|顺利)[^。\n]{0,12}(?:显示|通过|完成|可用|生效)/.test(text) &&
+    !/(?:修复|补充|实现|调整|验证|需要|必须|未完成|失败|阻塞|TODO|FIXME)/i.test(text)
+  )
+    return true;
   return false;
 }
 
@@ -204,6 +209,9 @@ export function cleanTodoTitle(title: string, description = "", quote = ""): str
 }
 
 function todoForStorage(todo: ExtractedTodo): ExtractedTodo | null {
+  // STEP-08 Layer 2: never store completed work as a todo — the surface is
+  // for UNRESOLVED pain points. (Enum keeps accepting "done"; we filter at emit.)
+  if (todo.typeBucket === "done") return null;
   const title = cleanTodoTitle(todo.title, todo.description, todo.evidence?.quote);
   if (!title) return null;
   const description = normalizeText(todo.description || todo.evidence?.quote).slice(0, 1000);
