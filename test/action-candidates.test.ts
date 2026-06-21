@@ -257,6 +257,106 @@ describe("zero-LLM action candidates", () => {
     expect(candidates[0].title).toBe("新增 Viewer 行动候选展示");
   });
 
+  it("collapses CJK rewordings of one task across a batch but keeps distinct work (STEP-08 PR4)", () => {
+    const candidates = extractActionCandidatesFromObservations([
+      obs("obs_1", { narrative: "TODO: 克隆上游项目到子目录。" }),
+      obs("obs_2", { narrative: "TODO: 克隆上游项目到子目录中。" }), // insertion
+      obs("obs_3", { narrative: "TODO: 把上游项目克隆到子目录。" }), // word-order
+      obs("obs_4", { narrative: "TODO: 克隆上游项目到子目录下。" }), // insertion
+      obs("obs_5", { narrative: "TODO: 修复登录态失效后摘要不显示。" }), // distinct
+    ]);
+
+    expect(candidates.map((c) => c.title)).toEqual([
+      "克隆上游项目到子目录",
+      "修复登录态失效后摘要不显示",
+    ]);
+  });
+
+  it("keeps semantically distinct candidates that only look similar (STEP-08 PR4)", () => {
+    // negation flip, version bump, and a two-char substitution must NOT collapse
+    const candidates = extractActionCandidatesFromObservations([
+      obs("obs_1", { narrative: "TODO: 支持离线缓存模式。" }),
+      obs("obs_2", { narrative: "TODO: 不支持离线缓存模式。" }),
+      obs("obs_3", { narrative: "TODO: 升级依赖到 v2。" }),
+      obs("obs_4", { narrative: "TODO: 升级依赖到 v3。" }),
+      obs("obs_5", { narrative: "TODO: 克隆上游仓库到子目录。" }),
+      obs("obs_6", { narrative: "TODO: 克隆上游项目到子目录。" }),
+    ]);
+
+    expect(candidates).toHaveLength(6);
+  });
+
+  it("near-dup guard is seeded from open work only, never from done work (STEP-08 PR4)", () => {
+    const seedNearDup = (status: Action["status"]): Action => ({
+      id: `act_${status}`,
+      title: "克隆上游项目到子目录中",
+      description: "old",
+      status,
+      priority: 6,
+      createdAt: "2026-06-11T08:00:00.000Z",
+      updatedAt: "2026-06-11T08:00:00.000Z",
+      createdBy: "test",
+      tags: [],
+      sourceObservationIds: [],
+      sourceMemoryIds: [],
+    });
+    const observation = obs("obs_1", { narrative: "TODO: 克隆上游项目到子目录。" });
+
+    // A near-dup of an open action is suppressed...
+    expect(
+      extractActionCandidatesFromObservations([observation], {
+        existingActions: [seedNearDup("pending")],
+      }),
+    ).toHaveLength(0);
+
+    // ...but a near-dup of a done action may reappear (work could have regressed).
+    expect(
+      extractActionCandidatesFromObservations([observation], {
+        existingActions: [seedNearDup("done")],
+      }),
+    ).toHaveLength(1);
+  });
+
+  it("seeds the near-dup guard from pending action reviews but not approved/dismissed ones (STEP-08 PR4)", () => {
+    const seedReview = (status: ReviewQueueItem["status"]): ReviewQueueItem => ({
+      id: `review_${status}`,
+      createdAt: "2026-06-11T08:00:00.000Z",
+      updatedAt: "2026-06-11T08:00:00.000Z",
+      status,
+      kind: "action",
+      title: "克隆上游项目到子目录中",
+      content: "old",
+      source: "viewer",
+    });
+    const observation = obs("obs_1", { narrative: "TODO: 克隆上游项目到子目录。" });
+
+    expect(
+      extractActionCandidatesFromObservations([observation], {
+        existingReviewItems: [seedReview("pending")],
+      }),
+    ).toHaveLength(0);
+    expect(
+      extractActionCandidatesFromObservations([observation], {
+        existingReviewItems: [seedReview("dismissed")],
+      }),
+    ).toHaveLength(1);
+  });
+
+  it("collapses near-duplicate browser turns of one task into a single draft (STEP-08 PR4)", () => {
+    const candidates = extractActionCandidatesFromTurns([
+      { role: "user", text: "下一步请修复登录页面的样式问题。" },
+      { role: "user", text: "下一步请修复登录页面的样式问题啊。" }, // insertion reword
+      { role: "user", text: "下一步请修复 issue 123。" },
+      { role: "user", text: "下一步请修复 issue 456。" }, // different issue → kept
+    ]);
+
+    expect(candidates.map((c) => c.title)).toEqual([
+      "修复登录页面的样式问题",
+      "修复 issue 123",
+      "修复 issue 456",
+    ]);
+  });
+
   it("extracts browser conversation turns with explicit next-step language", () => {
     const candidates = extractActionCandidatesFromTurns([
       { role: "assistant", text: "我会先解释这个页面。" },
@@ -412,6 +512,38 @@ describe("mem::action-candidates-generate", () => {
       },
     });
     expect(result.items[0].payload?.sourceSessionProject).toBeUndefined();
+  });
+
+  it("collapses title-drifted candidates across sessions via the generate loop (STEP-08 PR4)", async () => {
+    const { sdk, kv } = setup();
+    const mkSession = (id: string, ended: string): Session => ({
+      id,
+      project: "agentmemory-lab",
+      cwd: "/repo",
+      startedAt: ended,
+      endedAt: ended,
+      status: "completed",
+      observationCount: 1,
+    });
+    // Two sessions, same task reworded (insertion) — exact-key dedup misses it,
+    // the cross-session near-dup guard must collapse it.
+    await kv.set(KV.sessions, "ses_a", mkSession("ses_a", "2026-06-11T08:10:00.000Z"));
+    await kv.set(KV.observations("ses_a"), "obs_a", obs("obs_a", {
+      sessionId: "ses_a",
+      narrative: "TODO: 克隆上游项目到子目录。",
+      timestamp: "2026-06-11T08:11:00.000Z",
+    }));
+    await kv.set(KV.sessions, "ses_b", mkSession("ses_b", "2026-06-11T08:20:00.000Z"));
+    await kv.set(KV.observations("ses_b"), "obs_b", obs("obs_b", {
+      sessionId: "ses_b",
+      narrative: "TODO: 克隆上游项目到子目录中。",
+      timestamp: "2026-06-11T08:21:00.000Z",
+    }));
+
+    const result = await sdk.trigger("mem::action-candidates-generate", {}) as { generated: number; items: ReviewQueueItem[] };
+
+    expect(result.generated).toBe(1);
+    expect(result.items[0].title).toMatch(/^克隆上游项目到子目录/);
   });
 
   it("does not regenerate duplicates after pending, dismissed, approved, or existing actions", async () => {

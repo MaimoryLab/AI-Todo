@@ -4,7 +4,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { ISdk } from "iii-sdk";
 import type { StateKV } from "../state/kv.js";
-import { KV, fingerprintId, generateId } from "../state/schema.js";
+import { KV, fingerprintId, generateId, nearDuplicateTitle } from "../state/schema.js";
 import type { Action, CompressedObservation, ReviewQueueItem, ScanCheckpoint, Session } from "../types.js";
 import {
   DEFAULT_LANGEXTRACT_BASE_URL,
@@ -85,6 +85,35 @@ function normalizeText(value: string | undefined): string {
 
 function normalizedKey(value: string): string {
   return normalizeText(value).toLowerCase().replace(/[，。！？；：,.!?;:]/g, "").replace(/\s+/g, " ");
+}
+
+// STEP-08 PR 4/5: the rules/LLM extractors emit clusters of near-identical
+// titles ("克隆上游项目到子目录" reworded with insertions/word-order drift) that
+// the exact-key dedup misses. nearDuplicateTitle (in schema.ts) is the single
+// source of truth for the policy (similarity bar + discriminator vetoes); here
+// we just scan it against already-accepted *active* titles.
+function isNearDuplicateTitle(normalizedTitle: string, seenTitles: string[]): boolean {
+  return seenTitles.some((seen) => nearDuplicateTitle(normalizedTitle, seen));
+}
+
+// Seed the near-dup guard only from titles of work that is still open. A new
+// pending todo that resembles a done/cancelled action (or an already
+// approved/dismissed review) must still be allowed — the work may have
+// regressed or reopened. (Exact-dup suppression keeps its existing behavior.)
+function existingActiveTitles(actions: Action[], reviews: ReviewQueueItem[]): string[] {
+  const titles: string[] = [];
+  for (const action of actions) {
+    if (action.status === "done" || action.status === "cancelled") continue;
+    const title = normalizedKey(action.title);
+    if (title) titles.push(title);
+  }
+  for (const item of reviews) {
+    if (item.kind !== "action") continue;
+    if (item.status === "approved" || item.status === "dismissed") continue;
+    const title = normalizedKey(item.title);
+    if (title) titles.push(title);
+  }
+  return titles;
 }
 
 function stripTitleNoise(value: string): string {
@@ -606,6 +635,7 @@ export async function generateTodosFromSessions(
   const remainingActions = cleanup.cleanedActions > 0 ? await kv.list<Action>(KV.actions).catch(() => []) : actions;
   const remainingReviews = cleanup.cleanedReviews > 0 ? await kv.list<ReviewQueueItem>(KV.reviewQueue).catch(() => []) : reviews;
   const existing = existingDedupeKeys(remainingActions, remainingReviews);
+  const seenTitles = existingActiveTitles(remainingActions, remainingReviews);
   const checkpointId = `todo-extract:${data.project || "all"}`;
   const checkpoint = await kv.get<ScanCheckpoint>(KV.scanCheckpoints, checkpointId).catch(() => null);
   const processed = parseCheckpoint(checkpoint?.cursor);
@@ -641,13 +671,22 @@ export async function generateTodosFromSessions(
         continue;
       }
       const dedupeKey = todo.dedupeKey || normalizedKey(`${todo.title}:${todo.description}`);
-      if (!dedupeKey || existing.has(dedupeKey) || existing.has(normalizedKey(todo.title))) {
+      const titleKey = normalizedKey(todo.title);
+      if (!dedupeKey || existing.has(dedupeKey) || existing.has(titleKey)) {
         discarded++;
         continue;
       }
-      existing.add(dedupeKey);
-      existing.add(normalizedKey(todo.title));
+      if (isNearDuplicateTitle(titleKey, seenTitles)) {
+        discarded++;
+        continue;
+      }
       if (todo.timeBucket === "history") {
+        // History todos are hidden (dismissed), not open work. Mark them in the
+        // exact-key set so they aren't re-emitted, but keep them out of the
+        // near-dup seed so a later *open* near-dup is still allowed (matches
+        // existingActiveTitles' open-only policy).
+        existing.add(dedupeKey);
+        existing.add(titleKey);
         const review = makeReview({ ...todo, dedupeKey }, session, now);
         review.status = "dismissed";
         review.payload = { ...(review.payload || {}), hiddenHistory: true };
@@ -663,8 +702,15 @@ export async function generateTodosFromSessions(
         await kv.set(KV.reviewQueue, review.id, review);
         reviewCreated++;
       } else {
+        // Not persisted — seed nothing, so a discarded low-confidence todo can
+        // never suppress a later genuine one (mirrors action-candidates).
         discarded++;
+        continue;
       }
+      // Reached only for persisted open work: now safe to seed both guards.
+      existing.add(dedupeKey);
+      existing.add(titleKey);
+      seenTitles.push(titleKey);
     }
     processed[session.id] = key;
   }
