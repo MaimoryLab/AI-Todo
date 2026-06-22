@@ -600,6 +600,24 @@ describe("todo extraction", () => {
     expect((await kv.list<Action>(KV.actions)).find((a) => a.id === "a1")).toMatchObject({ status: "done" });
   });
 
+  it("update rule-filters tool dumps out of the session delta (STEP-12)", async () => {
+    await kv.set(KV.sessions, "ses_x", session({ id: "ses_x", endedAt: "2026-06-18T09:00:00.000Z", observationCount: 5 }));
+    // a tool-trace observation (must be filtered) + a human one (must survive)
+    await kv.set(KV.observations("ses_x"), "o_tool", obs({ id: "o_tool", sessionId: "ses_x", timestamp: "2026-06-18T08:00:00.000Z", narrative: '{"cmd":"gh pr list --json number"}' }));
+    await kv.set(KV.observations("ses_x"), "o_human", obs({ id: "o_human", sessionId: "ses_x", timestamp: "2026-06-18T08:01:00.000Z", narrative: "刚刚已经修复并合并了登录超时。" }));
+    await kv.set<Action>(KV.actions, "a1", {
+      id: "a1", title: "Fix login timeout", description: "x", status: "pending", priority: 5,
+      createdAt: "2026-06-17T08:00:00.000Z", updatedAt: "2026-06-17T08:00:00.000Z",
+      createdBy: "todo-extract", tags: ["todo-extracted"], sourceObservationIds: [], sourceMemoryIds: [],
+      metadata: { todoExtraction: { sourceSessionId: "ses_x", sourceCheckpoint: "2026-06-17T09:00:00.000Z:1" } },
+    });
+    let captured: Array<{ sessionDelta?: string }> = [];
+    const decide = async (cards: Array<{ sessionDelta?: string }>) => { captured = cards; return [{ id: "a:a1", decision: "KEEP" as const }]; };
+    await updateChangedTodoCards(kv as never, { mode: "dry-run", decide });
+    expect(captured[0]?.sessionDelta).toContain("登录超时");      // human text kept
+    expect(captured[0]?.sessionDelta).not.toContain("gh pr list"); // tool dump dropped
+  });
+
   it("update dry-run previews without mutating (STEP-12)", async () => {
     await kv.set(KV.sessions, "ses_x", session({ id: "ses_x", endedAt: "2026-06-18T09:00:00.000Z", observationCount: 5 }));
     await kv.set<Action>(KV.actions, "a_drop", {

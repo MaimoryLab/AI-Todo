@@ -912,8 +912,16 @@ function advanceReviewCheckpoint(item: ReviewQueueItem, checkpoint: string, now:
 async function buildSessionDelta(kv: Pick<StateKV, "list">, sessionId: string): Promise<string> {
   const observations = (await kv.list<CompressedObservation>(KV.observations(sessionId)).catch(() => []))
     .sort((a, b) => (a.timestamp || "").localeCompare(b.timestamp || ""));
+  // Rule-filter before sending to the LLM — never ship raw session/tool dumps.
+  // Keep the human-readable narrative of recent interactions and drop tool
+  // traces / commands / paths / JSON (isPollutedTodoText), mirroring what the
+  // extract path does with prefilterTodoObservations.
   const recent = takeRecentInteractions(observations, 2);
-  const text = recent.map((obs) => textForObservation(obs)).filter(Boolean).join("\n").trim();
+  const text = recent
+    .map((obs) => textForObservation(obs))
+    .filter((line) => line && !isPollutedTodoText(line))
+    .join("\n")
+    .trim();
   return text.length > 2000 ? text.slice(text.length - 2000) : text;
 }
 

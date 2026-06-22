@@ -101,7 +101,13 @@ def call_llm(cards: list) -> list:
     req = urllib.request.Request(
         base_url + "/chat/completions",
         data=json.dumps(body).encode("utf-8"),
-        headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+        headers={
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+            # Cloudflare in front of Novita 403s the default Python-urllib UA
+            # ("error code: 1010"); a stable explicit UA is required.
+            "User-Agent": "AI-Todo",
+        },
         method="POST",
     )
     timeout = float(os.environ.get("AGENTMEMORY_TODO_EXTRACT_TIMEOUT_MS", "120000")) / 1000.0
