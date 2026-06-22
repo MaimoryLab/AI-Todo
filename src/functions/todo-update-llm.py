@@ -18,7 +18,7 @@ import sys
 import urllib.error
 import urllib.request
 
-DEFAULT_MODEL = "deepseek/deepseek-v4-pro"
+DEFAULT_MODEL = "deepseek/deepseek-v4-flash"
 DEFAULT_BASE_URL = "https://api.novita.ai/openai/v1"
 LEGACY_MODELS = {"pa/gpt-5.5"}
 VALID_DECISIONS = {"KEEP", "DROP", "DONE", "REWRITE", "MERGE"}
@@ -127,6 +127,13 @@ def call_llm(cards: list) -> list:
     try:
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             data = json.loads(resp.read().decode("utf-8"))
+    except urllib.error.HTTPError as exc:  # pragma: no cover
+        detail = ""
+        try:
+            detail = exc.read().decode("utf-8")[:300]
+        except Exception:
+            pass
+        raise SystemExit(f"LLM request failed: HTTP {exc.code} {detail}") from exc
     except (urllib.error.URLError, TimeoutError, OSError) as exc:  # pragma: no cover
         raise SystemExit(f"LLM request failed: {exc}") from exc
     content = data["choices"][0]["message"]["content"]

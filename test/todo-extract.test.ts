@@ -17,7 +17,7 @@ vi.mock("../src/config.js", () => ({
     };
     return process.env[key] ?? values[key];
   },
-  normalizeTodoExtractorModel: (value?: string) => value || "deepseek/deepseek-v4-pro",
+  normalizeTodoExtractorModel: (value?: string) => value || "deepseek/deepseek-v4-flash",
   normalizeTodoExtractorProvider: (value?: string) => (value || "openai").toLowerCase(),
 }));
 

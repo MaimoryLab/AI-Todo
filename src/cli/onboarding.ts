@@ -66,7 +66,7 @@ const EXTRACTOR_MODELS: ExtractorModel[] = [
     label: "Novita · DeepSeek-V4 (recommended)",
     defaults: {
       ...SHARED_TODO_DEFAULTS,
-      LANGEXTRACT_MODEL: "deepseek/deepseek-v4-pro",
+      LANGEXTRACT_MODEL: "deepseek/deepseek-v4-flash",
       LANGEXTRACT_BASE_URL: "https://api.novita.ai/openai/v1",
       LANGEXTRACT_THINKING_DEPTH: "medium",
     },

@@ -38,18 +38,18 @@ describe("todo extractor user config", () => {
   it("writes only allowed LangExtract keys and never exposes the API key", async () => {
     const { getTodoExtractorUserConfig, getUserEnvPath, writeUserEnv } = await freshConfig();
     writeUserEnv({
-      LANGEXTRACT_MODEL: "deepseek/deepseek-v4-pro",
+      LANGEXTRACT_MODEL: "deepseek/deepseek-v4-flash",
       LANGEXTRACT_API_KEY: "secret",
       NOT_ALLOWED: "ignored",
     });
 
     const raw = readFileSync(getUserEnvPath(), "utf-8");
-    expect(raw).toContain("LANGEXTRACT_MODEL=deepseek/deepseek-v4-pro");
+    expect(raw).toContain("LANGEXTRACT_MODEL=deepseek/deepseek-v4-flash");
     expect(raw).toContain("LANGEXTRACT_API_KEY=secret");
     expect(raw).not.toContain("NOT_ALLOWED");
 
     const cfg = getTodoExtractorUserConfig();
-    expect(cfg.LANGEXTRACT_MODEL).toBe("deepseek/deepseek-v4-pro");
+    expect(cfg.LANGEXTRACT_MODEL).toBe("deepseek/deepseek-v4-flash");
     expect(cfg.LANGEXTRACT_API_KEY_CONFIGURED).toBe(true);
     expect(cfg.LANGEXTRACT_API_KEY_MASKED).toBe("se****et");
     expect(cfg).not.toHaveProperty("LANGEXTRACT_API_KEY");
@@ -59,7 +59,7 @@ describe("todo extractor user config", () => {
     const { getTodoExtractorUserConfig, writeUserEnv } = await freshConfig();
     writeUserEnv({ LANGEXTRACT_MODEL: "pa/gpt-5.5" });
 
-    expect(getTodoExtractorUserConfig().LANGEXTRACT_MODEL).toBe("deepseek/deepseek-v4-pro");
+    expect(getTodoExtractorUserConfig().LANGEXTRACT_MODEL).toBe("deepseek/deepseek-v4-flash");
   });
 
   it("defaults LangExtract to Novita OpenAI-compatible routing", async () => {

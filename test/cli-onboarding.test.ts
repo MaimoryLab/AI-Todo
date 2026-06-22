@@ -126,7 +126,7 @@ describe("cli onboarding", () => {
     const lines = activeEnvLines(readFileSync(envPath, "utf-8"));
     expect(lines).toContain("AGENTMEMORY_TODO_EXTRACTOR=langextract");
     expect(lines).toContain("LANGEXTRACT_PROVIDER=openai");
-    expect(lines).toContain("LANGEXTRACT_MODEL=deepseek/deepseek-v4-pro");
+    expect(lines).toContain("LANGEXTRACT_MODEL=deepseek/deepseek-v4-flash");
     expect(lines).toContain("LANGEXTRACT_BASE_URL=https://api.novita.ai/openai/v1");
     expect(lines.some((line) => line.startsWith("LANGEXTRACT_API_KEY="))).toBe(false);
   });
