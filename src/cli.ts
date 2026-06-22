@@ -991,6 +991,7 @@ function printReadyHint(consoleState: IiiConsoleState): void {
   p.note(lines.join("\n"), `AI-Todo v${VERSION}`);
 
   process.stdout.write("\nTry: node dist/cli.mjs demo\n");
+  process.stdout.write("Press Ctrl+C to stop.\n");
 }
 
 function printNotReadyHint(): void {
@@ -1005,6 +1006,32 @@ function printNotReadyHint(): void {
     ].join("\n"),
     "Worker not ready",
   );
+}
+
+// Option A worker model: the agentmemory worker runs *inside* iii-engine — the
+// `iii-exec` block in iii-config*.yaml spawns `node dist/index.mjs`, detached
+// from this CLI's process group. So `start` keeps the CLI in the foreground
+// only to own Ctrl+C: on SIGINT/SIGTERM we run the same teardown as
+// `agentmemory-lab stop` (engine + worker), then exit. Without this the CLI
+// would return immediately and Ctrl+C would have nothing to stop.
+async function runForegroundUntilSignal(): Promise<void> {
+  await new Promise<void>(() => {
+    let stopping = false;
+    const onSignal = () => {
+      if (stopping) return;
+      stopping = true;
+      void (async () => {
+        try {
+          await runStop();
+        } catch (err) {
+          vlog(`stop on signal failed: ${err instanceof Error ? err.message : String(err)}`);
+        }
+        process.exit(0);
+      })();
+    };
+    process.on("SIGINT", onSignal);
+    process.on("SIGTERM", onSignal);
+  });
 }
 
 async function main() {
@@ -1047,11 +1074,13 @@ async function main() {
       whichBinary("iii") ?? fallbackIiiPaths().find((p) => existsSync(p)) ?? null;
     enforceEngineVersionPin(attachedBin);
     adoptRunningEngine();
-    await import("./index.js");
+    // The worker runs inside iii-engine (iii-exec spawns `node dist/index.mjs`),
+    // so we attach instead of starting a second in-process worker.
     if (await waitForAgentmemoryReady(15000)) {
       const consoleState = await ensureIiiConsole();
       await maybeOfferGlobalInstall();
       printReadyHint(consoleState);
+      await runForegroundUntilSignal();
     } else {
       printNotReadyHint();
     }
@@ -1122,8 +1151,10 @@ async function main() {
   }
 
   s.stop("iii-engine is ready");
-  await import("./index.js");
-  if (await waitForAgentmemoryReady(15000)) {
+  // The worker runs inside iii-engine (iii-exec spawns `node dist/index.mjs`),
+  // detached from this CLI — we do NOT start a second in-process worker here.
+  const workerReady = await waitForAgentmemoryReady(15000);
+  if (workerReady) {
     const consoleState = await ensureIiiConsole();
     await maybeOfferGlobalInstall();
     printReadyHint(consoleState);
@@ -1133,6 +1164,9 @@ async function main() {
   // Mark splash as something to skip on subsequent runs. This is a
   // no-op if onboarding already flipped the flag (idempotent merge).
   writePrefs({ skipSplash: true });
+  // Stay in the foreground so Ctrl+C tears down the whole service (engine +
+  // worker) instead of orphaning it. Blocks until SIGINT/SIGTERM.
+  if (workerReady) await runForegroundUntilSignal();
 }
 
 async function apiFetch<T = unknown>(base: string, path: string, timeoutMs = 5000): Promise<T | null> {
