@@ -20,7 +20,7 @@ vi.mock("../src/config.js", () => ({
   normalizeTodoExtractorProvider: (value?: string) => (value || "openai").toLowerCase(),
 }));
 
-import { cleanPollutedTodoCards, cleanTodoCardsWithLlm, cleanTodoTitle, generateTodosFromSessions, validateTodoEvidence, runLangExtractSidecar, type ExtractedTodo } from "../src/functions/todo-extract.js";
+import { cleanPollutedTodoCards, updateChangedTodoCards, cleanTodoTitle, generateTodosFromSessions, validateTodoEvidence, runLangExtractSidecar, type ExtractedTodo } from "../src/functions/todo-extract.js";
 import type { Action, CompressedObservation, ReviewQueueItem, Session } from "../src/types.js";
 import { KV } from "../src/state/schema.js";
 import { mockKV } from "./helpers/mocks.js";
@@ -529,12 +529,14 @@ describe("todo extraction", () => {
     expect((await kv.list<Action>(KV.actions)).find((a) => a.id === "act_noise")).toMatchObject({ status: "pending" });
   });
 
-  it("LLM cleanup applies KEEP/DROP/DONE/REWRITE/MERGE with audit (STEP-10)", async () => {
+  it("update applies KEEP/DROP/DONE/REWRITE/MERGE on changed-session cards with audit (STEP-12)", async () => {
+    await kv.set(KV.sessions, "ses_x", session({ id: "ses_x", endedAt: "2026-06-18T09:00:00.000Z", observationCount: 9 }));
     const mkAction = (id: string, title: string) =>
       kv.set<Action>(KV.actions, id, {
         id, title, description: title + " — details", status: "pending", priority: 5,
         createdAt: "2026-06-17T08:00:00.000Z", updatedAt: "2026-06-17T08:00:00.000Z",
-        createdBy: "todo-extract", tags: ["todo-extracted"], sourceObservationIds: [], sourceMemoryIds: [],
+        createdBy: "todo-extract", tags: ["todo-extracted", "todo-recheck"], sourceObservationIds: [], sourceMemoryIds: [],
+        metadata: { todoExtraction: { sourceSessionId: "ses_x", sourceCheckpoint: "2026-06-17T09:00:00.000Z:1" } },
       });
     await mkAction("a_keep", "Fix the login bug");
     await mkAction("a_drop", "npm test output");
@@ -548,7 +550,7 @@ describe("todo extraction", () => {
       { id: "a:a_rw", decision: "REWRITE" as const, newTitle: "Fix the dashboard N+1", newDescription: "fix the slow query" },
       { id: "a:a_merge", decision: "MERGE" as const, mergeIntoId: "a:a_rw" },
     ];
-    const result = await cleanTodoCardsWithLlm(kv as never, { mode: "apply", decide });
+    const result = await updateChangedTodoCards(kv as never, { mode: "apply", decide });
     expect(result).toMatchObject({ engine: "llm", scanned: 5, kept: 1, dropped: 1, completed: 1, rewritten: 1, merged: 1 });
     const actions = await kv.list<Action>(KV.actions);
     const byId = (id: string) => actions.find((a) => a.id === id);
@@ -557,32 +559,75 @@ describe("todo extraction", () => {
     expect(byId("a_done")).toMatchObject({ status: "done", metadata: { cleanup: expect.objectContaining({ decision: "done" }) } });
     expect(byId("a_rw")).toMatchObject({ title: "Fix the dashboard N+1", status: "pending", metadata: { cleanup: expect.objectContaining({ decision: "rewrite", previousTitle: "fix" }) } });
     expect(byId("a_merge")).toMatchObject({ status: "cancelled", metadata: { cleanup: expect.objectContaining({ decision: "merge", mergeIntoId: "a:a_rw" }) } });
+    // every processed card advances its checkpoint and drops the recheck tag, so
+    // it won't be reprocessed until its session changes again.
+    expect(byId("a_keep")?.metadata?.todoExtraction).toMatchObject({ sourceCheckpoint: "2026-06-18T09:00:00.000Z:9", needsRecheck: false });
+    expect(byId("a_keep")?.tags).not.toContain("todo-recheck");
   });
 
-  it("LLM cleanup dry-run previews without mutating (STEP-10)", async () => {
+  it("update only touches cards whose source session changed (STEP-12)", async () => {
+    // unchanged: stored checkpoint == current session fingerprint
+    await kv.set(KV.sessions, "ses_same", session({ id: "ses_same", endedAt: "2026-06-18T09:00:00.000Z", observationCount: 3 }));
+    await kv.set<Action>(KV.actions, "a_same", {
+      id: "a_same", title: "Fix the login bug", description: "x", status: "pending", priority: 5,
+      createdAt: "2026-06-17T08:00:00.000Z", updatedAt: "2026-06-17T08:00:00.000Z",
+      createdBy: "todo-extract", tags: ["todo-extracted"], sourceObservationIds: [], sourceMemoryIds: [],
+      metadata: { todoExtraction: { sourceSessionId: "ses_same", sourceCheckpoint: "2026-06-18T09:00:00.000Z:3" } },
+    });
+    let called = false;
+    const decide = async () => { called = true; return []; };
+    const result = await updateChangedTodoCards(kv as never, { mode: "apply", decide });
+    expect(result.scanned).toBe(0);
+    expect(called).toBe(false); // decide never runs when nothing changed
+    expect((await kv.list<Action>(KV.actions)).find((a) => a.id === "a_same")).toMatchObject({ status: "pending" });
+  });
+
+  it("update passes the session delta to the LLM (STEP-12)", async () => {
+    await kv.set(KV.sessions, "ses_x", session({ id: "ses_x", endedAt: "2026-06-18T09:00:00.000Z", observationCount: 5 }));
+    await kv.set(KV.observations("ses_x"), "o1", obs({ id: "o1", sessionId: "ses_x", narrative: "刚刚已经修复并合并了登录超时。" }));
+    await kv.set<Action>(KV.actions, "a1", {
+      id: "a1", title: "Fix login timeout", description: "x", status: "pending", priority: 5,
+      createdAt: "2026-06-17T08:00:00.000Z", updatedAt: "2026-06-17T08:00:00.000Z",
+      createdBy: "todo-extract", tags: ["todo-extracted"], sourceObservationIds: [], sourceMemoryIds: [],
+      metadata: { todoExtraction: { sourceSessionId: "ses_x", sourceCheckpoint: "2026-06-17T09:00:00.000Z:1" } },
+    });
+    let captured: Array<{ sessionDelta?: string }> = [];
+    const decide = async (cards: Array<{ sessionDelta?: string }>) => { captured = cards; return [{ id: "a:a1", decision: "DONE" as const }]; };
+    const result = await updateChangedTodoCards(kv as never, { mode: "apply", decide });
+    expect(result.completed).toBe(1);
+    expect(captured[0]?.sessionDelta).toContain("登录超时");
+    expect((await kv.list<Action>(KV.actions)).find((a) => a.id === "a1")).toMatchObject({ status: "done" });
+  });
+
+  it("update dry-run previews without mutating (STEP-12)", async () => {
+    await kv.set(KV.sessions, "ses_x", session({ id: "ses_x", endedAt: "2026-06-18T09:00:00.000Z", observationCount: 5 }));
     await kv.set<Action>(KV.actions, "a_drop", {
       id: "a_drop", title: "npm test output", description: "x", status: "pending", priority: 5,
       createdAt: "2026-06-17T08:00:00.000Z", updatedAt: "2026-06-17T08:00:00.000Z",
       createdBy: "todo-extract", tags: ["todo-extracted"], sourceObservationIds: [], sourceMemoryIds: [],
+      metadata: { todoExtraction: { sourceSessionId: "ses_x", sourceCheckpoint: "2026-06-17T09:00:00.000Z:1" } },
     });
     const decide = async () => [{ id: "a:a_drop", decision: "DROP" as const, reason: "noise" }];
-    const result = await cleanTodoCardsWithLlm(kv as never, { mode: "dry-run", decide });
+    const result = await updateChangedTodoCards(kv as never, { mode: "dry-run", decide });
     expect(result).toMatchObject({ engine: "llm", dropped: 1 });
     expect(result.preview).toHaveLength(1);
     expect((await kv.list<Action>(KV.actions)).find((a) => a.id === "a_drop")).toMatchObject({ status: "pending" });
   });
 
-  it("LLM cleanup falls back to rule-based cleanup when the LLM fails (STEP-10)", async () => {
+  it("update leaves cards untouched when the LLM fails — no rule fallback (STEP-12)", async () => {
+    await kv.set(KV.sessions, "ses_x", session({ id: "ses_x", endedAt: "2026-06-18T09:00:00.000Z", observationCount: 5 }));
     await kv.set<Action>(KV.actions, "a_bad", {
       id: "a_bad", title: "gh pr list --json number", description: "{\"cmd\":\"gh pr list\"}", status: "pending", priority: 5,
       createdAt: "2026-06-17T08:00:00.000Z", updatedAt: "2026-06-17T08:00:00.000Z",
       createdBy: "todo-extract", tags: ["todo-extracted"], sourceObservationIds: [], sourceMemoryIds: [],
+      metadata: { todoExtraction: { sourceSessionId: "ses_x", sourceCheckpoint: "2026-06-17T09:00:00.000Z:1" } },
     });
     const decide = async (): Promise<never> => { throw new Error("LLM down"); };
-    const result = await cleanTodoCardsWithLlm(kv as never, { mode: "apply", decide });
+    const result = await updateChangedTodoCards(kv as never, { mode: "apply", decide });
     expect(result.engine).toBe("rules");
     expect(result.fallbackReason).toContain("LLM down");
-    expect((await kv.list<Action>(KV.actions)).find((a) => a.id === "a_bad")).toMatchObject({ status: "cancelled" });
+    // update has no rule equivalent, so the card stays exactly as it was
+    expect((await kv.list<Action>(KV.actions)).find((a) => a.id === "a_bad")).toMatchObject({ status: "pending" });
   });
 
   it("filters agent progress observations before rules extraction", async () => {

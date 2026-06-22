@@ -4146,17 +4146,17 @@
         'act.extract.discarded': 'discarded',
         'act.extract.cleaned': 'cleaned',
         'act.extract.reason': 'reason',
-        'act.cleanup.title': 'Use LLM to curate existing cards',
-        'act.cleanup.run': 'Clean up',
-        'act.cleanup.running': 'Cleaning...',
-        'act.cleanup.applying': 'Applying cleanup...',
-        'act.cleanup.done': 'Cleaned',
-        'act.cleanup.error': 'Cleanup failed',
-        'act.cleanup.failed': 'Cleanup failed; cards unchanged',
-        'act.cleanup.clean': 'Cards already look clean',
+        'act.cleanup.title': 'Update recorded cards from sessions that changed',
+        'act.cleanup.run': 'Update',
+        'act.cleanup.running': 'Updating...',
+        'act.cleanup.applying': 'Applying updates...',
+        'act.cleanup.done': 'Updated',
+        'act.cleanup.error': 'Update failed',
+        'act.cleanup.failed': 'Update failed; cards unchanged',
+        'act.cleanup.clean': 'All cards are up to date',
         'act.cleanup.llmUnavailable': 'LLM unavailable — no changes',
-        'act.cleanup.confirm': 'Apply these cleanup changes?',
-        'act.cleanup.summary': 'drop {dropped} · done {completed} · rewrite {rewritten} · merge {merged}',
+        'act.cleanup.confirm': 'Apply these updates?',
+        'act.cleanup.summary': 'update {rewritten} · done {completed} · drop {dropped} · merge {merged}',
         'act.status.complete': 'Complete',
         'act.status.archive': 'Archive',
         'act.status.delete': 'Delete',
@@ -4348,17 +4348,17 @@
         'act.extract.discarded': '丢弃',
         'act.extract.cleaned': '清理',
         'act.extract.reason': '原因',
-        'act.cleanup.title': '用大模型清洗现有卡片',
-        'act.cleanup.run': '清洗',
-        'act.cleanup.running': '清洗中...',
-        'act.cleanup.applying': '正在应用清洗...',
-        'act.cleanup.done': '已清洗',
-        'act.cleanup.error': '清洗失败',
-        'act.cleanup.failed': '清洗失败，卡片未改动',
-        'act.cleanup.clean': '卡片已经很干净',
+        'act.cleanup.title': '用大模型更新已记录的卡片（来源会话有新进展时）',
+        'act.cleanup.run': '更新',
+        'act.cleanup.running': '更新中...',
+        'act.cleanup.applying': '正在应用更新...',
+        'act.cleanup.done': '已更新',
+        'act.cleanup.error': '更新失败',
+        'act.cleanup.failed': '更新失败，卡片未改动',
+        'act.cleanup.clean': '卡片已是最新',
         'act.cleanup.llmUnavailable': '大模型不可用 — 未改动',
-        'act.cleanup.confirm': '应用这些清洗改动？',
-        'act.cleanup.summary': '丢弃 {dropped} · 完成 {completed} · 改写 {rewritten} · 合并 {merged}',
+        'act.cleanup.confirm': '应用这些更新？',
+        'act.cleanup.summary': '更新 {rewritten} · 完成 {completed} · 丢弃 {dropped} · 合并 {merged}',
         'act.status.complete': '完成',
         'act.status.archive': '归档',
         'act.status.delete': '删除',
@@ -8970,13 +8970,13 @@
 
     // LLM card cleanup (STEP-10): curate EXISTING cards. Always dry-run first so
     // the user confirms before anything is soft-deleted; apply only on confirm.
-    function startTodoCleanup() {
+    function startTodoUpdate() {
       if (state.actions.cleanupInFlight || state.actions.extractInFlight) return;
       state.actions.cleanupInFlight = true;
       state.actions.cleanupStatus = 'running';
       state.actions.cleanupMessage = t('act.cleanup.running');
       if (state.activeTab === 'actions') renderActions();
-      apiPost('todo/cleanup', { mode: 'dry-run' }).then(function(preview) {
+      apiPost('todo/update', { mode: 'dry-run' }).then(function(preview) {
         state.actions.cleanupInFlight = false;
         if (!preview || typeof preview.scanned !== 'number') {
           state.actions.cleanupStatus = 'error';
@@ -9001,7 +9001,7 @@
         state.actions.cleanupStatus = 'running';
         state.actions.cleanupMessage = t('act.cleanup.applying');
         if (state.activeTab === 'actions') renderActions();
-        apiPost('todo/cleanup', { mode: 'apply' }).then(function(result) {
+        apiPost('todo/update', { mode: 'apply' }).then(function(result) {
           state.actions.cleanupStatus = 'done';
           state.actions.cleanupMessage = todoCleanupSummary(result || preview);
           return refreshActionListsAfterExtract();
@@ -9683,7 +9683,7 @@
         if (state.actions.cleanupInFlight) cleanupLabel = t('act.cleanup.running');
         else if (state.actions.cleanupStatus === 'done') cleanupLabel = t('act.cleanup.done');
         else if (state.actions.cleanupStatus === 'error') cleanupLabel = t('act.cleanup.error');
-        html += '<button class="btn' + (state.actions.cleanupInFlight ? ' btn-working' : '') + '" data-action="cleanup-cards" type="button" title="' + esc(state.actions.cleanupMessage || t('act.cleanup.title')) + '"' + (state.actions.cleanupInFlight ? ' disabled aria-busy="true"' : '') + '>' + esc(cleanupLabel) + '</button>';
+        html += '<button class="btn' + (state.actions.cleanupInFlight ? ' btn-working' : '') + '" data-action="update-cards" type="button" title="' + esc(state.actions.cleanupMessage || t('act.cleanup.title')) + '"' + (state.actions.cleanupInFlight ? ' disabled aria-busy="true"' : '') + '>' + esc(cleanupLabel) + '</button>';
         html += '<button class="btn' + (state.actions.stale ? ' btn-soft-alert' : '') + '" data-action="refresh-actions" type="button">' + (state.actions.stale ? t('act.refresh') : t('act.refresh')) + '</button>';
         html += '</div>';
         return html;
@@ -10527,8 +10527,8 @@
         startTodoExtraction(true);
         return;
       }
-      if (action === 'cleanup-cards') {
-        startTodoCleanup();
+      if (action === 'update-cards') {
+        startTodoUpdate();
         return;
       }
       if (action === 'toggle-settings') {

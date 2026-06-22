@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
-"""LLM curation sidecar for AI Todo card cleanup (PLAN-002 STEP-10).
+"""LLM update sidecar for AI Todo cards (PLAN-002 STEP-12).
 
 Reads {"cards": [...]} from stdin and writes {"decisions": [...]} to stdout.
-Unlike todo-extract-langextract.py (which extracts NEW todos from session text),
-this judges EXISTING cards: KEEP / DROP / DONE / REWRITE / MERGE. Uses a direct
-OpenAI-compatible chat completion (stdlib urllib, no extra deps), reusing the
-same LANGEXTRACT_* config. On any failure (no key, network, bad JSON) it exits
-non-zero so TypeScript falls back to rule-based cleanup.
+Each card's source session has gained new activity since the card was recorded
+(`sessionDelta` carries that recent activity). This re-judges the card in light
+of it: KEEP / DROP / DONE / REWRITE / MERGE. Uses a direct OpenAI-compatible
+chat completion (stdlib urllib, no extra deps), reusing the same LANGEXTRACT_*
+config. On any failure (no key, network, bad JSON) it exits non-zero so the
+TypeScript caller leaves every card untouched and reports why.
 """
 
 from __future__ import annotations
@@ -23,33 +24,36 @@ LEGACY_MODELS = {"pa/gpt-5.5"}
 VALID_DECISIONS = {"KEEP", "DROP", "DONE", "REWRITE", "MERGE"}
 
 SYSTEM_PROMPT = """\
-You are a strict, conservative curator of a developer's personal Todo list. Each
-card was auto-extracted from AI coding-agent sessions, so the list is noisy:
-tool-call echoes, command output, status narration ("running tests…"), git-ref
-fragments, completed work, vague fragments, and duplicates. Your job is to make
-the list trustworthy — every surviving card must be a REAL, SPECIFIC, STILL-OPEN
+You are a strict, conservative maintainer of a developer's personal Todo list.
+Each card was auto-extracted earlier from an AI coding-agent session, and that
+session has SINCE gained new activity, provided as `sessionDelta`. Your job is to
+UPDATE each card in light of what happened after it was recorded, keeping the
+list trustworthy — every surviving card must be a REAL, SPECIFIC, STILL-OPEN
 action.
 
 For EACH input card, output exactly one decision:
-- KEEP    — genuine, actionable, still-open; clear enough as-is.
-- DROP    — not a real todo: tool/command output, a status report, a git
-            ref/hash fragment, meta-commentary, or too vague to act on.
-- DONE    — a real task the card's own text/evidence shows is already completed.
-- REWRITE — a real, still-open todo whose title/description is unclear, noisy,
-            or truncated. Provide a corrected concise `newTitle` (<= 80 chars)
-            and one-line `newDescription`, PRESERVING the original meaning.
-            Never invent scope, steps, or details not in the original.
+- KEEP    — still a genuine, still-open action and the new activity does not
+            change it; clear enough as-is.
+- DROP    — the new activity (or the card itself) shows it is not a real todo:
+            tool/command output, a status report, a git ref/hash fragment,
+            meta-commentary, or too vague to act on.
+- DONE    — the new session activity shows this task is now completed.
+- REWRITE — still a real, still-open todo, but the new activity means its
+            title/description should be updated (clearer, or reflecting the
+            latest state). Provide a corrected concise `newTitle` (<= 80 chars)
+            and one-line `newDescription`. Stay faithful to the card + evidence +
+            sessionDelta; never invent scope or steps not supported by them.
 - MERGE   — a duplicate of another card in this same batch; give `mergeIntoId`
             of the canonical (clearest) card to merge into.
 
 Rules:
-1. BE CONSERVATIVE. When unsure whether something is a real todo, choose KEEP.
-   Only DROP or DONE when you are confident from the card's own
-   title/description/evidence. It is far worse to delete a real todo than to
-   keep a borderline one.
-2. Ground every decision ONLY in the card's own text/evidence. No outside
-   knowledge, no assumed facts.
-3. For REWRITE, only clarify wording. Do not add scope, steps, or detail.
+1. BE CONSERVATIVE. When unsure, choose KEEP. Only DROP or DONE when the card's
+   own text/evidence or the sessionDelta makes you confident. It is far worse to
+   wrongly drop or close a real todo than to keep a borderline one.
+2. Ground every decision ONLY in the card's own text/evidence and its
+   sessionDelta. No outside knowledge, no assumed facts.
+3. For REWRITE, only clarify or reflect the new state; do not add unsupported
+   scope, steps, or detail.
 4. KEEP bar: a specific subject + a verb/action + a discernible outcome
    (e.g. "Fix the N+1 query in the dashboard loader"). Reject pure observations,
    logs, status lines, and vibes.
@@ -60,13 +64,11 @@ Output STRICT JSON only, exactly one entry per input card, same ids:
 REWRITE>","mergeIntoId":"<only if MERGE>"}]}
 
 Examples of decisions:
-- "⏺ Bash(npm test)" / "Viewer: http://localhost:3114" / "abc1234 (HEAD)"  -> DROP
-- "running the test suite now"                                            -> DROP (status report)
-- "看一下那个东西" (too vague)                                            -> DROP
-- "Fix the N+1 query in the dashboard loader"                              -> KEEP
-- title truncated mid-sentence but clearly a real task                     -> REWRITE
-- two cards describing the same fix                                        -> MERGE (one) + KEEP (canonical)
-- evidence shows the change was committed/merged/passed                    -> DONE
+- sessionDelta shows the change was committed/merged/tests passed             -> DONE
+- "⏺ Bash(npm test)" / "Viewer: http://localhost:3114" / "abc1234 (HEAD)"     -> DROP
+- a real task whose wording is now stale given the new activity               -> REWRITE
+- two cards describing the same fix                                           -> MERGE (one) + KEEP (canonical)
+- a still-open task the new activity does not touch                           -> KEEP
 """
 
 
@@ -79,7 +81,7 @@ def call_llm(cards: list) -> list:
     """Direct OpenAI-compatible chat completion. Raises SystemExit on failure."""
     api_key = os.environ.get("LANGEXTRACT_API_KEY", "").strip()
     if not api_key:
-        raise SystemExit("LANGEXTRACT_API_KEY is required for LLM cleanup")
+        raise SystemExit("LANGEXTRACT_API_KEY is required for LLM update")
     base_url = (os.environ.get("LANGEXTRACT_BASE_URL", DEFAULT_BASE_URL).strip() or DEFAULT_BASE_URL).rstrip("/")
     body = {
         "model": model_id(),
@@ -87,8 +89,9 @@ def call_llm(cards: list) -> list:
             {"role": "system", "content": SYSTEM_PROMPT},
             {
                 "role": "user",
-                "content": "Curate these existing cards. Return strict JSON "
-                '{"decisions":[...]} with one entry per card.\n'
+                "content": "Update these existing cards given their session's new "
+                'activity. Return strict JSON {"decisions":[...]} with one entry '
+                "per card.\n"
                 + json.dumps({"cards": cards}, ensure_ascii=False),
             },
         ],
@@ -156,7 +159,7 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    if os.environ.get("AGENTMEMORY_TODO_CLEANUP_SELF_TEST") == "1":
+    if os.environ.get("AGENTMEMORY_TODO_UPDATE_SELF_TEST") == "1":
         # Offline smoke: exercise normalize() without any network call.
         _cards = [{"id": "a", "title": "x"}, {"id": "b", "title": "y"}, {"id": "c", "title": "z"}]
         _raw = [

@@ -67,7 +67,7 @@ type TodoExtractOptions = {
 const TIME_BUCKETS = new Set(["current", "recent", "history"]);
 const TYPE_BUCKETS = new Set(["pending", "to_start", "follow_up", "in_progress", "done", "processing"]);
 const SIDE_CAR = "todo-extract-langextract.py";
-const CLEANUP_SIDE_CAR = "todo-cleanup-llm.py";
+const CLEANUP_SIDE_CAR = "todo-update-llm.py";
 const MAX_LLM_OBSERVATIONS_PER_SESSION = 40;
 const SIDE_CAR_ENV_KEYS = [
   "LANGEXTRACT_API_KEY",
@@ -770,7 +770,7 @@ type LlmCleanupItem = {
   newDescription?: string;
   mergeIntoId?: string;
 };
-type CleanupCard = { id: string; title: string; description: string; status: string; evidence?: string };
+type CleanupCard = { id: string; title: string; description: string; status: string; evidence?: string; sessionDelta?: string };
 
 const DEFAULT_CLEANUP_MAX_CARDS = 60;
 
@@ -871,6 +871,46 @@ function applyReviewCleanup(item: ReviewQueueItem, d: LlmCleanupItem, now: strin
   return { ...item, status: "dismissed", updatedAt: now, payload: { ...(item.payload || {}), cleanup } };
 }
 
+// STEP-12: after an update pass, advance the card's stored source checkpoint to
+// the session's current fingerprint and clear the recheck markers, so a card is
+// not re-selected until its session changes again.
+function advanceActionCheckpoint(action: Action, checkpoint: string, now: string): Action {
+  const extraction = (action.metadata?.todoExtraction || {}) as Record<string, unknown>;
+  const tags = Array.isArray(action.tags) ? action.tags.filter((tag) => tag !== "todo-recheck") : action.tags;
+  return {
+    ...action,
+    updatedAt: now,
+    tags,
+    metadata: {
+      ...(action.metadata || {}),
+      todoExtraction: { ...extraction, sourceCheckpoint: checkpoint, needsRecheck: false },
+    },
+  };
+}
+
+function advanceReviewCheckpoint(item: ReviewQueueItem, checkpoint: string, now: string): ReviewQueueItem {
+  const extraction = (item.payload?.todoExtraction || {}) as Record<string, unknown>;
+  return {
+    ...item,
+    updatedAt: now,
+    payload: {
+      ...(item.payload || {}),
+      todoExtraction: { ...extraction, sourceCheckpoint: checkpoint, needsRecheck: false },
+    },
+  };
+}
+
+// The session's most-recent activity (last ~2 interaction records), as text, so
+// the updater LLM can re-judge a card against what happened after it was first
+// recorded. Capped so the prompt stays bounded.
+async function buildSessionDelta(kv: Pick<StateKV, "list">, sessionId: string): Promise<string> {
+  const observations = (await kv.list<CompressedObservation>(KV.observations(sessionId)).catch(() => []))
+    .sort((a, b) => (a.timestamp || "").localeCompare(b.timestamp || ""));
+  const recent = takeRecentInteractions(observations, 2);
+  const text = recent.map((obs) => textForObservation(obs)).filter(Boolean).join("\n").trim();
+  return text.length > 2000 ? text.slice(text.length - 2000) : text;
+}
+
 export type LlmCleanupResult = {
   engine: "llm" | "rules";
   scanned: number;
@@ -883,28 +923,54 @@ export type LlmCleanupResult = {
   fallbackReason?: string;
 };
 
-export async function cleanTodoCardsWithLlm(
+export async function updateChangedTodoCards(
   kv: Pick<StateKV, "list" | "set">,
   opts: { mode?: CleanupMode; maxCards?: number; decide?: (cards: CleanupCard[]) => Promise<LlmCleanupItem[]> } = {},
 ): Promise<LlmCleanupResult> {
   const mode = opts.mode ?? "apply";
   const maxCards = opts.maxCards ?? DEFAULT_CLEANUP_MAX_CARDS;
   const decide = opts.decide ?? runCleanupSidecar;
-  const [actions, reviews] = await Promise.all([
+  const [actions, reviews, sessions] = await Promise.all([
     kv.list<Action>(KV.actions).catch(() => []),
     kv.list<ReviewQueueItem>(KV.reviewQueue).catch(() => []),
+    kv.list<Session>(KV.sessions).catch(() => []),
   ]);
-  const openActions = actions.filter(
-    (a) => actionLooksGenerated(a) && a.status !== "done" && a.status !== "cancelled",
-  );
-  const openReviews = reviews.filter((r) => reviewLooksGenerated(r) && r.status === "pending");
-  const actionById = new Map(openActions.map((a) => [`a:${a.id}`, a] as [string, Action]));
-  const reviewById = new Map(openReviews.map((r) => [`r:${r.id}`, r] as [string, ReviewQueueItem]));
+  const sessionsById = new Map(sessions.map((s) => [s.id, s] as [string, Session]));
+  // Only open, generated cards whose source-session fingerprint moved on since
+  // the card was recorded (sessionChangedSinceExtraction) — the "the session
+  // updated, so update its cards" scope.
+  const changedActions = actions.filter((a) => {
+    if (!actionLooksGenerated(a) || a.status === "done" || a.status === "cancelled") return false;
+    const ex = a.metadata?.todoExtraction as (ExtractedTodo & { sourceCheckpoint?: string }) | undefined;
+    const session = ex?.sourceSessionId ? sessionsById.get(ex.sourceSessionId) : undefined;
+    return !!ex && !!session && sessionChangedSinceExtraction(ex, session);
+  });
+  const changedReviews = reviews.filter((r) => {
+    if (!reviewLooksGenerated(r) || r.status !== "pending") return false;
+    const ex = r.payload?.todoExtraction as (ExtractedTodo & { sourceCheckpoint?: string }) | undefined;
+    const session = ex?.sourceSessionId ? sessionsById.get(ex.sourceSessionId) : undefined;
+    return !!ex && !!session && sessionChangedSinceExtraction(ex, session);
+  });
+  const actionById = new Map(changedActions.map((a) => [`a:${a.id}`, a] as [string, Action]));
+  const reviewById = new Map(changedReviews.map((r) => [`r:${r.id}`, r] as [string, ReviewQueueItem]));
 
-  const cards: CleanupCard[] = [
-    ...openActions.map((a) => ({ id: `a:${a.id}`, title: a.title, description: a.description, status: a.status, evidence: cardEvidence(a.metadata) })),
-    ...openReviews.map((r) => ({ id: `r:${r.id}`, title: r.title, description: r.content, status: r.status, evidence: cardEvidence(r.payload) })),
+  // Build the LLM card batch (capped), attaching each card's session delta — the
+  // session's most-recent activity — so the model can re-judge it against what
+  // happened after it was first recorded. Delta is built once per session.
+  const deltaCache = new Map<string, string>();
+  const sessionDeltaFor = async (sessionId: string | undefined): Promise<string> => {
+    if (!sessionId) return "";
+    if (!deltaCache.has(sessionId)) deltaCache.set(sessionId, await buildSessionDelta(kv, sessionId));
+    return deltaCache.get(sessionId) || "";
+  };
+  const entries = [
+    ...changedActions.map((a) => ({ id: `a:${a.id}`, sessionId: (a.metadata?.todoExtraction as ExtractedTodo | undefined)?.sourceSessionId, title: a.title, description: a.description, status: a.status, evidence: cardEvidence(a.metadata) })),
+    ...changedReviews.map((r) => ({ id: `r:${r.id}`, sessionId: (r.payload?.todoExtraction as ExtractedTodo | undefined)?.sourceSessionId, title: r.title, description: r.content, status: r.status, evidence: cardEvidence(r.payload) })),
   ].slice(0, maxCards);
+  const cards: CleanupCard[] = [];
+  for (const entry of entries) {
+    cards.push({ id: entry.id, title: entry.title, description: entry.description, status: entry.status, evidence: entry.evidence, sessionDelta: await sessionDeltaFor(entry.sessionId) });
+  }
 
   if (cards.length === 0) {
     return { engine: "llm", scanned: 0, kept: 0, dropped: 0, completed: 0, rewritten: 0, merged: 0, preview: [] };
@@ -914,60 +980,66 @@ export async function cleanTodoCardsWithLlm(
   try {
     decisions = await decide(cards);
   } catch (err) {
-    // LLM unavailable → rule-based cleanup as a safety net.
-    const rules = await cleanPollutedTodoCards(kv, mode);
-    const dropped = rules.cleanedActions + rules.cleanedReviews;
-    const completed = rules.completedActions + rules.completedReviews;
+    // Update is an LLM-only operation (it re-judges cards against new session
+    // content); there is no rule equivalent, so on failure leave every card
+    // untouched and report why.
     return {
       engine: "rules",
       scanned: cards.length,
-      kept: Math.max(0, cards.length - dropped - completed),
-      dropped,
-      completed,
+      kept: cards.length,
+      dropped: 0,
+      completed: 0,
       rewritten: 0,
       merged: 0,
-      preview: [...rules.preview.actions, ...rules.preview.reviews].map((p) => ({
-        id: p.id,
-        title: p.title,
-        decision: (p.decision === "done" ? "DONE" : "DROP") as LlmCleanupDecision,
-        reason: "rule-based fallback",
-      })),
+      preview: [],
       fallbackReason: err instanceof Error ? err.message : String(err),
     };
   }
 
   const now = new Date().toISOString();
+  const decisionById = new Map(decisions.filter((d) => d && d.id).map((d) => [d.id, d] as [string, LlmCleanupItem]));
   const writes: Array<Promise<unknown>> = [];
-  let dropped = 0, completed = 0, rewritten = 0, merged = 0;
+  let kept = 0, dropped = 0, completed = 0, rewritten = 0, merged = 0;
   const preview: LlmCleanupResult["preview"] = [];
 
-  for (const d of decisions) {
-    if (!d || d.decision === "KEEP") continue;
-    const action = actionById.get(d.id);
-    const review = reviewById.get(d.id);
-    if (!action && !review) continue;
-    if (d.decision === "DROP") dropped++;
-    else if (d.decision === "DONE") completed++;
-    else if (d.decision === "REWRITE") rewritten++;
-    else if (d.decision === "MERGE") merged++;
-    preview.push({
-      id: d.id,
-      title: action?.title ?? review?.title ?? "",
-      decision: d.decision,
-      reason: d.reason,
-      newTitle: d.newTitle,
-      mergeIntoId: d.mergeIntoId,
-    });
+  // Process every changed card in the batch. A KEEP (or a card the LLM returned
+  // no decision for) keeps its text but still has its checkpoint advanced — it
+  // has now been re-judged against the latest session, so it should not reappear
+  // until the session changes again.
+  for (const card of cards) {
+    const action = actionById.get(card.id);
+    const review = reviewById.get(card.id);
+    const target = action ?? review;
+    if (!target) continue;
+    const ex = (action ? action.metadata?.todoExtraction : review!.payload?.todoExtraction) as ExtractedTodo | undefined;
+    const session = ex?.sourceSessionId ? sessionsById.get(ex.sourceSessionId) : undefined;
+    const checkpoint = session ? checkpointKey(session) : undefined;
+    const d = decisionById.get(card.id);
+    const decision = d?.decision ?? "KEEP";
+    if (decision === "KEEP") kept++;
+    else if (decision === "DROP") dropped++;
+    else if (decision === "DONE") completed++;
+    else if (decision === "REWRITE") rewritten++;
+    else if (decision === "MERGE") merged++;
+    if (decision !== "KEEP") {
+      preview.push({ id: card.id, title: target.title, decision, reason: d?.reason, newTitle: d?.newTitle, mergeIntoId: d?.mergeIntoId });
+    }
     if (mode !== "apply") continue;
-    if (action) writes.push(kv.set(KV.actions, action.id, applyActionCleanup(action, d, now)));
-    else if (review) writes.push(kv.set(KV.reviewQueue, review.id, applyReviewCleanup(review, d, now)));
+    if (action) {
+      let next = decision === "KEEP" ? action : applyActionCleanup(action, d!, now);
+      if (checkpoint) next = advanceActionCheckpoint(next, checkpoint, now);
+      writes.push(kv.set(KV.actions, action.id, next));
+    } else if (review) {
+      let next = decision === "KEEP" ? review : applyReviewCleanup(review, d!, now);
+      if (checkpoint) next = advanceReviewCheckpoint(next, checkpoint, now);
+      writes.push(kv.set(KV.reviewQueue, review.id, next));
+    }
   }
   await Promise.all(writes);
-  const touched = dropped + completed + rewritten + merged;
   return {
     engine: "llm",
     scanned: cards.length,
-    kept: Math.max(0, cards.length - touched),
+    kept,
     dropped,
     completed,
     rewritten,
@@ -1197,7 +1269,7 @@ export function registerTodoExtractFunctions(sdk: ISdk, kv: StateKV): void {
   sdk.registerFunction("mem::todo-extract-generate", async (data: TodoExtractOptions = {}) =>
     generateTodosFromSessions(kv, data),
   );
-  sdk.registerFunction("mem::todo-cleanup", async (data: { mode?: CleanupMode; maxCards?: number } = {}) =>
-    cleanTodoCardsWithLlm(kv, data),
+  sdk.registerFunction("mem::todo-update", async (data: { mode?: CleanupMode; maxCards?: number } = {}) =>
+    updateChangedTodoCards(kv, data),
   );
 }
