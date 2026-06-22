@@ -866,6 +866,10 @@ async function waitForEngine(timeoutMs: number): Promise<boolean> {
   const start = Date.now();
   while (Date.now() - start < timeoutMs) {
     if (await isEngineRunning()) return true;
+    // Fail fast: the engine process already exited (e.g. its port is in use),
+    // so there's nothing left to wait for — let the caller surface the
+    // captured stderr instead of polling the full timeout.
+    if (startupFailure?.kind === "engine-crashed") return false;
     await new Promise((r) => setTimeout(r, 500));
   }
   return false;
@@ -1108,7 +1112,11 @@ async function main() {
   const ready = await waitForEngine(15000);
   if (!ready) {
     const port = getRestPort();
-    s.stop("iii-engine did not become ready within 15s");
+    s.stop(
+      startupFailure?.kind === "engine-crashed"
+        ? "iii-engine exited on startup"
+        : "iii-engine did not become ready within 15s",
+    );
 
     if (startupFailure?.kind === "engine-crashed" || startupFailure?.kind === "docker-crashed") {
       p.log.error("The iii-engine process crashed on startup.");
@@ -1120,16 +1128,30 @@ async function main() {
       } else {
         p.log.info("No stderr was captured. Re-run with --verbose for more detail.");
       }
+      const portInUse =
+        !!startupFailure.stderr &&
+        /address.*in use|already in use|EADDRINUSE/i.test(startupFailure.stderr);
       p.note(
-        [
-          "Common causes:",
-          "  - iii-engine version mismatch — reinstall the latest binary",
-          "    (sh script on macOS/Linux, GitHub release zip on Windows)",
-          "  - Docker Desktop not running (if you're using the Docker path)",
-          "  - Port already in use (see below)",
-          "",
-          "See https://iii.dev/docs for current install instructions.",
-        ].join("\n"),
+        portInUse
+          ? [
+              "The engine couldn't bind its port — it's already in use (see stderr above).",
+              "",
+              "`start:local-memory` always binds the engine to the port in",
+              "iii-config.local-memory.yaml (default 3111). `--port` only changes which",
+              "port this CLI queries, not the engine's bind port — so it can't free a",
+              "busy port. To recover:",
+              "  - Stop a previous instance:  node dist/cli.mjs stop",
+              "  - Or free the port:          lsof -i :3111   (then kill the listed PID)",
+            ].join("\n")
+          : [
+              "Common causes:",
+              "  - iii-engine version mismatch — reinstall the latest binary",
+              "    (sh script on macOS/Linux, GitHub release zip on Windows)",
+              "  - Docker Desktop not running (if you're using the Docker path)",
+              "  - Port already in use (see below)",
+              "",
+              "See https://iii.dev/docs for current install instructions.",
+            ].join("\n"),
         "Troubleshooting",
       );
     } else {
@@ -1139,7 +1161,8 @@ async function main() {
           `Check whether port ${port} is already bound by another process:`,
           portInUseDiagnostic(port),
           "",
-          "If it is, free the port or override: npm run start:local-memory -- --port <N>",
+          "If it is, free that port. (`--port` changes only the port this CLI",
+          "queries, not the engine's bind port — the engine uses iii-config.local-memory.yaml.)",
           "",
           "If it isn't, a firewall may be blocking 127.0.0.1:" + port + ".",
           "Re-run with --verbose to see engine stderr.",
