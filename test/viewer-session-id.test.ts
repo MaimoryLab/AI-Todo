@@ -1020,7 +1020,8 @@ describe("viewer session rendering", () => {
     sandbox.renderActions();
     expect(getElement("view-actions").innerHTML).toContain("Complete");
     expect(getElement("view-actions").innerHTML).toContain("Archive");
-    expect(getElement("view-actions").innerHTML).toContain("Delete");
+    // STEP-13: the duplicate "Delete" button (also status=cancelled) was removed.
+    expect(getElement("view-actions").innerHTML).not.toContain("Delete");
 
     const target = Object.create(sandbox.Element.prototype);
     target.getAttribute = (name: string) => {

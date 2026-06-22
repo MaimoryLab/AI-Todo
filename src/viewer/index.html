@@ -9657,21 +9657,13 @@
         return html;
       }
       function renderActionFilters() {
-        var chips = [
-          { value: 'pending', label: t('status.pending') },
-          { value: 'review', label: t('filter.review') },
-          { value: 'active', label: t('status.active') },
-          { value: 'done', label: t('status.done') },
-          { value: '', label: t('filter.all') }
-        ];
+        // STEP-13: the status-filter chip row duplicated the metric overview
+        // cards below (actionMetricCards) — same state.actions.statusFilter, same
+        // values (pending/review/active/done). Keep the metric cards (they carry
+        // counts) as the single status filter; this row keeps only search + the
+        // action buttons.
         var html = '<div class="actions-filter-row">';
         html += '<input id="actions-search" class="search-input" type="text" placeholder="' + esc(t('act.searchPlaceholder')) + '" value="' + esc(state.actions.search) + '" style="flex:1;min-width:200px" />';
-        html += '<div class="actions-filter-chips" role="group" aria-label="' + esc(t('act.filterAria')) + '">';
-        chips.forEach(function(chip) {
-          var active = (state.actions.statusFilter || '') === chip.value;
-          html += '<button class="actions-filter-chip' + (active ? ' active' : '') + '" data-action="filter-actions-status" data-status="' + esc(chip.value) + '" type="button">' + esc(chip.label) + '</button>';
-        });
-        html += '</div>';
         html += '<span style="font-size:12px;color:var(--ink-faint);align-self:center;">' + metricReviewItems.length + ' ' + t('act.nToConfirm') + ' · ' + metricItems.length + ' ' + t('act.nConfirmed') + '</span>';
         var extractTitle = state.actions.extractMessage || t('act.extract.title');
         var extractLabel = t('act.extract.run');
@@ -9732,8 +9724,10 @@
         html += '</div></div>';
         html += '<div class="action-item-actions">';
         if (a.status !== 'done') html += '<button class="btn" data-action="action-status" data-action-id="' + esc(a.id || '') + '" data-status="done" type="button">' + esc(t('act.status.complete')) + '</button>';
+        // STEP-13: "Archive" and "Delete" both wrote status=cancelled — two
+        // buttons for one outcome. Keep a single Archive (cancelled is a soft,
+        // recoverable state, not a hard delete).
         if (a.status !== 'cancelled') html += '<button class="btn" data-action="action-status" data-action-id="' + esc(a.id || '') + '" data-status="cancelled" type="button">' + esc(t('act.status.archive')) + '</button>';
-        if (a.status !== 'cancelled') html += '<button class="btn btn-danger" data-action="action-status" data-action-id="' + esc(a.id || '') + '" data-status="cancelled" type="button">' + esc(t('act.status.delete')) + '</button>';
         html += statusIconMarkup(a.status, statusLabel(a.status));
         html += '</div>';
         html += '</article>';
@@ -10698,7 +10692,10 @@
         return;
       }
       if (action === 'filter-actions-status') {
-        state.actions.statusFilter = target.getAttribute('data-status') || '';
+        var nextFilter = target.getAttribute('data-status') || '';
+        // STEP-13: clicking the already-active filter clears it — with the chip
+        // row gone, this is how the metric cards restore the "show all" view.
+        state.actions.statusFilter = (state.actions.statusFilter || '') === nextFilter ? '' : nextFilter;
         renderActions();
         return;
       }
