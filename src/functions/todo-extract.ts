@@ -934,12 +934,15 @@ export type LlmCleanupResult = {
   rewritten: number;
   merged: number;
   preview: Array<{ id: string; title: string; decision: LlmCleanupDecision; reason?: string; newTitle?: string; mergeIntoId?: string }>;
+  // The exact decisions used, so a dry-run preview can be applied verbatim
+  // (the caller passes them back as opts.decisions) without re-calling the LLM.
+  decisions?: LlmCleanupItem[];
   fallbackReason?: string;
 };
 
 export async function updateChangedTodoCards(
   kv: Pick<StateKV, "list" | "set">,
-  opts: { mode?: CleanupMode; maxCards?: number; decide?: (cards: CleanupCard[]) => Promise<LlmCleanupItem[]> } = {},
+  opts: { mode?: CleanupMode; maxCards?: number; decide?: (cards: CleanupCard[]) => Promise<LlmCleanupItem[]>; decisions?: LlmCleanupItem[] } = {},
 ): Promise<LlmCleanupResult> {
   const mode = opts.mode ?? "apply";
   const maxCards = opts.maxCards ?? DEFAULT_CLEANUP_MAX_CARDS;
@@ -981,34 +984,45 @@ export async function updateChangedTodoCards(
     ...changedActions.map((a) => ({ id: `a:${a.id}`, sessionId: (a.metadata?.todoExtraction as ExtractedTodo | undefined)?.sourceSessionId, title: a.title, description: a.description, status: a.status, evidence: cardEvidence(a.metadata) })),
     ...changedReviews.map((r) => ({ id: `r:${r.id}`, sessionId: (r.payload?.todoExtraction as ExtractedTodo | undefined)?.sourceSessionId, title: r.title, description: r.content, status: r.status, evidence: cardEvidence(r.payload) })),
   ].slice(0, maxCards);
+  // When applying a previously-previewed result, the caller passes the dry-run
+  // decisions back so we apply them verbatim — no LLM re-call, no session delta.
+  const reuseDecisions = opts.decisions;
   const cards: CleanupCard[] = [];
   for (const entry of entries) {
-    cards.push({ id: entry.id, title: entry.title, description: entry.description, status: entry.status, evidence: entry.evidence, sessionDelta: await sessionDeltaFor(entry.sessionId) });
+    cards.push({ id: entry.id, title: entry.title, description: entry.description, status: entry.status, evidence: entry.evidence, sessionDelta: reuseDecisions ? "" : await sessionDeltaFor(entry.sessionId) });
   }
 
   if (cards.length === 0) {
-    return { engine: "llm", scanned: 0, kept: 0, dropped: 0, completed: 0, rewritten: 0, merged: 0, preview: [] };
+    return { engine: "llm", scanned: 0, kept: 0, dropped: 0, completed: 0, rewritten: 0, merged: 0, preview: [], decisions: [] };
   }
 
   let decisions: LlmCleanupItem[];
-  try {
-    decisions = await decide(cards);
-  } catch (err) {
-    // Update is an LLM-only operation (it re-judges cards against new session
-    // content); there is no rule equivalent, so on failure leave every card
-    // untouched and report why via fallbackReason. Callers detect "LLM
-    // unavailable" by fallbackReason, not by a misnomer engine value.
-    return {
-      engine: "llm",
-      scanned: cards.length,
-      kept: cards.length,
-      dropped: 0,
-      completed: 0,
-      rewritten: 0,
-      merged: 0,
-      preview: [],
-      fallbackReason: err instanceof Error ? err.message : String(err),
-    };
+  if (reuseDecisions) {
+    // Apply the exact decisions from the dry-run preview — never re-call the LLM
+    // on apply. Reasoning models vary even at temperature 0, so a re-call could
+    // diverge from what the user just confirmed (e.g. preview MERGE, apply DONE).
+    decisions = reuseDecisions;
+  } else {
+    try {
+      decisions = await decide(cards);
+    } catch (err) {
+      // Update is an LLM-only operation (it re-judges cards against new session
+      // content); there is no rule equivalent, so on failure leave every card
+      // untouched and report why via fallbackReason. Callers detect "LLM
+      // unavailable" by fallbackReason, not by a misnomer engine value.
+      return {
+        engine: "llm",
+        scanned: cards.length,
+        kept: cards.length,
+        dropped: 0,
+        completed: 0,
+        rewritten: 0,
+        merged: 0,
+        preview: [],
+        decisions: [],
+        fallbackReason: err instanceof Error ? err.message : String(err),
+      };
+    }
   }
 
   const now = new Date().toISOString();
@@ -1068,6 +1082,7 @@ export async function updateChangedTodoCards(
     rewritten,
     merged,
     preview,
+    decisions,
   };
 }
 
@@ -1292,7 +1307,7 @@ export function registerTodoExtractFunctions(sdk: ISdk, kv: StateKV): void {
   sdk.registerFunction("mem::todo-extract-generate", async (data: TodoExtractOptions = {}) =>
     generateTodosFromSessions(kv, data),
   );
-  sdk.registerFunction("mem::todo-update", async (data: { mode?: CleanupMode; maxCards?: number } = {}) =>
+  sdk.registerFunction("mem::todo-update", async (data: { mode?: CleanupMode; maxCards?: number; decisions?: LlmCleanupItem[] } = {}) =>
     updateChangedTodoCards(kv, data),
   );
 }

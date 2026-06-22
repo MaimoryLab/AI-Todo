@@ -8974,7 +8974,7 @@
             // to the LLM) on every future click. No card content changes, so no
             // confirmation is needed.
             state.actions.cleanupInFlight = true;
-            apiPost('todo/update', { mode: 'apply' }).then(function() {
+            apiPost('todo/update', { mode: 'apply', decisions: preview.decisions }).then(function() {
               return refreshActionListsAfterExtract();
             }).catch(function() {}).then(function() {
               state.actions.cleanupInFlight = false;
@@ -9000,7 +9000,7 @@
         state.actions.cleanupStatus = 'running';
         state.actions.cleanupMessage = t('act.cleanup.applying');
         if (state.activeTab === 'actions') renderActions();
-        apiPost('todo/update', { mode: 'apply' }).then(function(result) {
+        apiPost('todo/update', { mode: 'apply', decisions: preview.decisions }).then(function(result) {
           state.actions.cleanupStatus = 'done';
           state.actions.cleanupMessage = todoCleanupSummary(result || preview);
           return refreshActionListsAfterExtract();

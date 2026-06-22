@@ -680,6 +680,41 @@ describe("todo extraction", () => {
     expect((await kv.list<Action>(KV.actions)).find((a) => a.id === "a_src")).toMatchObject({ status: "pending" });
   });
 
+  it("update apply reuses the dry-run decisions verbatim — no LLM re-call (STEP-12)", async () => {
+    await kv.set(KV.sessions, "ses_x", session({ id: "ses_x", endedAt: "2026-06-18T09:00:00.000Z", observationCount: 5 }));
+    await kv.set<Action>(KV.actions, "a_drop", {
+      id: "a_drop", title: "noise", description: "x", status: "pending", priority: 5,
+      createdAt: "2026-06-17T08:00:00.000Z", updatedAt: "2026-06-17T08:00:00.000Z",
+      createdBy: "todo-extract", tags: ["todo-extracted"], sourceObservationIds: [], sourceMemoryIds: [],
+      metadata: { todoExtraction: { sourceSessionId: "ses_x", sourceCheckpoint: "2026-06-17T09:00:00.000Z:1" } },
+    });
+    let decideCalled = false;
+    const decide = async () => { decideCalled = true; return [{ id: "a:a_drop", decision: "KEEP" as const }]; };
+    // The dry-run decided DROP; apply must honour that, not re-ask the LLM
+    // (which here would say KEEP).
+    const result = await updateChangedTodoCards(kv as never, {
+      mode: "apply", decide,
+      decisions: [{ id: "a:a_drop", decision: "DROP", reason: "preview said drop" }],
+    });
+    expect(decideCalled).toBe(false);
+    expect(result.dropped).toBe(1);
+    expect((await kv.list<Action>(KV.actions)).find((a) => a.id === "a_drop")).toMatchObject({ status: "cancelled" });
+  });
+
+  it("update dry-run returns the decisions so apply can replay them (STEP-12)", async () => {
+    await kv.set(KV.sessions, "ses_x", session({ id: "ses_x", endedAt: "2026-06-18T09:00:00.000Z", observationCount: 5 }));
+    await kv.set<Action>(KV.actions, "a1", {
+      id: "a1", title: "real todo", description: "x", status: "pending", priority: 5,
+      createdAt: "2026-06-17T08:00:00.000Z", updatedAt: "2026-06-17T08:00:00.000Z",
+      createdBy: "todo-extract", tags: ["todo-extracted"], sourceObservationIds: [], sourceMemoryIds: [],
+      metadata: { todoExtraction: { sourceSessionId: "ses_x", sourceCheckpoint: "2026-06-17T09:00:00.000Z:1" } },
+    });
+    const decide = async () => [{ id: "a:a1", decision: "DONE" as const, reason: "done now" }];
+    const dry = await updateChangedTodoCards(kv as never, { mode: "dry-run", decide });
+    expect(dry.decisions).toEqual([{ id: "a:a1", decision: "DONE", reason: "done now" }]);
+    expect((await kv.list<Action>(KV.actions)).find((a) => a.id === "a1")).toMatchObject({ status: "pending" }); // dry-run didn't mutate
+  });
+
   it("filters agent progress observations before rules extraction", async () => {
     await kv.set(KV.sessions, "ses_1", session({ status: "active", observationCount: 2 }));
     await kv.set(KV.observations("ses_1"), "obs_noise", obs({

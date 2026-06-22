@@ -1426,7 +1426,10 @@ export function startViewerServer(
       const mode = body.mode === "apply" ? "apply" : "dry-run";
       const maxCards =
         typeof body.maxCards === "number" && body.maxCards > 0 ? Math.floor(body.maxCards) : undefined;
-      const result = await updateChangedTodoCards(kv as ViewerKv, { mode, maxCards });
+      // On apply, the viewer passes back the dry-run decisions so they are applied
+      // verbatim instead of re-calling the (non-deterministic) LLM.
+      const decisions = Array.isArray(body.decisions) ? body.decisions as never : undefined;
+      const result = await updateChangedTodoCards(kv as ViewerKv, { mode, maxCards, decisions });
       json(res, 200, result, req);
       return;
     }
