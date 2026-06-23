@@ -1,0 +1,133 @@
+    :root {
+      --bg: #F5F5F5;
+      --bg-alt: #FAFAFA;
+      --bg-subtle: #F0EFED;
+      --bg-inset: #F0EFED;
+      --surface: #FFFFFF;
+      --border: #D6D3D1;
+      --border-light: #E7E5E4;
+      --border-heavy: #A8A29E;
+      --ink: #0C0A09;
+      --ink-secondary: #4E4E4E;
+      --ink-muted: #777169;
+      --ink-faint: #A8A29E;
+      --accent: #292524;
+      --accent-light: #D6D3D1;
+      --cream: #FAFAFA;
+      --node-file: #2D6A4F;
+      --node-function: #1D4E89;
+      --node-concept: #B8860B;
+      --node-error: #CC0000;
+      --node-decision: #6B3FA0;
+      --node-pattern: #2563EB;
+      --node-library: #C2410C;
+      --node-person: #111111;
+      --green: #2D6A4F;
+      --blue: #1D4E89;
+      --yellow: #B8860B;
+      --red: #CC0000;
+      --purple: #6B3FA0;
+      --orange: #C2410C;
+      --cyan: #0E7490;
+      --font-display: Georgia, "Times New Roman", serif;
+      --font-body: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      --font-ui: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      --font-mono: "SF Mono", "SFMono-Regular", ui-monospace, Menlo, Consolas, monospace;
+    }
+    html[data-theme="dark"] {
+      --bg: #1a1a1e;
+      --bg-alt: #232328;
+      --bg-subtle: #1f1f24;
+      --bg-inset: #2a2a30;
+      --border: #444;
+      --border-light: #3a3a42;
+      --border-heavy: #ccc;
+      --ink: #eee;
+      --ink-secondary: #ccc;
+      --ink-muted: #999;
+      --ink-faint: #777;
+      --cream: #2a2520;
+    }
+    html[data-theme="dark"] body {
+      background-image: radial-gradient(circle, #3a3a42 0.5px, transparent 0.5px);
+    }
+    html[data-theme="dark"] .graph-tooltip {
+      background: rgba(30,30,35,0.92);
+      border-color: rgba(255,255,255,0.1);
+      box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+    }
+    html[data-theme="dark"] .graph-controls button {
+      background: rgba(30,30,35,0.92);
+      border-color: rgba(255,255,255,0.1);
+    }
+    html[data-theme="dark"] .graph-controls button:hover {
+      background: var(--ink);
+      color: var(--bg);
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: var(--font-body);
+      background: var(--bg);
+      color: var(--ink-secondary);
+      line-height: 1.6;
+      overflow: hidden;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      background-image: none;
+    }
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: var(--bg); }
+    ::-webkit-scrollbar-thumb { background: var(--border-light); border-radius: 0; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--ink-muted); }
+
+    .app-header { display: none !important; }
+    .app-header .brand {
+      display: flex;
+      align-items: baseline;
+      gap: 10px;
+      color: inherit;
+      text-decoration: none;
+      cursor: pointer;
+    }
+    .app-header .brand:hover h1,
+    .app-header .brand:focus-visible h1 { color: var(--accent); }
+    .app-header .brand:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; }
+    .app-header .brand h1 {
+      font-size: 24px;
+      color: var(--ink);
+      font-weight: 600;
+      font-family: var(--font-display);
+      letter-spacing: -0.02em;
+      text-transform: none;
+    }
+    .header-right {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    #theme-toggle { display: none; }
+    #ws-status { display: none; }
+    .ws-status {
+      font-size: 10px;
+      padding: 3px 10px;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      font-family: var(--font-ui);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      font-weight: 600;
+      border: 1px solid var(--border-light);
+    }
+    .ws-status::before {
+      content: '';
+      width: 6px;
+      height: 6px;
+      display: inline-block;
+    }
+    .ws-status.connected { border-color: var(--green); color: var(--green); }
+    .ws-status.connected::before { background: var(--green); }
+    .ws-status.disconnected { border-color: var(--ink-faint); color: var(--ink-faint); }
+    .ws-status.disconnected::before { background: var(--ink-faint); }
+

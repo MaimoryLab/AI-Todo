@@ -17,8 +17,10 @@
     "agentmemory-lab": "dist/cli.mjs"
   },
   "scripts": {
-    "build": "tsdown && (cp iii-config.yaml dist/ 2>/dev/null || true) && (cp iii-config.docker.yaml dist/ 2>/dev/null || true) && (cp docker-compose.yml dist/ 2>/dev/null || true) && (cp .env.example dist/ 2>/dev/null || true) && mkdir -p dist/viewer/agent-avatars dist/viewer/demo dist/functions && cp src/viewer/index.html dist/viewer/ && cp src/viewer/favicon.svg dist/viewer/ && cp src/viewer/agent-avatars/* dist/viewer/agent-avatars/ && cp src/viewer/demo/* dist/viewer/demo/ && cp src/functions/todo-extract-langextract.py dist/functions/ && cp src/functions/todo-update-llm.py dist/functions/",
+    "build": "tsdown && node scripts/build-viewer-html.mjs --check && (cp iii-config.yaml dist/ 2>/dev/null || true) && (cp iii-config.docker.yaml dist/ 2>/dev/null || true) && (cp docker-compose.yml dist/ 2>/dev/null || true) && (cp .env.example dist/ 2>/dev/null || true) && mkdir -p dist/viewer/agent-avatars dist/viewer/demo dist/functions && cp src/viewer/index.html dist/viewer/ && cp src/viewer/favicon.svg dist/viewer/ && cp src/viewer/agent-avatars/* dist/viewer/agent-avatars/ && cp src/viewer/demo/* dist/viewer/demo/ && cp src/functions/todo-extract-langextract.py dist/functions/ && cp src/functions/todo-update-llm.py dist/functions/",
     "dev": "tsx src/index.ts",
+    "viewer:build": "node scripts/build-viewer-html.mjs",
+    "viewer:watch": "node scripts/build-viewer-html.mjs --watch",
     "start": "node dist/cli.mjs",
     "start:local-memory": "AGENTMEMORY_III_CONFIG=./iii-config.local-memory.yaml node dist/cli.mjs",
     "migrate": "node dist/functions/migrate.js",
