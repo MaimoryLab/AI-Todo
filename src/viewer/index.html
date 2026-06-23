@@ -5130,16 +5130,6 @@
       if (!isGeneratedAction(action)) return true;
       return !isReviewTextPolluted(action.title) && !isReviewTextPolluted(action.description);
     }
-    function reviewKindLabel(kind) {
-      if (kind === 'lesson') return '经验';
-      if (kind === 'action') return '行动';
-      return '记忆';
-    }
-    function reviewKindCandidateLabel(kind) {
-      if (kind === 'lesson') return '经验候选';
-      if (kind === 'action') return '行动候选';
-      return '记忆候选';
-    }
     function reviewActionPriority(item) {
       var payload = reviewPayload(item);
       var candidate = payload.actionCandidate && typeof payload.actionCandidate === 'object' ? payload.actionCandidate : {};
@@ -7110,42 +7100,6 @@
         });
       }
       restoreSearchFocus(__focus);
-    }
-
-    function renderReviewQueue(items) {
-      items = (items || []).filter(isReviewItemDisplayable);
-      if (!items.length) return '';
-      var html = '<section class="card memory-section" style="padding:14px 16px;margin-bottom:14px;background:#ffffff;">';
-      html += '<div class="memory-section-head"><div><div class="memory-section-title">待审阅</div><div class="memory-summary-sub" style="margin-top:3px;">浏览器插件送来的候选内容，确认后才会进入长期记忆、经验或行动。</div></div><span class="memory-section-count">' + items.length + ' 条</span></div>';
-      html += '<div class="memory-card-grid">';
-      items.forEach(function(item) {
-        var page = item.page || {};
-        var payload = reviewPayload(item);
-        var tags = reviewTags(item);
-        var project = reviewProject(item);
-        var kindLabel = reviewKindLabel(item.kind);
-        var candidateLabel = reviewKindCandidateLabel(item.kind);
-        var decision = item.decision || (item.status === 'dismissed' ? 'evidence_only' : 'candidate');
-        var meta = [decision === 'evidence_only' ? '会话证据' : candidateLabel, reviewSourceLabel(item), page.url || ''].filter(Boolean).join(' · ');
-        html += '<article class="memory-display-card" style="border-radius:8px;">';
-        html += '<div class="memory-card-topline"><span class="memory-card-type">' + esc(decision === 'evidence_only' ? '已同步' : '待审阅') + '</span><span class="memory-card-strength">' + esc(decision === 'evidence_only' ? '证据' : kindLabel) + '</span></div>';
-        html += '<h3>' + esc(item.title || '未命名候选') + '</h3>';
-        html += '<p>' + esc(item.content || '').replace(/\n/g, '<br>') + '</p>';
-        html += '<div class="tag-list" style="margin-top:10px;">';
-        html += '<span class="badge badge-muted">' + esc(projectDisplayName(project)) + '</span>';
-        if (payload.asLesson || item.kind === 'lesson' || item.kind === 'action') html += '<span class="badge badge-green">' + esc(candidateLabel) + '</span>';
-        tags.forEach(function(tag) { html += '<span class="tag">' + esc(tag) + '</span>'; });
-        html += '</div>';
-        html += '<div class="memory-card-source">' + esc(meta) + '</div>';
-        if (decision === 'evidence_only') {
-          html += '<div class="memory-card-actions"><button class="btn" data-action="dismiss-review" data-review-id="' + esc(item.id) + '">从列表移除</button></div>';
-        } else {
-          html += '<div class="memory-card-actions"><button class="btn btn-primary" data-action="edit-review" data-review-id="' + esc(item.id) + '">审阅保存</button><button class="btn" data-action="dismiss-review" data-review-id="' + esc(item.id) + '">忽略</button></div>';
-        }
-        html += '</article>';
-      });
-      html += '</div></section>';
-      return html;
     }
 
     function deleteMemory(id, title) {
