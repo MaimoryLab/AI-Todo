@@ -1,8 +1,7 @@
-# Feature: LLM todo extraction loop
+# Feature: LLM todo extraction and update loop
 
-> Draft scope for the first LLM-backed todo loop. This document answers how
-> session ingestion, todo classification, card updates, and evidence navigation
-> are expected to work before broader implementation.
+> Current contract for the LLM-backed todo loop. This document records what is
+> implemented today and the small follow-up gaps that should be fixed next.
 
 ## One-line definition
 
@@ -12,17 +11,17 @@ source session.
 
 ## Status / Priority
 
-- Status: Draft
+- Status: Implemented, with follow-up documentation/UI gaps
 - Priority: P0
 
 ## Problem
 
 The To-Do tab must not look like a generic memory summary list. Users need
 cards that are visibly actionable, grounded in session evidence, and updated
-when the source session changes. The current implementation has the core pieces
-but the product contract needs to be explicit: when sessions are read, when the
-LLM runs, how a card is classified as todo/done/in-progress, and how evidence
-helps users return to the original work context.
+when the source session changes. The product contract needs to stay explicit:
+when sessions are read, when the LLM runs, how a card is classified as
+todo/done/in-progress, and how evidence helps users return to the original work
+context.
 
 ## Users
 
@@ -36,20 +35,21 @@ helps users return to the original work context.
 - Make the startup contract explicit: first launch reads historical Codex
   session files into the local database; later launches and daemon scans are
   incremental and skip unchanged history.
-- Make LLM extraction explicit and observable: the To-Do UI can trigger the
-  extraction loop, but it must show progress and whether it used LLM or rules.
+- Make LLM extraction explicit and observable: the To-Do UI triggers the
+  extraction loop via **Organize with LLM** and shows progress plus whether it
+  used LLM or rules fallback.
 - Require structured LLM output with title, description, confidence, time
   bucket, type bucket, dedupe key, and evidence quote.
 - Classify generated cards as pending, active, or done based on extracted
   `typeBucket`, not merely because a sentence appears in a session.
-- Detect source-session changes after a card is created and mark the card as
-  needing recheck without changing the card text automatically.
+- Detect source-session changes after a card is created and update cards through
+  an LLM dry-run/apply loop instead of silently changing card text.
 - Improve evidence navigation so a card can take the user to both the evidence
   panel and the local Codex session/work directory when available.
 
 ## Non-goals
 
-- No automatic background LLM calls on daemon startup in this first version.
+- No automatic background LLM calls on daemon startup or To-Do tab refresh.
 - No cloud sync.
 - No writes back into Codex, browser AI tools, GitHub Issues, or external todo
   apps.
@@ -65,17 +65,20 @@ helps users return to the original work context.
    imported into local `sessions` and `observations`.
 2. Later scans read only new or changed files. Unchanged history is skipped by
    source checkpoints.
-3. The user opens To-Do and clicks the LLM organize button, or the UI triggers a
-   small visible extraction run.
-4. The extractor reads recent changed sessions, sends observation blocks to the
+3. The user opens To-Do; the tab reads stored cards and does not run the LLM by
+   itself.
+4. The user clicks **Organize with LLM**. The extractor reads recent sessions,
+   sends observation blocks to the
    LangExtract sidecar when configured, and falls back to rules if the sidecar
    fails.
 5. High-confidence, evidence-valid todos become Actions. Medium-confidence
    todos enter the review queue. Low-confidence or evidence-less candidates are
    discarded.
-6. If a source session changes after a card was created, the card shows a
-   compact visual recheck indicator. The user can archive/delete it or run LLM
-   recheck.
+6. If a source session changes after a generated card was created, the user can
+   click **Update**. The UI first calls `/agentmemory/todo/update` in `dry-run`
+   mode for changed cards, then confirms before applying DROP, DONE, REWRITE, or
+   MERGE decisions. If every decision is KEEP, the UI applies silently so
+   checkpoints advance.
 7. The user clicks evidence. The UI jumps to the evidence record and, when
    available, exposes the local work directory/session path as the next action.
 
@@ -89,8 +92,9 @@ helps users return to the original work context.
 | R4 | A todo is stored only when its evidence quote matches the source observation | P0 |
 | R5 | `typeBucket=done` maps to `Action.status=done`; `in_progress` and `processing` map to `active`; all other buckets map to `pending` | P0 |
 | R6 | Cards created from sessions store enough metadata to compare their source checkpoint with the latest session checkpoint | P1 |
-| R7 | If the source checkpoint changes, the card gets a visual recheck state without overwriting title/description automatically | P1 |
+| R7 | If the source checkpoint changes, `/agentmemory/todo/update` can dry-run and apply KEEP, DROP, DONE, REWRITE, and MERGE decisions | P1 |
 | R8 | Evidence jump lands on the evidence item and makes the local Codex session/work directory discoverable when present | P1 |
+| R9 | `/agentmemory/todo/update` supports `scope=changed` by default and `scope=all` for explicit maintenance runs | P1 |
 
 ## Acceptance criteria
 
@@ -105,8 +109,11 @@ helps users return to the original work context.
   JSON, file paths, tool logs, and screenshots are rejected as card titles.
 - A completed-work sentence creates either a `done` Action or a discarded
   historical candidate; it must not appear as a pending todo by default.
-- When a source session changes after card creation, the card renders a compact
-  non-text visual recheck state and offers recheck/archive/delete paths.
+- When a source session changes after card creation, **Update** previews LLM
+  maintenance before any destructive or rewriting change is applied.
+- `POST /agentmemory/todo/update` with `{ "mode": "dry-run", "scope": "all" }`
+  can evaluate existing generated cards for explicit maintenance runs; this is
+  an API path today, not a separate viewer control.
 - Evidence navigation can show the observation, source session id, local session
   file or work directory when available.
 
@@ -128,19 +135,27 @@ helps users return to the original work context.
 - Current LLM/rules extraction is `mem::todo-extract-generate` in
   `src/functions/todo-extract.ts`, with the Python LangExtract sidecar in
   `src/functions/todo-extract-langextract.py`.
+- Current LLM update is `mem::todo-update` / `POST /agentmemory/todo/update` in
+  `src/functions/todo-extract.ts`, `src/triggers/api.ts`, and
+  `src/viewer/server.ts`.
 - Current structured prompt requires action-only extraction, source quote,
   readable title, confidence, time bucket, type bucket, and dedupe key.
-- Existing `metadata.todoExtraction` should be extended, if needed, with a
-  `sourceCheckpoint` or equivalent stable comparison key. Do not infer stale
-  state from UI render time only.
+- Existing `metadata.todoExtraction.sourceCheckpoint` is used to decide whether
+  generated cards need changed-session maintenance.
+- `scope=all` is supported by the API/function for stock cleanup and title
+  quality passes, but the viewer's **Update** button currently uses the default
+  changed-card scope.
 - Evidence navigation should reuse `sourceObservationIds`,
   `metadata.todoExtraction.evidence`, session `cwd`, and scanner source
   metadata before adding new storage.
 
-## Rollout
+## Follow-up plan
 
-- Slice 1: default model and documentation update.
-- Slice 2: visible recheck state and source-checkpoint metadata.
-- Slice 3: evidence jump enhancement for local session/work directory.
-- Rollback for slice 1 is reverting the default model/doc PR; rollback for
-  later slices must leave existing Actions readable and status-preserving.
+1. Keep docs aligned with the current default model (`deepseek/deepseek-v4-pro`)
+   until the code default is changed and tested.
+2. Decide whether the viewer needs an explicit **Update all generated cards**
+   control; until then, document `scope=all` as API-only.
+3. Replace old CLI wording in code help/onboarding strings in a separate PR if
+   the installed binary name stays `agentmemory-lab`.
+4. Verify future changes with `npm run check:consistency-local`, `npm run build`,
+   and the focused To-Do tests before opening a PR.
