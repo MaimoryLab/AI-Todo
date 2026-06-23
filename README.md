@@ -34,9 +34,9 @@ Then refresh the viewer: the dashboard fills with browsable sessions, memory, an
 
 ## Use your own data
 
-- **Codex sessions (local):** the daemon scans your Codex session directories (`~/.codex/sessions` and `~/.codex/archived_sessions`) on startup and on an interval. Toggle with `AGENTMEMORY_CODEX_AUTOSCAN=false`; tune the cadence with `AGENTMEMORY_CODEX_SCAN_INTERVAL_MS` (default 5 min). You can also import a transcript on demand with `agentmemory import-jsonl <path>`.
+- **Codex sessions (local):** the daemon scans your Codex session directories (`~/.codex/sessions` and `~/.codex/archived_sessions`) on startup and on an interval. Toggle with `AGENTMEMORY_CODEX_AUTOSCAN=false`; tune the cadence with `AGENTMEMORY_CODEX_SCAN_INTERVAL_MS` (default 5 min). You can also import a transcript on demand from a source checkout with `node dist/cli.mjs import-jsonl <path>` (installed package binary: `agentmemory-lab import-jsonl <path>`).
 - **Browser AI conversations:** load the browser extension under [`browser-extension/`](browser-extension/); it captures supported AI sites and posts them to the local daemon, which extracts todos into the same queue.
-- **LangExtract extraction (optional):** install Python deps with `python3 -m pip install -r requirements-langextract.txt` (add `socksio` if your network uses a SOCKS proxy). Configure it during first-run setup (`agentmemory --reset`), from the viewer Settings panel, or in `~/.agentmemory/.env`: `AGENTMEMORY_TODO_EXTRACTOR=langextract`, `LANGEXTRACT_PYTHON=/path/to/python`, `LANGEXTRACT_PROVIDER=openai`, `LANGEXTRACT_MODEL=deepseek/deepseek-v4-pro`, `LANGEXTRACT_BASE_URL=https://api.novita.ai/openai/v1`, `LANGEXTRACT_API_KEY=<runtime secret>`, and optionally `AGENTMEMORY_TODO_EXTRACT_TIMEOUT_MS=120000`. Trigger it from the To-Do tab or with `POST /agentmemory/todo-extract/generate`.
+- **LangExtract extraction (optional):** install Python deps with `python3 -m pip install -r requirements-langextract.txt` (add `socksio` if your network uses a SOCKS proxy). Configure it during first-run setup (`node dist/cli.mjs --reset` from source, or `agentmemory-lab --reset` when installed), from the viewer Settings panel, or in `~/.agentmemory/.env`: `AGENTMEMORY_TODO_EXTRACTOR=langextract`, `LANGEXTRACT_PYTHON=/path/to/python`, `LANGEXTRACT_PROVIDER=openai`, `LANGEXTRACT_MODEL=deepseek/deepseek-v4-pro`, `LANGEXTRACT_BASE_URL=https://api.novita.ai/openai/v1`, `LANGEXTRACT_API_KEY=<runtime secret>`, and optionally `AGENTMEMORY_TODO_EXTRACT_TIMEOUT_MS=120000`. Trigger it from the To-Do tab or with `POST /agentmemory/todo-extract/generate`.
 - **First-run setup:** the first-run CLI model choice configures To-Do extraction — it seeds the `LANGEXTRACT_*` settings above for the model you pick (or keeps the rules extractor if you skip). The legacy memory compression/consolidation/embeddings provider is an advanced `.env`-only setting.
 
 Everything stays on your machine — see [Privacy](#privacy).
@@ -49,17 +49,21 @@ local agent sessions ─┐
 browser AI capture ───┘                         (rules or LangExtract)
 ```
 
-Built on iii-engine (file-based SQLite state), with a local REST API + MCP server + web UI. The default extractor is deterministic rules. LangExtract is opt-in: opening or refreshing the To-Do tab runs a small recent-session pass, and the **Organize with LLM** button forces a pass. See [ARCHITECTURE.md](ARCHITECTURE.md) for detail.
+Built on iii-engine (file-based SQLite state), with a local REST API + MCP server + web UI. The default extractor is deterministic rules. LangExtract is opt-in: the To-Do tab reads stored cards, and the **Organize with LLM** button runs extraction for recent sessions. The **Update** button dry-runs LLM maintenance for generated cards whose source sessions changed, asks before dropping/closing/rewriting/merging cards, then applies the reviewed decisions. See [ARCHITECTURE.md](ARCHITECTURE.md) for detail.
 
-## Core todo statuses
+## Core todo state
+
+Persisted todo cards use the existing `Action.status` values:
 
 | Status | Meaning |
 |---|---|
-| `waiting_for_user` | The agent is waiting for user input, confirmation, or authorization |
-| `agent_blocked` | The agent failed because of a tool, dependency, permission, network, or runtime issue |
-| `partial_done` | Work has an intermediate result but no final completion evidence |
-| `needs_review` | The agent produced something that requires human review |
-| `stale_thread` | The conversation indicates later continuation but has no recent progress |
+| `pending` | Open work that has not started or needs user review |
+| `active` | Work that appears in progress |
+| `done` | Completed work |
+| `blocked` | Work blocked by a tool, dependency, permission, network, or runtime issue |
+| `cancelled` | Work the user or system dismissed |
+
+LLM extraction also writes classification tags such as `type:waiting_for_user`, `type:agent_blocked`, `type:partial_done`, `type:needs_review`, and `type:stale_thread` so the UI can explain why a card was created without adding new stored status values.
 
 ## Privacy
 
