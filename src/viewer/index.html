@@ -2031,6 +2031,60 @@
       gap: 6px;
       white-space: nowrap;
     }
+    /* STEP-16 calm card: source/time + secondary actions hidden at rest, fade in on hover/focus */
+    .action-item-submeta {
+      margin-top: 8px;
+      color: var(--ink-faint);
+      font-size: 11px;
+      line-height: 1.3;
+      opacity: 0;
+      transition: opacity .12s ease;
+    }
+    .action-secondary {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity .12s ease;
+    }
+    .action-item-card:hover .action-item-submeta,
+    .action-item-card:focus-within .action-item-submeta { opacity: 1; }
+    .action-item-card:hover .action-secondary,
+    .action-item-card:focus-within .action-secondary {
+      opacity: 1;
+      pointer-events: auto;
+    }
+    .btn-ghost-sm {
+      appearance: none;
+      border: none;
+      background: none;
+      padding: 3px 6px;
+      font-size: 12px;
+      line-height: 1.3;
+      color: var(--ink-faint);
+      cursor: pointer;
+      font-family: inherit;
+      border-radius: 6px;
+    }
+    .btn-ghost-sm:hover { color: var(--ink); background: var(--bg-warm, rgba(0,0,0,0.05)); }
+    .btn-outline-sm {
+      appearance: none;
+      background: none;
+      border: 1px solid var(--border);
+      color: var(--ink-muted);
+      padding: 4px 12px;
+      font-size: 12px;
+      line-height: 1.3;
+      cursor: pointer;
+      font-family: inherit;
+      border-radius: 7px;
+      transition: border-color .12s ease, color .12s ease;
+    }
+    .btn-outline-sm:hover { border-color: var(--accent); color: var(--accent); }
+    @media (hover: none) {
+      .action-item-submeta, .action-secondary { opacity: 1; pointer-events: auto; }
+    }
     .actions-filter-row {
       display: flex;
       gap: 8px;
@@ -4642,6 +4696,31 @@
     function shortTime(ts) {
       if (!ts) return '';
       try { return new Date(ts).toLocaleTimeString(); } catch { return ts; }
+    }
+    // Absolute time down to the hour only (year-month-day hour, no minutes/seconds).
+    function absoluteHour(ts) {
+      try {
+        var d = new Date(ts);
+        if (isNaN(d.getTime())) return '';
+        var p = function(n) { return (n < 10 ? '0' : '') + n; };
+        var base = d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + ' ' + p(d.getHours());
+        return I18N_LANG === 'zh' ? base + '时' : base + ':00';
+      } catch { return ''; }
+    }
+    // Relative time without minute/second granularity; falls back to absoluteHour
+    // for anything older than ~30 days.
+    function relativeTime(ts) {
+      if (!ts) return '';
+      try {
+        var diff = Date.now() - new Date(ts).getTime();
+        if (!isFinite(diff)) return absoluteHour(ts);
+        if (diff < 0) diff = 0;
+        var hour = 3600000, day = 86400000, zh = I18N_LANG === 'zh';
+        if (diff < hour) return zh ? '刚刚' : 'just now';
+        if (diff < day) { var h = Math.floor(diff / hour); return zh ? h + '小时前' : h + 'h ago'; }
+        if (diff < 30 * day) { var dd = Math.floor(diff / day); return zh ? dd + '天前' : dd + 'd ago'; }
+        return absoluteHour(ts);
+      } catch { return absoluteHour(ts); }
     }
     function truncate(s, n) {
       if (!s) return '';
@@ -9669,24 +9748,22 @@
         html += '<div class="action-item-title">' + esc(compactActionTitle(a.title)) + '</div>';
         var actionDesc = actionDescriptionText(a.description);
         if (actionDesc) html += '<div class="action-item-desc">' + esc(truncate(actionDesc, 120)) + '</div>';
-        html += '<div class="action-item-meta">';
-        var attention = actionAttentionKey(a, isFrontier);
-        if (attention) html += '<span class="badge ' + (attention === 'next' ? 'badge-green' : 'badge-yellow') + '">' + esc(t('act.attn.' + attention)) + '</span>';
-        html += '<span class="badge badge-muted">' + esc(priorityLabel(a.priority)) + '</span>';
+        // STEP-16 calm card: source + relative time are hidden at rest and fade in
+        // on hover; priority shows on the rail, status via the group. No badges /
+        // status icon / classification tags.
+        var metaParts = [];
         var sourceText = actionSourceText(a);
-        if (sourceText) html += '<span class="action-meta-text">' + t('act.from') + ' ' + esc(sourceText) + '</span>';
-        var jumpObsId = Array.isArray(a.sourceObservationIds) ? a.sourceObservationIds.find(function(id) { return typeof id === 'string' && id.length > 0; }) : '';
-        if (jumpObsId) html += '<button class="action-evidence-link" type="button" data-action="jump-to-evidence" data-obs-id="' + esc(jumpObsId) + '">' + t('act.viewSource') + '</button>';
-        actionVisibleTags(a.tags).forEach(function(t) { html += '<span class="tag">' + esc(t) + '</span>'; });
-        if (a.updatedAt) html += '<span class="action-meta-text">' + t('act.updated') + ' ' + esc(shortTime(a.updatedAt)) + '</span>';
-        html += '</div></div>';
+        if (sourceText) metaParts.push(t('act.from') + ' ' + esc(sourceText));
+        if (a.updatedAt) metaParts.push(esc(relativeTime(a.updatedAt)));
+        if (metaParts.length) html += '<div class="action-item-submeta"' + (a.updatedAt ? ' title="' + esc(absoluteHour(a.updatedAt)) + '"' : '') + '>' + metaParts.join(' · ') + '</div>';
+        html += '</div>';
         html += '<div class="action-item-actions">';
-        if (a.status !== 'done') html += '<button class="btn" data-action="action-status" data-action-id="' + esc(a.id || '') + '" data-status="done" type="button">' + esc(t('act.status.complete')) + '</button>';
-        // STEP-13: "Archive" and "Delete" both wrote status=cancelled — two
-        // buttons for one outcome. Keep a single Archive (cancelled is a soft,
-        // recoverable state, not a hard delete).
-        if (a.status !== 'cancelled') html += '<button class="btn" data-action="action-status" data-action-id="' + esc(a.id || '') + '" data-status="cancelled" type="button">' + esc(t('act.status.archive')) + '</button>';
-        html += statusIconMarkup(a.status, statusLabel(a.status));
+        html += '<div class="action-secondary">';
+        var jumpObsId = Array.isArray(a.sourceObservationIds) ? a.sourceObservationIds.find(function(id) { return typeof id === 'string' && id.length > 0; }) : '';
+        if (jumpObsId) html += '<button class="btn-ghost-sm" type="button" data-action="jump-to-evidence" data-obs-id="' + esc(jumpObsId) + '">' + esc(t('act.viewSource')) + '</button>';
+        if (a.status !== 'cancelled') html += '<button class="btn-ghost-sm" data-action="action-status" data-action-id="' + esc(a.id || '') + '" data-status="cancelled" type="button">' + esc(t('act.status.archive')) + '</button>';
+        html += '</div>';
+        if (a.status !== 'done') html += '<button class="btn-outline-sm" data-action="action-status" data-action-id="' + esc(a.id || '') + '" data-status="done" type="button">' + esc(t('act.status.complete')) + '</button>';
         html += '</div>';
         html += '</article>';
         return html;

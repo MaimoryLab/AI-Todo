@@ -77,7 +77,7 @@ describe("viewer i18n base", () => {
     expect(html).toContain('data-i18n="tab.actions"');
     expect(html).toContain('data-i18n="tab.sessions"');
     // render still keys display off the stored enum, so filtering/storage is untouched
-    expect(html).toContain("statusLabel(a.status)");
+    expect(html).toContain("statusLabel(status)");
   });
 
   it("dashboard strings are externalized to the catalog (PLAN-001 STEP-02a)", () => {
@@ -94,7 +94,9 @@ describe("viewer i18n base", () => {
     const { html } = renderViewerDocument();
     expect(html).toContain("t('act.refresh')");
     expect(html).toContain("t('act.empty.title')");
-    expect(html).toContain("t('act.attn.' + attention)");
+    // STEP-16 calm card dropped the attention badge; the card actions still route
+    // through the catalog.
+    expect(html).toContain("t('act.status.complete')");
     // English locale must not receive the Chinese rewrite tables
     expect(html).toContain("if (I18N_LANG !== 'zh') return s;");
     expect(html).toContain("'act.refresh': 'Refresh'");

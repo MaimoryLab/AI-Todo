@@ -1245,7 +1245,7 @@ describe("viewer session rendering", () => {
     expect(idxGroups === -1 || idxAwaiting < idxGroups).toBe(true);
   });
 
-  it("renders todo extraction classification tags on approved action cards", () => {
+  it("calm action card shows title without classification tags (STEP-16)", () => {
     const { sandbox, getElement } = loadViewerSandbox();
     sandbox.state.activeTab = "actions";
     sandbox.state.actions = {
@@ -1273,9 +1273,10 @@ describe("viewer session rendering", () => {
     const html = getElement("view-actions").innerHTML;
 
     expect(html).toContain("整理验收截图");
-    expect(html).toContain("todo-extracted");
-    expect(html).toContain("time:current");
-    expect(html).toContain("type:to_start");
+    // STEP-16 calm card: classification tags (time:/type:) are no longer rendered
+    // on the card — only title + description + a muted source/time meta line.
+    expect(html).not.toContain("time:current");
+    expect(html).not.toContain("type:to_start");
   });
 
   it("hides generated command-log action cards from the todo view", () => {
