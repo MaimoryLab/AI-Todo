@@ -3923,7 +3923,7 @@
       <button data-tab="sessions"><span class="tab-icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M7 9h10M7 13h6"/></svg></span><span class="tab-label" data-i18n="tab.sessions">Evidence</span></button>
     </div>
     <div class="tab-side-meta">
-      <button id="expert-toggle" type="button" class="expert-toggle" aria-pressed="false" aria-label="Expert mode" title="Expert mode: show advanced memory, graph, and audit views">More</button>
+      <button id="expert-toggle" type="button" class="expert-toggle" aria-pressed="false" aria-label="More views" title="More views">More</button>
       <a href="https://github.com/MaimoryLab/agentmemory-lab" target="_blank" rel="noopener" aria-label="Repository" title="Repository"><span class="side-icon icon-repo"></span></a>
       <a href="https://github.com/MaimoryLab/agentmemory-lab#readme" target="_blank" rel="noopener" aria-label="Docs" title="Docs"><span class="side-icon icon-docs"></span></a>
       <a id="footer-feedback" href="#" target="_blank" rel="noopener" aria-label="Feedback" title="Feedback"><span class="side-icon icon-feedback"></span></a>
@@ -4051,7 +4051,7 @@
         'filter.review': 'To confirm', 'filter.all': 'All',
         'dash.firstRun.kicker': 'First run',
         'dash.firstRun.title': 'Import sample data first',
-        'dash.firstRun.body': 'No session data yet. Run the demo and the page will fill with browsable memory and activity.',
+        'dash.firstRun.body': 'No session data yet. Run the demo and the page will fill with browsable to-dos and activity.',
         'dash.firstRun.link': 'View quick start &rarr;',
         'dash.noRecord': 'No records yet',
         'dash.stat.sessions': 'Sessions',
@@ -4253,7 +4253,7 @@
         'filter.review': '待确认', 'filter.all': '全部',
         'dash.firstRun.kicker': '首次使用',
         'dash.firstRun.title': '先导入示例数据',
-        'dash.firstRun.body': '目前还没有会话数据。先运行 demo，页面就会出现可浏览的记忆与活动。',
+        'dash.firstRun.body': '目前还没有会话数据。先运行 demo，页面就会出现可浏览的待办与活动。',
         'dash.firstRun.link': '查看快速开始 &rarr;',
         'dash.noRecord': '暂无记录',
         'dash.stat.sessions': '会话',
@@ -5197,11 +5197,11 @@
           sessionId: 'browser_' + (item.id || ''),
           timestamp: item.updatedAt || createdAt,
           type: item.kind === 'lesson' ? 'decision' : 'discovery',
-          title: item.kind === 'lesson' ? '经验候选' : '记忆候选',
+          title: item.kind === 'lesson' ? '经验候选' : '同步会话',
           subtitle: item.status === 'approved' ? '已保存' : item.status === 'dismissed' ? '已忽略' : '待审阅',
           narrative: item.content,
           facts: [],
-          concepts: ['browser', item.kind || 'memory'],
+          concepts: ['browser', item.kind === 'lesson' ? 'lesson' : 'session'],
           files: [],
           importance: 0.7
         });
@@ -5908,7 +5908,7 @@
       html += '<div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;"><a class="btn btn-primary" href="/artifacts/agent-memory-lab-extension.zip" target="_blank" rel="noopener">下载插件</a><a class="btn" href="#sessions">查看会话</a></div>';
       html += '</div>';
       if (!showDebug) {
-        html += '<div style="font-size:12px;color:var(--ink-faint);line-height:1.45;">插件界面只显示同步状态，不在浏览器里做记忆选择。</div></div>';
+        html += '<div style="font-size:12px;color:var(--ink-faint);line-height:1.45;">插件界面只显示同步状态，不在浏览器里做内容挑选。</div></div>';
         return html;
       }
       html += '<div class="stats-grid" style="margin-bottom:12px;">';
@@ -7286,12 +7286,12 @@
       var overlay = document.getElementById('modal-overlay');
       modal.innerHTML =
         '<h3>审阅后保存</h3>' +
-        '<p>这条内容来自 ' + esc(sourceLabel) + '。确认前可以调整标题、内容和归属，避免临时信息直接进入长期记忆或行动列表。</p>' +
+        '<p>这条内容来自 ' + esc(sourceLabel) + '。确认前可以调整标题、内容和归属，避免临时信息直接进入待办列表。</p>' +
         '<div class="memory-add-form">' +
         '<label>标题<input id="review-title" value="' + esc(item.title || '') + '"></label>' +
         '<label>内容<textarea id="review-content" rows="8">' + esc(item.content || '') + '</textarea></label>' +
         '<div class="memory-add-grid">' +
-        '<label>类型<select id="review-kind"><option value="memory"' + (item.kind !== 'lesson' && item.kind !== 'action' ? ' selected' : '') + '>记忆</option><option value="lesson"' + (item.kind === 'lesson' ? ' selected' : '') + '>经验</option><option value="action"' + (isAction ? ' selected' : '') + '>行动候选</option></select></label>' +
+        '<label>类型<select id="review-kind"><option value="action" selected>行动候选</option></select></label>' +
         '<label>项目<input id="review-project" value="' + esc(defaultProject) + '"></label>' +
         '</div>' +
         '<div class="memory-add-grid">' +
