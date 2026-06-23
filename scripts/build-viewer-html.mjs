@@ -50,8 +50,8 @@ if (args.has("--check")) {
     }
   };
   rebuild();
-  watch(partsDir, rebuild);
-  console.log(`watching ${partsDir} — Ctrl+C to stop`);
+  watch(partsDir, { recursive: true }, rebuild);
+  console.log(`watching ${partsDir} (recursive) — Ctrl+C to stop`);
 } else {
   writeFileSync(outFile, assemble());
   console.log("wrote src/viewer/index.html from parts/");

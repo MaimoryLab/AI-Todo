@@ -1,6 +1,15 @@
 [
   "00-head.html",
-  "10-style.css",
+  "style/00-tokens-reset.css",
+  "style/10-shell-atoms.css",
+  "style/20-legacy-graph-obs-episode.css",
+  "style/30-sessions.css",
+  "style/40-legacy-audit-empty-lessons-skills.css",
+  "style/50-todo-cards.css",
+  "style/60-editorial-overrides-legacy-memory.css",
+  "style/70-legacy-crystal-modal-settings-timeline.css",
+  "style/80-legacy-heatmap-replay.css",
+  "style/90-responsive-avatars.css",
   "20-body.html",
   "30-app.js",
   "40-tail.html"

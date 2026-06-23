@@ -48,3 +48,32 @@ describe("viewer index.html assembly (PLAN-007 STEP-01)", () => {
     expect(realTag.length).toBe(1);
   });
 });
+
+describe("viewer CSS fragmentation (PLAN-007 STEP-02)", () => {
+  const cssFragments = () => manifest().filter((name) => name.endsWith(".css"));
+
+  it("delivers CSS as multiple style/ fragments, not one monolith", () => {
+    const css = cssFragments();
+    expect(css.length).toBeGreaterThanOrEqual(2);
+    // the STEP-01 monolith must be gone, replaced by style/* fragments
+    expect(manifest()).not.toContain("10-style.css");
+    for (const name of css) {
+      expect(name.startsWith("style/"), `CSS fragment ${name} should live under style/`).toBe(true);
+    }
+  });
+
+  it("CSS fragments are pure CSS (no HTML or script tags)", () => {
+    for (const name of cssFragments()) {
+      const body = readFileSync(join(PARTS_DIR, name), "utf-8");
+      expect(body, `${name} contains a <style tag`).not.toMatch(/<\/?style/);
+      expect(body, `${name} contains a <script tag`).not.toMatch(/<script/);
+    }
+  });
+
+  it("assembles to exactly one <style> block (tags not split or duplicated)", () => {
+    const html = readFileSync(join(VIEWER_DIR, "index.html"), "utf-8");
+    expect((html.match(/<style>/g) ?? []).length).toBe(1);
+    expect((html.match(/<\/style>/g) ?? []).length).toBe(1);
+  });
+});
+
