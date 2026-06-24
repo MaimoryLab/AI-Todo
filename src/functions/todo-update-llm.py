@@ -18,7 +18,7 @@ import sys
 import urllib.error
 import urllib.request
 
-DEFAULT_MODEL = "deepseek/deepseek-v4-pro"
+DEFAULT_MODEL = "deepseek/deepseek-v4-flash"
 DEFAULT_BASE_URL = "https://api.novita.ai/openai/v1"
 LEGACY_MODELS = {"pa/gpt-5.5"}
 VALID_DECISIONS = {"KEEP", "DROP", "DONE", "REWRITE", "MERGE"}

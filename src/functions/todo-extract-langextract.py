@@ -13,7 +13,7 @@ import os
 import sys
 import textwrap
 
-DEFAULT_MODEL = "deepseek/deepseek-v4-pro"
+DEFAULT_MODEL = "deepseek/deepseek-v4-flash"
 DEFAULT_PROVIDER = "openai"
 DEFAULT_BASE_URL = "https://api.novita.ai/openai/v1"
 LEGACY_MODELS = {"pa/gpt-5.5"}
@@ -236,7 +236,7 @@ if __name__ == "__main__":
 
         params = extract_kwargs(DummyLx, model_id_from_env(), DummyConfig)
         config = params.get("config")
-        assert config.model_id == "deepseek/deepseek-v4-pro"
+        assert config.model_id == "deepseek/deepseek-v4-flash"
         assert config.provider == "openai"
         assert config.provider_kwargs["base_url"] == "https://api.novita.ai/openai/v1"
         assert config.provider_kwargs["reasoning_effort"] == "medium"

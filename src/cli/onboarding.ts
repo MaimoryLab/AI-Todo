@@ -59,14 +59,14 @@ const SHARED_TODO_DEFAULTS: Record<string, string> = {
 
 // THINKING_DEPTH maps to the sidecar's `reasoning_effort`, which only
 // non-reasoning models reject — so it's empty for gpt-4o-mini / deepseek-chat
-// and "medium" for the reasoning-capable DeepSeek-V4 default.
+// and "medium" for the reasoning-capable DeepSeek-V4 Flash default.
 const EXTRACTOR_MODELS: ExtractorModel[] = [
   {
     value: "novita",
-    label: "Novita · DeepSeek-V4 (recommended)",
+    label: "Novita · DeepSeek-V4 Flash (recommended)",
     defaults: {
       ...SHARED_TODO_DEFAULTS,
-      LANGEXTRACT_MODEL: "deepseek/deepseek-v4-pro",
+      LANGEXTRACT_MODEL: "deepseek/deepseek-v4-flash",
       LANGEXTRACT_BASE_URL: "https://api.novita.ai/openai/v1",
       LANGEXTRACT_THINKING_DEPTH: "medium",
     },

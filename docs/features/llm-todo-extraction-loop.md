@@ -87,7 +87,7 @@ context.
 | ID | Requirement | Priority |
 |---|---|---|
 | R1 | First startup imports historical Codex sessions into local storage; follow-up scans are incremental and skip unchanged history | P0 |
-| R2 | LLM extraction uses the configured model; default `LANGEXTRACT_MODEL` is `deepseek/deepseek-v4-pro` | P0 |
+| R2 | LLM extraction uses the configured model; default `LANGEXTRACT_MODEL` is `deepseek/deepseek-v4-flash` | P0 |
 | R3 | The extraction prompt must require actionable output, source quote, `timeBucket`, `typeBucket`, confidence, and dedupe key | P0 |
 | R4 | A todo is stored only when its evidence quote matches the source observation | P0 |
 | R5 | `typeBucket=done` maps to `Action.status=done`; `in_progress` and `processing` map to `active`; all other buckets map to `pending` | P0 |
@@ -151,7 +151,7 @@ context.
 
 ## Follow-up plan
 
-1. Keep docs aligned with the current default model (`deepseek/deepseek-v4-pro`)
+1. Keep docs aligned with the current default model (`deepseek/deepseek-v4-flash`)
    until the code default is changed and tested.
 2. Decide whether the viewer needs an explicit **Update all generated cards**
    control; until then, document `scope=all` as API-only.

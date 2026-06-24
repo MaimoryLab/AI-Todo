@@ -18,7 +18,7 @@ function safeParseInt(value: string | undefined, fallback: number): number {
 
 const DATA_DIR = join(homedir(), ".agentmemory");
 const ENV_FILE = join(DATA_DIR, ".env");
-export const DEFAULT_LANGEXTRACT_MODEL = "deepseek/deepseek-v4-pro";
+export const DEFAULT_LANGEXTRACT_MODEL = "deepseek/deepseek-v4-flash";
 export const DEFAULT_LANGEXTRACT_PROVIDER = "openai";
 export const DEFAULT_LANGEXTRACT_BASE_URL = "https://api.novita.ai/openai/v1";
 export const DEFAULT_TODO_EXTRACT_TIMEOUT_MS = 120_000;
@@ -194,7 +194,7 @@ function detectProvider(env: Record<string, string>): ProviderConfig {
     // warn when the configured OpenRouter model is in the
     // premium tier and likely to burn money on background compression.
     // Captured workload data shows ~$5/35h on claude-sonnet-4 vs
-    // ~$0.46/35h on deepseek-v4-pro for the same compression mix.
+    // ~$0.46/35h on deepseek-v4-flash for the same compression mix.
     // Heuristic match avoids hard-coding a pricing table.
     if (
       !warnPremiumModelShown &&
@@ -207,7 +207,7 @@ function detectProvider(env: Record<string, string>): ProviderConfig {
         `[agentmemory] OPENROUTER_MODEL=${model} is in the premium tier. ` +
           `Background compression on this model can cost $5+/day under active use. ` +
           `Cheaper alternatives with comparable quality for memory compression: ` +
-          `deepseek/deepseek-v4-pro, deepseek/deepseek-chat, qwen/qwen3-coder. ` +
+          `deepseek/deepseek-v4-flash, deepseek/deepseek-chat, qwen/qwen3-coder. ` +
           `See README "Cost-aware model selection" for the full table. ` +
           `Set AGENTMEMORY_SUPPRESS_COST_WARNING=1 to silence.\n`,
       );

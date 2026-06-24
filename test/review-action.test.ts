@@ -122,7 +122,7 @@ describe("review action candidates", () => {
   it("exposes todo extractor config without returning the API key", async () => {
     const oldModel = process.env.LANGEXTRACT_MODEL;
     const oldKey = process.env.LANGEXTRACT_API_KEY;
-    process.env.LANGEXTRACT_MODEL = "deepseek/deepseek-v4-pro";
+    process.env.LANGEXTRACT_MODEL = "deepseek/deepseek-v4-flash";
     process.env.LANGEXTRACT_API_KEY = "secret";
     const response = await sdk.trigger("api::todo-extractor-config", req()) as { status_code: number; body: { success: boolean; config: Record<string, unknown>; envPath: string } };
     if (oldModel === undefined) delete process.env.LANGEXTRACT_MODEL;
@@ -133,7 +133,7 @@ describe("review action candidates", () => {
     expect(response.status_code).toBe(200);
     expect(response.body.success).toBe(true);
     expect(response.body.envPath).toContain(".agentmemory");
-    expect(response.body.config.LANGEXTRACT_MODEL).toBe("deepseek/deepseek-v4-pro");
+    expect(response.body.config.LANGEXTRACT_MODEL).toBe("deepseek/deepseek-v4-flash");
     expect(response.body.config.LANGEXTRACT_API_KEY).toBeUndefined();
     expect(response.body.config.LANGEXTRACT_API_KEY_CONFIGURED).toBe(true);
   });
