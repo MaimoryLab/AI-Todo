@@ -1,8 +1,7 @@
     .action-overview {
-      display: grid;
-      grid-template-columns: repeat(5, minmax(0, 1fr));
-      gap: 10px;
-      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
     }
     .action-overview-card,
     .action-group,
@@ -12,10 +11,10 @@
       background: #ffffff;
     }
     .action-overview-card {
-      padding: 12px 14px;
+      padding: 7px 10px;
     }
     button.action-overview-card {
-      width: 100%;
+      min-width: 78px;
       text-align: left;
       cursor: pointer;
       font: inherit;
@@ -38,12 +37,53 @@
       font-weight: 650;
     }
     .action-overview-value {
-      margin-top: 4px;
+      margin-top: 2px;
       color: var(--ink);
       font-family: var(--font-display);
-      font-size: 26px;
+      font-size: 18px;
       line-height: 1;
       font-weight: 300;
+    }
+    .attention-chip-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin: -2px 0 12px;
+    }
+    .attention-chip {
+      display: inline-flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      min-width: 112px;
+      min-height: 32px;
+      padding: 5px 10px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: #ffffff;
+      color: var(--ink-muted);
+      font: inherit;
+      font-size: 12px;
+      cursor: pointer;
+    }
+    .attention-chip:hover {
+      border-color: var(--accent);
+      background: var(--bg-alt);
+    }
+    .attention-chip.active {
+      border-color: var(--ink);
+      color: var(--ink);
+      box-shadow: inset 0 0 0 1px var(--ink);
+    }
+    .attention-chip-label {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .attention-chip-value {
+      flex: 0 0 auto;
+      color: var(--ink);
+      font-weight: 650;
     }
     .action-group {
       padding: 14px;
@@ -63,6 +103,39 @@
       font-weight: 650;
     }
     .done-today-section { opacity: 0.92; }
+    .action-folded-section {
+      background: rgba(255,255,255,0.78);
+    }
+    .action-folded-head {
+      width: 100%;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      margin: 0;
+      padding: 0;
+      border: none;
+      background: none;
+      text-align: left;
+      cursor: pointer;
+      font: inherit;
+    }
+    .action-folded-head:hover .action-group-title { color: var(--accent, #2563eb); }
+    .action-folded-lead {
+      margin-top: 4px;
+      color: var(--ink-faint);
+      font-size: 12px;
+      line-height: 1.35;
+    }
+    .action-folded-meta {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      flex: 0 0 auto;
+    }
+    .action-folded-section .action-card-list {
+      margin-top: 12px;
+    }
     .done-today-head {
       width: 100%;
       background: none;
@@ -293,6 +366,12 @@
       opacity: 1;
       pointer-events: auto;
     }
+    .action-recheck-note {
+      color: var(--accent);
+      font-size: 11px;
+      font-weight: 650;
+      white-space: nowrap;
+    }
     .btn-ghost-sm {
       appearance: none;
       border: none;
@@ -306,6 +385,29 @@
       border-radius: 6px;
     }
     .btn-ghost-sm:hover { color: var(--ink); background: var(--bg-warm, rgba(0,0,0,0.05)); }
+    .action-archive-link {
+      color: color-mix(in srgb, var(--ink-faint) 82%, transparent);
+    }
+    .action-refresh-link {
+      color: var(--ink-muted);
+    }
+    .btn-primary-sm {
+      appearance: none;
+      border: 1px solid var(--ink);
+      background: var(--ink);
+      color: #ffffff;
+      padding: 4px 12px;
+      font-size: 12px;
+      line-height: 1.3;
+      cursor: pointer;
+      font-family: inherit;
+      border-radius: 7px;
+      transition: background .12s ease, border-color .12s ease;
+    }
+    .btn-primary-sm:hover {
+      border-color: var(--accent);
+      background: var(--accent);
+    }
     .btn-outline-sm {
       appearance: none;
       background: none;
@@ -353,7 +455,7 @@
       white-space: pre-wrap;
     }
     @media (max-width: 760px) {
-      .action-overview { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .attention-chip { flex: 1 1 calc(50% - 8px); min-width: 0; }
       .action-item-card.action-candidate-card,
       .action-item-card.action-approved-card {
         grid-template-columns: 5px minmax(0, 1fr);
@@ -448,4 +550,3 @@
         flex-direction: column;
       }
     }
-

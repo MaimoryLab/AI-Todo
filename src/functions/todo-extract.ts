@@ -8,7 +8,6 @@ import { KV, fingerprintId, generateId, nearDuplicateTitle } from "../state/sche
 import type { Action, CompressedObservation, ReviewQueueItem, ScanCheckpoint, Session } from "../types.js";
 import {
   DEFAULT_LANGEXTRACT_BASE_URL,
-  DEFAULT_TODO_EXTRACT_MAX_LLM_SESSIONS,
   DEFAULT_TODO_EXTRACT_TIMEOUT_MS,
   DEFAULT_TODO_EXTRACT_SINCE_DAYS,
   DEFAULT_TODO_EXTRACT_MAX_INTERACTIONS,
@@ -42,6 +41,22 @@ export interface ExtractedTodo {
   dedupeKey: string;
 }
 
+type TodoQualityReason =
+  | "ok"
+  | "incomplete-title"
+  | "process-or-status"
+  | "polluted"
+  | "completed"
+  | "low-actionability";
+
+type TodoQuality = {
+  confidence: number;
+  reason: TodoQualityReason;
+  warnings: string[];
+  titleCompacted?: boolean;
+  originalTitle?: string;
+};
+
 type ObservationBlock = {
   sourceObservationId: string;
   timestamp: string;
@@ -60,11 +75,22 @@ type TodoExtractOptions = {
   // then the config defaults when omitted.
   sinceDays?: number;
   maxInteractionsPerSession?: number;
-  maxLlmSessions?: number;
   project?: string;
   force?: boolean;
   scanSources?: boolean;
   cleanup?: "none" | "dry-run" | "apply";
+};
+
+type TodoRefreshActionOptions = {
+  actionId?: string;
+};
+
+type LangExtractRunner = typeof runLangExtractSidecar;
+
+type ExtractForSessionOptions = {
+  runLangExtractSidecar?: LangExtractRunner;
+  refreshAction?: Record<string, unknown>;
+  forceLlmContext?: boolean;
 };
 
 const TIME_BUCKETS = new Set(["current", "recent", "history"]);
@@ -82,79 +108,18 @@ const SIDE_CAR_ENV_KEYS = [
   "LANGEXTRACT_MAX_WORKERS",
   "LANGEXTRACT_MAX_CHAR_BUFFER",
 ];
-
-export type TodoExtractErrorCode =
-  | "llm_unavailable"
-  | "provider_timeout"
-  | "config_error"
-  | "provider_error"
-  | "extract_failed";
-
-export type TodoExtractJobStatus = "idle" | "running" | "done" | "error";
-
-export type TodoExtractResult = {
-  success: true;
-  jobId?: string;
-  status?: TodoExtractJobStatus;
-  startedAt?: string;
-  finishedAt?: string;
-  engine: "langextract" | "rules" | "mixed";
-  scannedSessions: number;
-  processedSessions: number;
-  skippedUnchangedSessions: number;
-  scannedObservations: number;
-  directCreated: number;
-  reviewCreated: number;
-  hiddenHistory: number;
-  discarded: number;
-  cleanedActions: number;
-  cleanedReviews: number;
-  completedActions: number;
-  completedReviews: number;
-  recheckMarked: number;
-  llmSessionBudget: number;
-  llmSessionsAttempted: number;
-  llmSessionsSkipped: number;
-  llmFallback?: boolean;
-  fallbackReason?: string;
-  errorCode?: TodoExtractErrorCode;
-  cleanupPreview?: { actions: unknown[]; reviews: unknown[] };
-  sourceScan?: { imported: number; skipped: number; errors: number };
-};
-
-export type TodoExtractJob = {
-  success: boolean;
-  jobId: string;
-  status: TodoExtractJobStatus;
-  startedAt: string;
-  finishedAt?: string;
-  message?: string;
-  errorCode?: TodoExtractErrorCode;
-  errorMessage?: string;
-  result?: TodoExtractResult;
-  inFlight?: boolean;
-};
-
-let activeTodoExtractJob: Promise<TodoExtractResult> | null = null;
-let currentTodoExtractJob: TodoExtractJob | null = null;
+const TECH_IDENTIFIER_PATTERN = /(?:\b[a-z][a-z0-9_.-]*\/[a-z0-9][a-z0-9_.-]*(?:\/[a-z0-9][a-z0-9_.-]*)*\b|\/(?:Users|tmp|var|private|Volumes)\/\S+|https?:\/\/\S+|\b[0-9a-f]{7,40}\b)/i;
+const DANGLE_TITLE_PATTERN = /(?:到|为|把|对|向|在|从|将|with|to|for|from|into|onto|via|using)$/i;
+const BRANCH_IDENTIFIER_PATTERN = /\b[a-z][a-z0-9_.-]*\/[a-z0-9][a-z0-9_.-]*(?:\/[a-z0-9][a-z0-9_.-]*)*\b/i;
 
 function envNumber(key: string, fallback: number): number {
   const parsed = Number(getEnvVar(key));
   return Number.isFinite(parsed) ? parsed : fallback;
 }
 
-function classifyExtractError(message: string | undefined): TodoExtractErrorCode {
-  const text = String(message || "").toLowerCase();
-  if (/(timed out|timeout|abort)/.test(text)) return "provider_timeout";
-  if (/(api key|apikey|unauthorized|forbidden|401|403|required)/.test(text)) return "config_error";
-  if (/(rate limit|429|quota|provider|openai|novita|langextract)/.test(text)) return "provider_error";
-  return "extract_failed";
-}
-
 function clampPositiveInt(value: unknown, fallback: number, max: number): number {
   const parsed = typeof value === "number" ? value : parseInt(String(value ?? ""), 10);
   if (!Number.isFinite(parsed) || parsed < 1) return fallback;
-  if (!Number.isFinite(max)) return Math.floor(parsed);
   return Math.min(max, Math.floor(parsed));
 }
 
@@ -259,6 +224,100 @@ function firstTitleSentence(value: string): string {
   return trimToTitleBoundary(short || compact, 42);
 }
 
+function looksIncompleteTitle(value: string): boolean {
+  const text = normalizeText(value).replace(/[。！？!?,，；;：:\s]+$/u, "").trim();
+  if (!text) return true;
+  if (looksTruncated(text)) return true;
+  if (DANGLE_TITLE_PATTERN.test(text)) return true;
+  if (/^(?:准备|开始|继续|接下来|现在我会)\s*[^\n。！？]{0,80}(?:到|为|把|对|向|在|从|将)$/u.test(text)) return true;
+  return false;
+}
+
+function compactTitleTechnicalIdentifiers(title: string, description: string, quote = ""): { title: string; compacted: boolean } {
+  const text = normalizeText(title);
+  const context = normalizeText(`${title} ${description} ${quote}`);
+  if (!TECH_IDENTIFIER_PATTERN.test(text)) return { title: text, compacted: false };
+  if (/(?:推送|提交|push)/i.test(context) && /(?:\borigin\b|远程|remote|仓库|repo)/i.test(context)) {
+    const target = /\borigin\b/i.test(context) ? "origin" : I18NChineseTitle(context) ? "远程仓库" : "the remote repository";
+    const zhTitle = target === "origin" ? `推送当前工作分支到 ${target}` : `推送当前工作分支到${target}`;
+    return { title: I18NChineseTitle(context) ? zhTitle : `Push the current branch to ${target}`, compacted: true };
+  }
+  const compacted = text
+    .replace(BRANCH_IDENTIFIER_PATTERN, I18NChineseTitle(context) ? "当前工作分支" : "current branch")
+    .replace(/https?:\/\/\S+/ig, I18NChineseTitle(context) ? "相关链接" : "the link")
+    .replace(/\/(?:Users|tmp|var|private|Volumes)\/\S+/ig, I18NChineseTitle(context) ? "相关文件" : "the file")
+    .replace(/\b[0-9a-f]{7,40}\b/ig, I18NChineseTitle(context) ? "相关提交" : "the commit")
+    .replace(/\s+/g, " ")
+    .trim();
+  return { title: compacted || text, compacted: compacted !== text };
+}
+
+function I18NChineseTitle(value: string): boolean {
+  return /[\u4e00-\u9fff]/u.test(value);
+}
+
+function assessTodoQuality(todo: ExtractedTodo): TodoQuality {
+  const title = normalizeText(todo.title);
+  const description = normalizeText(todo.description);
+  const evidence = normalizeText(todo.evidence?.quote);
+  const warnings: string[] = [];
+  if (looksIncompleteTitle(title)) return { confidence: 0, reason: "incomplete-title", warnings: ["title is incomplete or truncated"] };
+  if (isCompletedTodoText(title) || isCompletedTodoText(description) || isCompletedTodoText(evidence)) {
+    return { confidence: 0, reason: "completed", warnings: ["looks completed"] };
+  }
+  if (isPollutedTodoText(title) || isPollutedTodoText(description) || isPollutedTodoText(evidence)) {
+    return { confidence: 0, reason: "polluted", warnings: ["looks like log or tool output"] };
+  }
+  if (isPureProcessCheck(`${title} ${description} ${evidence}`) || isPureStatusReport(`${title} ${description}`)) {
+    return { confidence: 0, reason: "process-or-status", warnings: ["looks like process/status narration"] };
+  }
+  let confidence = 0.9;
+  if (!hasTodoActionTrigger(`${title} ${description}`)) {
+    confidence = Math.min(confidence, 0.58);
+    warnings.push("weak action verb");
+  }
+  if (TECH_IDENTIFIER_PATTERN.test(title)) {
+    confidence = Math.min(confidence, 0.7);
+    warnings.push("title contains long technical identifier");
+  }
+  if (Array.from(title).length > 56) {
+    confidence = Math.min(confidence, 0.72);
+    warnings.push("title is too long to scan");
+  }
+  return { confidence, reason: confidence >= 0.55 ? "ok" : "low-actionability", warnings };
+}
+
+function todoQualityMetadata(quality: TodoQuality): Record<string, unknown> {
+  return {
+    confidence: quality.confidence,
+    reason: quality.reason,
+    warnings: quality.warnings,
+    ...(quality.titleCompacted ? { titleCompacted: true } : {}),
+    ...(quality.originalTitle ? { originalTitle: quality.originalTitle } : {}),
+  };
+}
+
+function effectiveTodoConfidence(todo: ExtractedTodo): number {
+  const quality = (todo as ExtractedTodo & { quality?: TodoQuality }).quality;
+  return Math.min(todo.confidence, quality?.confidence ?? 1);
+}
+
+function firstInvalidTodoReason(todos: ExtractedTodo[], blockMap: Map<string, Pick<ObservationBlock, "text">>): string {
+  for (const rawTodo of todos) {
+    const todo = todoForStorage(rawTodo);
+    if (!todo) {
+      const title = normalizeText(rawTodo.title || rawTodo.description || rawTodo.evidence?.quote);
+      if (looksIncompleteTitle(title)) return "incomplete-title";
+      if (isCompletedTodoText(title)) return "completed-or-history";
+      if (isPollutedTodoText(title)) return "polluted";
+      return "low-quality";
+    }
+    if (!validateTodoEvidence(todo, blockMap)) return "evidence-invalid";
+    if (todo.timeBucket === "history" || todo.typeBucket === "done") return "completed-or-history";
+  }
+  return "no-valid-todo";
+}
+
 function looksLikeBadTitle(value: string): boolean {
   const text = normalizeText(value);
   const lower = text.toLowerCase();
@@ -281,10 +340,32 @@ function looksLikeBadTitle(value: string): boolean {
   return lower === "untitled todo" || lower === "untitled candidate";
 }
 
+const PROCESS_CHECK_PHRASES = /(?:做最后一次状态确认|最后一次状态确认|启动后做健康检查|做健康检查|健康检查已完成|确认工作区干净|确认当前分支|确认 PR 链接|服务可用|重启 Codex desktop app 后再测一次|重启 Codex desktop app 后再测|重启后再测一次|重启后再测)/i;
+const PROCESS_CHECK_REWRITEABLE = /(?:重启 Codex desktop app 后再测一次|重启 Codex desktop app 后再测|重启后再测一次|重启后再测)/i;
+const DURABLE_DELIVERABLE_TERMS = /(?:修复|修正|补充|实现|调整|验证|排查|定位|跟进|整理|生成|上传|创建|更新|移除|删除|审查|合并|推送|提交|构建|\b(?:fix|add|update|create|remove|validate|retry|rerun|re-run|follow up|follow-up|investigate|debug|resolve|implement)\b)/i;
+
+function isProcessCheckText(value: string | undefined): boolean {
+  const text = normalizeText(value);
+  return !!text && PROCESS_CHECK_PHRASES.test(text);
+}
+
+function isRewriteableProcessCheck(value: string | undefined): boolean {
+  const text = normalizeText(value);
+  return !!text && PROCESS_CHECK_REWRITEABLE.test(text);
+}
+
+function isPureProcessCheck(value: string | undefined): boolean {
+  const text = normalizeText(value);
+  if (!text || !isProcessCheckText(text)) return false;
+  if (isRewriteableProcessCheck(text)) return false;
+  const remainder = stripTitleNoise(text).replace(PROCESS_CHECK_PHRASES, "");
+  return !DURABLE_DELIVERABLE_TERMS.test(remainder);
+}
+
 // An action being requested — used to exempt status/completed-narration text
 // from the pollution filter, so a real repair that mentions a status phrase
 // ("修复服务可用性回归", "排查…失败") is not silently dropped.
-const TODO_ACTION_TRIGGER = /(?:修复|补充|实现|调整|验证|排查|定位|跟进|整理|生成|上传|创建|更新|移除|删除|处理|审查|合并|推送|提交|构建|设计|重试|重新(?:运行|跑)|需要|必须|未完成|阻塞|TODO|FIXME|\b(?:fix|add|update|create|remove|validate|retry|rerun|re-run|follow up|follow-up|need to|must|blocked|blocking|investigate|debug|resolve|handle|implement)\b)/i;
+const TODO_ACTION_TRIGGER = /(?:修复|修正|补充|实现|调整|验证|排查|定位|跟进|整理|生成|上传|创建|更新|移除|删除|处理|审查|合并|推送|提交|构建|设计|重试|重新(?:运行|跑)|需要|必须|未完成|阻塞|TODO|FIXME|\b(?:fix|add|update|create|remove|validate|retry|rerun|re-run|follow up|follow-up|need to|must|blocked|blocking|investigate|debug|resolve|handle|implement)\b)/i;
 const AGENT_PROGRESS_PREFIX = /^(?:我会|我将|我要|现在我会|接下来|先|继续|等待|查看|读取|检查|确认|核对|梳理|记录|准备|进行|定位当前|开始)\b/u;
 const PROGRESS_NOUNS = /(?:仓库现状|远程元数据|关键入口|GitHub 状态|依赖安装|安装完成|空闲端口|健康检查|本地可运行性验证|静态梳理|运行验证|截图|console|服务可用|页面已经能返回|工作区状态|同名目录|PR\/issue|PR、issue|CI 配置)/i;
 const DONE_NARRATION = /(?:已(?:经)?|成功|顺利|全绿|pass(?:ed)?|merged|pushed|resolved|done|completed|works now|no action needed|完成|通过|可用|生效|能返回|能显示|已合并|已推送|已更新|已修复|无需处理)/i;
@@ -316,6 +397,7 @@ function isPollutedTodoText(value: string | undefined): boolean {
   if (/^⏺/.test(text) || /\b(?:bash|shell|exec)\(/i.test(text)) return true;
   if (/^[a-z][a-z0-9_-]*-[0-9a-f]{6,}`?$/i.test(text)) return true;
   if (/\b(?:Viewer|Health)\b\s*[：:]\s*(?:\[|https?:\/\/)/i.test(text)) return true;
+  if (isPureProcessCheck(text)) return true;
   if (AGENT_PROGRESS_PREFIX.test(text) && PROGRESS_NOUNS.test(text) && !hasTodoActionTrigger(text)) return true;
   // Status-report and completed-work narration are pollution ONLY when no action
   // is being requested. The action-verb exception keeps genuine repairs like
@@ -348,18 +430,20 @@ function isUsefulTodoText(value: string | undefined): boolean {
   const text = normalizeText(value);
   if (!text || isPollutedTodoText(text) || isCompletedTodoText(text)) return false;
   if (AGENT_PROGRESS_PREFIX.test(text) && !hasTodoActionTrigger(text)) return false;
-  return hasTodoActionTrigger(text) || /\b(?:TODO|FIXME|follow up|follow-up)\b/i.test(text);
+  return hasTodoActionTrigger(text) || /(?:^|[\s（(])(?:TODO|FIXME)\b|(?:follow up|follow-up)\b/i.test(text);
 }
 
 export function cleanTodoTitle(title: string, description = "", quote = ""): string | null {
+  if (isPureProcessCheck(`${title} ${description} ${quote}`)) return null;
   for (const raw of [title, description, quote]) {
     const candidate = firstTitleSentence(raw);
+    if (isPureProcessCheck(candidate)) continue;
     if (candidate && !looksLikeBadTitle(candidate) && !looksTruncated(candidate)) return candidate;
   }
   return null;
 }
 
-function todoForStorage(todo: ExtractedTodo): ExtractedTodo | null {
+function todoForStorage(todo: ExtractedTodo): (ExtractedTodo & { quality: TodoQuality }) | null {
   // STEP-08 Layer 2: never store completed work as a todo — the surface is
   // for UNRESOLVED pain points. (Enum keeps accepting "done"; we filter at emit.)
   if (todo.typeBucket === "done") return null;
@@ -367,16 +451,29 @@ function todoForStorage(todo: ExtractedTodo): ExtractedTodo | null {
   if (!title) return null;
   const description = normalizeText(todo.description || todo.evidence?.quote).slice(0, 1000);
   if (!description) return null;
+  const compacted = compactTitleTechnicalIdentifiers(title, description, todo.evidence?.quote);
+  const finalTitle = compacted.title;
+  const quality = assessTodoQuality({ ...todo, title: finalTitle, description });
   if (
-    isCompletedTodoText(title) || isCompletedTodoText(description) || isCompletedTodoText(todo.evidence?.quote) ||
-    isPollutedTodoText(title) || isPollutedTodoText(description) || isPollutedTodoText(todo.evidence?.quote)
+    quality.reason !== "ok" ||
+    isCompletedTodoText(finalTitle) || isCompletedTodoText(description) || isCompletedTodoText(todo.evidence?.quote) ||
+    isPollutedTodoText(finalTitle) || isPollutedTodoText(description) || isPollutedTodoText(todo.evidence?.quote)
   )
     return null;
   const rawDedupe = normalizeText(todo.dedupeKey);
   const dedupeKey = rawDedupe && !looksLikeBadTitle(rawDedupe)
     ? normalizedKey(rawDedupe)
-    : normalizedKey(`${title}:${description}`);
-  return { ...todo, title, description, dedupeKey };
+    : normalizedKey(`${finalTitle}:${description}`);
+  return {
+    ...todo,
+    title: finalTitle,
+    description,
+    dedupeKey,
+    quality: {
+      ...quality,
+      ...(compacted.compacted ? { titleCompacted: true, originalTitle: title } : {}),
+    },
+  };
 }
 
 function sessionSortTime(session: Session): string {
@@ -416,6 +513,42 @@ function takeRecentInteractions(
   if (boundaries.length <= maxInteractions) return observations;
   const cutoff = boundaries[boundaries.length - maxInteractions];
   return observations.slice(cutoff);
+}
+
+function interactionRanges(observations: CompressedObservation[]): Array<{ start: number; end: number }> {
+  if (!observations.length) return [];
+  const starts: number[] = [];
+  for (let i = 0; i < observations.length; i++) {
+    if (observationStartsInteraction(observations[i])) starts.push(i);
+  }
+  if (!starts.length || starts[0] !== 0) starts.unshift(0);
+  return starts.map((start, index) => ({
+    start,
+    end: starts[index + 1] ?? observations.length,
+  }));
+}
+
+function nearbyObservationContext(
+  observations: CompressedObservation[],
+  sourceObservationId: string | undefined,
+  maxObservations = 12,
+): { observations: CompressedObservation[]; foundSource: boolean } {
+  const sorted = [...observations].sort((a, b) => (a.timestamp || "").localeCompare(b.timestamp || ""));
+  if (!sorted.length) return { observations: [], foundSource: false };
+  const sourceIndex = sourceObservationId ? sorted.findIndex((obs) => obs.id === sourceObservationId) : -1;
+  if (sourceIndex < 0) {
+    return { observations: takeRecentInteractions(sorted, 2).slice(-maxObservations), foundSource: false };
+  }
+  const ranges = interactionRanges(sorted);
+  const rangeIndex = ranges.findIndex((range) => sourceIndex >= range.start && sourceIndex < range.end);
+  if (rangeIndex < 0) return { observations: sorted.slice(Math.max(0, sourceIndex - 5), sourceIndex + 7), foundSource: true };
+  const startRange = Math.max(0, rangeIndex - 2);
+  const endRange = Math.min(ranges.length - 1, rangeIndex + 2);
+  const picked = sorted.slice(ranges[startRange].start, ranges[endRange].end);
+  if (picked.length <= maxObservations) return { observations: picked, foundSource: true };
+  const pickedSourceIndex = picked.findIndex((obs) => obs.id === sourceObservationId);
+  const start = Math.max(0, Math.min(pickedSourceIndex - Math.floor(maxObservations / 2), picked.length - maxObservations));
+  return { observations: picked.slice(start, start + maxObservations), foundSource: true };
 }
 
 function timeBucketFor(session: Session, now = Date.now()): TimeBucket {
@@ -632,6 +765,7 @@ function parseCheckpoint(cursor: string | undefined): Record<string, string> {
 }
 
 function makeAction(todo: ExtractedTodo, session: Session, now: string): Action {
+  const quality = (todo as ExtractedTodo & { quality?: TodoQuality }).quality;
   const changed = sessionChangedSinceExtraction(todo, session);
   const tags = ["todo-extracted", `time:${todo.timeBucket}`, `type:${todo.typeBucket}`, ...(changed ? ["todo-recheck"] : [])];
   return {
@@ -647,11 +781,15 @@ function makeAction(todo: ExtractedTodo, session: Session, now: string): Action 
     tags,
     sourceObservationIds: [todo.evidence.sourceObservationId],
     sourceMemoryIds: [],
-    metadata: { todoExtraction: withSourceCheckpoint(todo, session) },
+    metadata: {
+      todoExtraction: withSourceCheckpoint(todo, session),
+      ...(quality ? { todoQuality: todoQualityMetadata(quality) } : {}),
+    },
   };
 }
 
 function makeReview(todo: ExtractedTodo, session: Session, now: string): ReviewQueueItem {
+  const quality = (todo as ExtractedTodo & { quality?: TodoQuality }).quality;
   const tags = ["todo-extracted", `time:${todo.timeBucket}`, `type:${todo.typeBucket}`];
   return {
     id: generateId("review"),
@@ -676,6 +814,7 @@ function makeReview(todo: ExtractedTodo, session: Session, now: string): ReviewQ
       // card can also be picked up by updateChangedTodoCards when its source
       // session later changes (otherwise the review-update path is dead).
       todoExtraction: withSourceCheckpoint(todo, session),
+      ...(quality ? { todoQuality: todoQualityMetadata(quality) } : {}),
     },
   };
 }
@@ -686,6 +825,32 @@ function actionLooksGenerated(action: Action): boolean {
     tags.includes("todo-extracted") ||
     tags.includes("action-candidate") ||
     !!action.metadata?.todoExtraction;
+}
+
+function replaceActionFromTodo(action: Action, fresh: Action, engine: "langextract" | "rules", now: string): Action {
+  return {
+    ...action,
+    title: fresh.title,
+    description: fresh.description,
+    status: fresh.status,
+    priority: fresh.priority,
+    updatedAt: now,
+    project: fresh.project,
+    tags: fresh.tags,
+    sourceObservationIds: fresh.sourceObservationIds,
+    sourceMemoryIds: fresh.sourceMemoryIds,
+    metadata: {
+      ...(action.metadata || {}),
+      todoExtraction: fresh.metadata?.todoExtraction,
+      ...(fresh.metadata?.todoQuality ? { todoQuality: fresh.metadata.todoQuality } : {}),
+      refresh: {
+        refreshedAt: now,
+        engine,
+        reason: "replaced",
+        previousTitle: action.title,
+      },
+    },
+  };
 }
 
 function sessionChangedSinceExtraction(todo: ExtractedTodo, session: Session): boolean {
@@ -868,10 +1033,22 @@ const VAGUE_TITLE_TERMS = [
   "进行",
   "处理",
 ];
+const PROCESS_TITLE_TERMS = [
+  "重启 Codex desktop app 后再测",
+  "重启后再测",
+  "最后一次状态确认",
+  "做健康检查",
+  "健康检查",
+  "确认工作区",
+];
 
 function titleQualityHint(title: string): string {
-  const hits = VAGUE_TITLE_TERMS.filter((term) => title.includes(term));
-  return hits.length ? `Title contains vague filler terms: ${hits.join(", ")}.` : "";
+  const hints: string[] = [];
+  const vagueHits = VAGUE_TITLE_TERMS.filter((term) => title.includes(term));
+  if (vagueHits.length) hints.push(`Title contains vague filler terms: ${vagueHits.join(", ")}.`);
+  const processHits = PROCESS_TITLE_TERMS.filter((term) => title.includes(term));
+  if (processHits.length) hints.push(`Title looks like agent process or status-check narration: ${processHits.join(", ")}.`);
+  return hints.join(" ");
 }
 
 async function runCleanupSidecar(
@@ -1200,22 +1377,28 @@ async function extractForSession(
   session: Session,
   observations: CompressedObservation[],
   mode: string,
-  opts: { allowLlm?: boolean } = {},
-): Promise<{ todos: ExtractedTodo[]; engine: "langextract" | "rules"; fallbackReason?: string; errorCode?: TodoExtractErrorCode }> {
+  options: ExtractForSessionOptions = {},
+): Promise<{ todos: ExtractedTodo[]; engine: "langextract" | "rules"; fallbackReason?: string }> {
   const { ruleObservations, llmObservations } = prefilterTodoObservations(session, observations);
-  const blocks = llmObservations.map(blockFor).filter((block) => block.text);
+  const llmSourceObservations = options.forceLlmContext && !llmObservations.length
+    ? observations.slice(0, MAX_LLM_OBSERVATIONS_PER_SESSION)
+    : llmObservations;
+  const blocks = llmSourceObservations.map(blockFor).filter((block) => block.text);
   const bucket = timeBucketFor(session);
   let fallbackReason = "";
-  if (mode !== "rules" && opts.allowLlm !== false && blocks.length > 0) {
+  if (mode !== "rules" && blocks.length > 0) {
     try {
-      const todos = await runLangExtractSidecar({
+      const run = options.runLangExtractSidecar || runLangExtractSidecar;
+      const input: Record<string, unknown> = {
         sessionId: session.id,
         project: session.project,
         cwd: session.cwd,
         startedAt: session.startedAt,
         endedAt: session.endedAt,
         blocks,
-      });
+      };
+      if (options.refreshAction) input.refreshAction = options.refreshAction;
+      const todos = await run(input);
       return { todos: todos.map((todo) => safeTodo(todo, session)), engine: "langextract" };
     } catch (err) {
       fallbackReason = err instanceof Error ? err.message : String(err || "langextract failed");
@@ -1227,14 +1410,255 @@ async function extractForSession(
     todos: candidates.map((candidate) => candidateToTodo(candidate, session, bucket)).filter((todo): todo is ExtractedTodo => !!todo),
     engine: "rules",
     ...(fallbackReason ? { fallbackReason } : {}),
-    ...(fallbackReason ? { errorCode: classifyExtractError(fallbackReason) } : {}),
+  };
+}
+
+function slimRecord(value: unknown, allowed: string[]): Record<string, unknown> | undefined {
+  if (!value || typeof value !== "object") return undefined;
+  const input = value as Record<string, unknown>;
+  const out: Record<string, unknown> = {};
+  for (const key of allowed) {
+    const raw = input[key];
+    if (typeof raw === "string") out[key] = raw.slice(0, 500);
+    else if (typeof raw === "number" || typeof raw === "boolean") out[key] = raw;
+  }
+  return Object.keys(out).length ? out : undefined;
+}
+
+function refreshActionPromptContext(action: Action): Record<string, unknown> {
+  const metadata = action.metadata || {};
+  return {
+    id: action.id,
+    title: action.title,
+    description: action.description,
+    status: action.status,
+    tags: action.tags,
+    sourceObservationIds: action.sourceObservationIds,
+    cleanup: slimRecord(metadata.cleanup, [
+      "decision",
+      "title",
+      "description",
+      "reason",
+      "previousTitle",
+      "previousDescription",
+      "previousStatus",
+    ]),
+    todoExtraction: slimRecord(metadata.todoExtraction, [
+      "title",
+      "description",
+      "confidence",
+      "timeBucket",
+      "typeBucket",
+      "dedupeKey",
+    ]),
+  };
+}
+
+function todoFromExistingActionEvidence(action: Action, session: Session): ExtractedTodo | null {
+  const extraction = action.metadata?.todoExtraction as Record<string, unknown> | undefined;
+  const evidence = extraction?.evidence as Record<string, unknown> | undefined;
+  const quote = normalizeText(typeof evidence?.quote === "string" ? evidence.quote : action.description);
+  const sourceObservationId =
+    normalizeText(typeof evidence?.sourceObservationId === "string" ? evidence.sourceObservationId : "") ||
+    action.sourceObservationIds.find((id) => typeof id === "string" && id.length > 0) ||
+    "";
+  if (!quote || !sourceObservationId) return null;
+  if (!hasTodoActionTrigger(`${action.title} ${action.description} ${quote}`)) return null;
+  if (looksIncompleteTitle(quote) && !/(?:\borigin\b|远程仓库|remote repository)/i.test(`${action.description} ${quote}`)) return null;
+  const typeBucket = TYPE_BUCKETS.has(extraction?.typeBucket) ? extraction!.typeBucket as TypeBucket : action.status === "active" ? "in_progress" : "pending";
+  return safeTodo({
+    title: action.title,
+    description: quote,
+    confidence: 0.86,
+    timeBucket: TIME_BUCKETS.has(extraction?.timeBucket) ? extraction!.timeBucket as TimeBucket : timeBucketFor(session),
+    typeBucket,
+    sourceSessionId: session.id,
+    evidence: {
+      sourceObservationId,
+      quote,
+    },
+    dedupeKey: normalizedKey(`${action.title}:${quote}`),
+  }, session);
+}
+
+export async function refreshTodoAction(
+  kv: Pick<StateKV, "get" | "set" | "list">,
+  data: TodoRefreshActionOptions = {},
+  deps: { runLangExtractSidecar?: LangExtractRunner } = {},
+): Promise<{
+  success: boolean;
+  action?: Action;
+  review?: ReviewQueueItem;
+  keptOld: boolean;
+  reason: string;
+  error?: string;
+  engine?: "langextract" | "rules";
+  scannedObservations: number;
+  fallbackReason?: string;
+}> {
+  const actionId = normalizeText(data.actionId);
+  if (!actionId) {
+    return { success: false, keptOld: true, reason: "missing-action-id", error: "actionId is required", scannedObservations: 0 };
+  }
+  const action = await kv.get<Action>(KV.actions, actionId).catch(() => null);
+  if (!action) {
+    return { success: false, keptOld: true, reason: "action-not-found", error: "action not found", scannedObservations: 0 };
+  }
+  if (!actionLooksGenerated(action)) {
+    return { success: false, keptOld: true, reason: "not-generated", error: "action is not a generated todo card", scannedObservations: 0 };
+  }
+  const extraction = action.metadata?.todoExtraction as Record<string, unknown> | undefined;
+  const evidence = extraction?.evidence as Record<string, unknown> | undefined;
+  const sourceSessionId = typeof extraction?.sourceSessionId === "string" ? extraction.sourceSessionId : "";
+  if (!sourceSessionId) {
+    return { success: false, keptOld: true, reason: "missing-source-session", error: "source session missing", scannedObservations: 0 };
+  }
+  const session = await kv.get<Session>(KV.sessions, sourceSessionId).catch(() => null);
+  if (!session) {
+    return { success: false, keptOld: true, reason: "source-session-not-found", error: "source session not found", scannedObservations: 0 };
+  }
+
+  const sourceObservationId =
+    (typeof evidence?.sourceObservationId === "string" && evidence.sourceObservationId) ||
+    action.sourceObservationIds.find((id) => typeof id === "string" && id.length > 0) ||
+    "";
+  const allObservations = await kv.list<CompressedObservation>(KV.observations(session.id)).catch(() => []);
+  const context = nearbyObservationContext(allObservations, sourceObservationId, 12);
+  const mode = (getEnvVar("AGENTMEMORY_TODO_EXTRACTOR") || "auto").toLowerCase();
+  const directThreshold = envNumber("AGENTMEMORY_TODO_DIRECT_CONFIDENCE", 0.82);
+  const { ruleObservations, llmObservations } = prefilterTodoObservations(session, context.observations);
+  const evidenceObservations = mode === "rules" ? ruleObservations : llmObservations.length ? llmObservations : context.observations;
+  const blockMap = new Map([...context.observations, ...evidenceObservations].map((obs) => [obs.id, blockFor(obs)]));
+  const scannedObservations = ruleObservations.length;
+  const [actions, reviews] = await Promise.all([
+    kv.list<Action>(KV.actions).catch(() => []),
+    kv.list<ReviewQueueItem>(KV.reviewQueue).catch(() => []),
+  ]);
+  const otherActions = actions.filter((item) => item.id !== action.id);
+  const existing = existingDedupeKeys(otherActions, reviews);
+  const seenTitles = existingActiveTitles(otherActions, reviews);
+
+  if (looksIncompleteTitle(action.title)) {
+    const fallbackTodo = todoFromExistingActionEvidence(action, session);
+    const todo = fallbackTodo ? todoForStorage(fallbackTodo) : null;
+    if (todo && validateTodoEvidence(todo, blockMap) && todo.timeBucket !== "history" && todo.typeBucket !== "done") {
+      const dedupeKey = todo.dedupeKey || normalizedKey(`${todo.title}:${todo.description}`);
+      const titleKey = normalizedKey(todo.title);
+      if (dedupeKey && !existing.has(dedupeKey) && !existing.has(titleKey) && !isNearDuplicateTitle(titleKey, seenTitles)) {
+        const now = new Date().toISOString();
+        const fresh = makeAction({ ...todo, dedupeKey }, session, now);
+        const replacement = replaceActionFromTodo(action, fresh, "rules", now);
+        await kv.set(KV.actions, action.id, replacement);
+        return {
+          success: true,
+          action: replacement,
+          keptOld: false,
+          reason: "replaced-from-existing-evidence",
+          engine: "rules",
+          scannedObservations,
+        };
+      }
+    }
+  }
+
+  const { todos, engine, fallbackReason } = await extractForSession(session, context.observations, mode, {
+    runLangExtractSidecar: deps.runLangExtractSidecar,
+    refreshAction: refreshActionPromptContext(action),
+    forceLlmContext: true,
+  });
+  if (mode !== "rules" && fallbackReason) {
+    return {
+      success: false,
+      keptOld: true,
+      reason: "llm-refresh-failed",
+      error: "LLM refresh failed",
+      engine,
+      scannedObservations,
+      fallbackReason,
+    };
+  }
+
+  const candidates: ExtractedTodo[] = [];
+  let usedExistingEvidenceFallback = false;
+  const rawTodos = [...todos];
+  if (!rawTodos.length) {
+    const fallbackTodo = todoFromExistingActionEvidence(action, session);
+    if (fallbackTodo) {
+      rawTodos.push(fallbackTodo);
+      usedExistingEvidenceFallback = true;
+    }
+  }
+  for (const rawTodo of rawTodos) {
+    const todo = todoForStorage(rawTodo);
+    if (!todo || !validateTodoEvidence(todo, blockMap)) continue;
+    if (todo.timeBucket === "history" || todo.typeBucket === "done") continue;
+    const dedupeKey = todo.dedupeKey || normalizedKey(`${todo.title}:${todo.description}`);
+    const titleKey = normalizedKey(todo.title);
+    if (!dedupeKey || existing.has(dedupeKey) || existing.has(titleKey) || isNearDuplicateTitle(titleKey, seenTitles)) continue;
+    candidates.push({ ...todo, dedupeKey });
+  }
+  candidates.sort((a, b) => effectiveTodoConfidence(b) - effectiveTodoConfidence(a));
+  const todo = candidates[0];
+  if (!todo) {
+    return {
+      success: true,
+      keptOld: true,
+      reason: firstInvalidTodoReason(rawTodos, blockMap),
+      engine,
+      scannedObservations,
+      ...(fallbackReason ? { fallbackReason } : {}),
+    };
+  }
+
+  const now = new Date().toISOString();
+  const effectiveConfidence = effectiveTodoConfidence(todo);
+  if (effectiveConfidence >= directThreshold) {
+    const fresh = makeAction(todo, session, now);
+    const replacement = replaceActionFromTodo(action, fresh, engine, now);
+    await kv.set(KV.actions, action.id, replacement);
+    return {
+      success: true,
+      action: replacement,
+      keptOld: false,
+      reason: usedExistingEvidenceFallback ? "replaced-from-existing-evidence" : "replaced",
+      engine: usedExistingEvidenceFallback ? "rules" : engine,
+      scannedObservations,
+      ...(fallbackReason ? { fallbackReason } : {}),
+    };
+  }
+
+  return {
+    success: true,
+    keptOld: true,
+    reason: "low-confidence",
+    engine,
+    scannedObservations,
+    ...(fallbackReason ? { fallbackReason } : {}),
   };
 }
 
 export async function generateTodosFromSessions(
   kv: Pick<StateKV, "get" | "set" | "list" | "delete">,
   data: TodoExtractOptions = {},
-): Promise<TodoExtractResult> {
+): Promise<{
+  success: true;
+  engine: "langextract" | "rules" | "mixed";
+  scannedSessions: number;
+  scannedObservations: number;
+  directCreated: number;
+  reviewCreated: number;
+  hiddenHistory: number;
+  discarded: number;
+  cleanedActions: number;
+  cleanedReviews: number;
+  completedActions: number;
+  completedReviews: number;
+  cleanupPreview?: { actions: CleanupPreviewItem[]; reviews: CleanupPreviewItem[] };
+  recheckMarked: number;
+  sourceScan?: { imported: number; skipped: number; errors: number };
+  llmFallback?: boolean;
+  fallbackReason?: string;
+}> {
   let sourceScan: { imported: number; skipped: number; errors: number } | undefined;
   if (data.scanSources !== false) {
     const scan = await scanCodexSource(kv as StateKV).catch(() => null);
@@ -1254,15 +1678,9 @@ export async function generateTodosFromSessions(
     DEFAULT_TODO_EXTRACT_MAX_INTERACTIONS,
     500,
   );
-  const maxLlmSessions = clampPositiveInt(
-    data.maxLlmSessions ?? getEnvVar("AGENTMEMORY_TODO_EXTRACT_MAX_LLM_SESSIONS"),
-    DEFAULT_TODO_EXTRACT_MAX_LLM_SESSIONS,
-    100,
-  );
   const sinceCutoffMs = Date.now() - sinceDays * 24 * 60 * 60 * 1000;
   const mode = (getEnvVar("AGENTMEMORY_TODO_EXTRACTOR") || "auto").toLowerCase();
   const directThreshold = envNumber("AGENTMEMORY_TODO_DIRECT_CONFIDENCE", 0.82);
-  const reviewThreshold = envNumber("AGENTMEMORY_TODO_REVIEW_CONFIDENCE", 0.55);
   const cleanupMode = data.cleanup === "apply" ? "apply" : data.cleanup === "dry-run" ? "dry-run" : null;
   const [actions, reviews, allSessions] = await Promise.all([
     kv.list<Action>(KV.actions).catch(() => []),
@@ -1288,8 +1706,8 @@ export async function generateTodosFromSessions(
   const sessions = allSessions
     .filter((session) => !data.project || session.project === data.project || session.cwd === data.project)
     // STEP-11: day-window is the primary scope control. Sessions with no/invalid
-    // timestamp are kept (never silently drop work); maxSessions only applies
-    // when a caller explicitly passes a positive cap.
+    // timestamp are kept (never silently drop work); maxSessions is the cap that
+    // still bounds a day with a flood of sessions.
     .filter((session) => {
       const raw = sessionSortTime(session);
       if (!raw) return true;
@@ -1303,22 +1721,14 @@ export async function generateTodosFromSessions(
   let reviewCreated = 0;
   let hiddenHistory = 0;
   let discarded = 0;
-  let processedSessions = 0;
-  let skippedUnchangedSessions = 0;
-  let llmSessionsAttempted = 0;
-  let llmSessionsSkipped = 0;
   const engines = new Set<"langextract" | "rules">();
   const fallbackReasons = new Set<string>();
-  const errorCodes = new Set<TodoExtractErrorCode>();
   const now = new Date().toISOString();
   const recheckMarked = await markChangedGeneratedActions(kv, new Map(allSessions.map((session) => [session.id, session])), now);
 
   for (const session of sessions) {
     const key = checkpointKey(session);
-    if (!data.force && processed[session.id] === key) {
-      skippedUnchangedSessions++;
-      continue;
-    }
+    if (!data.force && processed[session.id] === key) continue;
     const sortedObservations = (await kv.list<CompressedObservation>(KV.observations(session.id)).catch(() => []))
       .sort((a, b) => (a.timestamp || "").localeCompare(b.timestamp || ""));
     // STEP-11: keep only the most recent N interaction records, then apply the
@@ -1329,14 +1739,9 @@ export async function generateTodosFromSessions(
     scannedObservations += ruleObservations.length;
     const evidenceObservations = mode === "rules" ? ruleObservations : llmObservations.length ? llmObservations : ruleObservations;
     const blockMap = new Map(evidenceObservations.map((obs) => [obs.id, blockFor(obs)]));
-    const wantsLlm = mode !== "rules" && llmObservations.length > 0 && timeBucketFor(session) !== "history";
-    const allowLlm = !wantsLlm || llmSessionsAttempted < maxLlmSessions;
-    if (wantsLlm && allowLlm) llmSessionsAttempted++;
-    if (wantsLlm && !allowLlm) llmSessionsSkipped++;
-    const { todos, engine, fallbackReason, errorCode } = await extractForSession(session, ruleObservations, mode, { allowLlm });
+    const { todos, engine, fallbackReason } = await extractForSession(session, ruleObservations, mode);
     engines.add(engine);
     if (fallbackReason) fallbackReasons.add(fallbackReason.slice(0, 240));
-    if (errorCode) errorCodes.add(errorCode);
     for (const rawTodo of todos) {
       const todo = todoForStorage(rawTodo);
       if (!todo || !validateTodoEvidence(todo, blockMap)) {
@@ -1367,13 +1772,10 @@ export async function generateTodosFromSessions(
         hiddenHistory++;
         continue;
       }
-      if (todo.confidence >= directThreshold) {
+      const effectiveConfidence = effectiveTodoConfidence(todo);
+      if (effectiveConfidence >= directThreshold) {
         await kv.set(KV.actions, fingerprintId("act", `todo:${dedupeKey}`), makeAction({ ...todo, dedupeKey }, session, now));
         directCreated++;
-      } else if (todo.confidence >= reviewThreshold) {
-        const review = makeReview({ ...todo, dedupeKey }, session, now);
-        await kv.set(KV.reviewQueue, review.id, review);
-        reviewCreated++;
       } else {
         // Not persisted — seed nothing, so a discarded low-confidence todo can
         // never suppress a later genuine one (mirrors action-candidates).
@@ -1386,7 +1788,6 @@ export async function generateTodosFromSessions(
       seenTitles.push(titleKey);
     }
     processed[session.id] = key;
-    processedSessions++;
   }
 
   await kv.set(KV.scanCheckpoints, checkpointId, {
@@ -1399,8 +1800,6 @@ export async function generateTodosFromSessions(
     success: true,
     engine: engines.size > 1 ? "mixed" : Array.from(engines)[0] || "rules",
     scannedSessions: sessions.length,
-    processedSessions,
-    skippedUnchangedSessions,
     scannedObservations,
     directCreated,
     reviewCreated,
@@ -1411,122 +1810,20 @@ export async function generateTodosFromSessions(
     completedActions: cleanup.completedActions,
     completedReviews: cleanup.completedReviews,
     recheckMarked,
-    llmSessionBudget: maxLlmSessions,
-    llmSessionsAttempted,
-    llmSessionsSkipped,
     ...(data.cleanup === "dry-run" ? { cleanupPreview: cleanup.preview } : {}),
     ...(sourceScan ? { sourceScan } : {}),
     ...(fallbackReasons.size ? { llmFallback: true } : {}),
     ...(fallbackReasons.size ? { fallbackReason: Array.from(fallbackReasons)[0] } : {}),
-    ...(errorCodes.size ? { errorCode: Array.from(errorCodes)[0] } : {}),
   };
-}
-
-export function getTodoExtractJobStatus(): TodoExtractJob {
-  if (!currentTodoExtractJob) {
-    return {
-      success: true,
-      jobId: "",
-      status: "idle",
-      startedAt: "",
-    };
-  }
-  return { ...currentTodoExtractJob };
-}
-
-export async function startTodoExtractJob(
-  kv: Pick<StateKV, "get" | "set" | "list" | "delete">,
-  data: TodoExtractOptions = {},
-): Promise<TodoExtractJob> {
-  if (activeTodoExtractJob && currentTodoExtractJob?.status === "running") {
-    return { ...currentTodoExtractJob, success: true, inFlight: true };
-  }
-
-  const jobId = generateId("todo_extract");
-  const startedAt = new Date().toISOString();
-  currentTodoExtractJob = {
-    success: true,
-    jobId,
-    status: "running",
-    startedAt,
-    message: "running",
-    inFlight: true,
-  };
-
-  activeTodoExtractJob = generateTodosFromSessions(kv, data)
-    .then((result) => {
-      const finishedAt = new Date().toISOString();
-      const next: TodoExtractResult = {
-        ...result,
-        jobId,
-        status: "done",
-        startedAt,
-        finishedAt,
-      };
-      currentTodoExtractJob = {
-        success: true,
-        jobId,
-        status: "done",
-        startedAt,
-        finishedAt,
-        result: next,
-      };
-      return next;
-    })
-    .catch((err) => {
-      const message = err instanceof Error ? err.message : String(err || "todo extraction failed");
-      const errorCode = classifyExtractError(message);
-      currentTodoExtractJob = {
-        success: false,
-        jobId,
-        status: "error",
-        startedAt,
-        finishedAt: new Date().toISOString(),
-        errorCode,
-        errorMessage: message,
-      };
-      throw err;
-    })
-    .finally(() => {
-      activeTodoExtractJob = null;
-    });
-
-  return { ...currentTodoExtractJob, inFlight: false };
-}
-
-function isDuplicateTodoExtractJob(job: TodoExtractJob): boolean {
-  return job.inFlight === true;
-}
-
-export async function runTodoExtractJob(
-  kv: Pick<StateKV, "get" | "set" | "list" | "delete">,
-  data: TodoExtractOptions = {},
-): Promise<TodoExtractJob> {
-  const job = await startTodoExtractJob(kv, data);
-  if (isDuplicateTodoExtractJob(job) && job.status === "running") {
-    return job;
-  }
-  if (!activeTodoExtractJob) return getTodoExtractJobStatus();
-
-  try {
-    const result = await activeTodoExtractJob;
-    return {
-      ...result,
-      success: true,
-      jobId: result.jobId || job.jobId,
-      status: "done",
-      startedAt: result.startedAt || job.startedAt,
-      finishedAt: result.finishedAt,
-      result,
-    } as TodoExtractJob;
-  } catch {
-    return getTodoExtractJobStatus();
-  }
 }
 
 export function registerTodoExtractFunctions(sdk: ISdk, kv: StateKV): void {
-  sdk.registerFunction("mem::todo-extract-generate", async (data: TodoExtractOptions = {}) => runTodoExtractJob(kv, data));
-  sdk.registerFunction("mem::todo-extract-status", async () => getTodoExtractJobStatus());
+  sdk.registerFunction("mem::todo-extract-generate", async (data: TodoExtractOptions = {}) =>
+    generateTodosFromSessions(kv, data),
+  );
+  sdk.registerFunction("mem::todo-refresh-action", async (data: TodoRefreshActionOptions = {}) =>
+    refreshTodoAction(kv, data),
+  );
   sdk.registerFunction("mem::todo-update", async (data: TodoUpdateOptions = {}) =>
     updateChangedTodoCards(kv, data),
   );

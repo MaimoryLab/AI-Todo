@@ -72,7 +72,7 @@
       audit: { loaded: false, entries: [], opFilter: '' },
       activity: { loaded: false, observations: [], sessions: [], typeFilter: '', loadingPhase: '', warnings: [] },
       lessons: { loaded: false, items: [], search: '', skillSearch: '', skillRootFilter: 'all', mode: 'explicit', projects: [] },
-      actions: { loaded: false, items: [], reviewItems: [], frontier: [], statusFilter: '', search: '', doneExpanded: false, extractStatus: '', extractMessage: '', extractInFlight: false, extractJob: null, stale: false, config: null, configSaving: false, configDraft: {} },
+      actions: { loaded: false, items: [], reviewItems: [], frontier: [], statusFilter: '', search: '', doneExpanded: false, earlierOpenExpanded: false, olderBacklogExpanded: false, extractStatus: '', extractMessage: '', extractInFlight: false, cardRefreshInFlight: {}, cardRefreshNotice: '', stale: false, config: null, configSaving: false, configDraft: {} },
       inbox: { loaded: false, items: [], awaitingItems: [], answeredItems: [], dismissedItems: [], replyingId: null, pendingById: {}, briefingExpanded: false, answeredExpanded: false },
       crystals: { loaded: false, items: [], search: '', lessonMap: {} },
       profile: { loaded: false, projects: [], selectedProject: '', data: null },

@@ -41,6 +41,7 @@ describe("review action candidates", () => {
     registerActionsFunction(sdk as never, kv as never);
     registerActionCandidateFunctions(sdk as never, kv as never);
     sdk.registerFunction("mem::todo-extract-generate", async (payload) => ({ success: true, ...payload }));
+    sdk.registerFunction("mem::todo-refresh-action", async (payload) => ({ success: true, keptOld: false, reason: "replaced", scannedObservations: 1, ...payload }));
     sdk.registerFunction("api::session::start", async () => ({ success: true }));
     sdk.registerFunction("mem::observe", async () => ({ success: true }));
     sdk.registerFunction("mem::remember", async () => ({ success: true, memory: { id: "mem_1" } }));
@@ -103,7 +104,6 @@ describe("review action candidates", () => {
     const response = await sdk.trigger("api::todo-extract-generate", req({
       maxSessions: 3,
       maxObservationsPerSession: 20,
-      maxLlmSessions: 4,
       project: "agentmemory-lab",
       force: true,
       cleanup: "dry-run",
@@ -114,11 +114,44 @@ describe("review action candidates", () => {
       success: true,
       maxSessions: 3,
       maxObservationsPerSession: 20,
-      maxLlmSessions: 4,
       project: "agentmemory-lab",
       force: true,
       cleanup: "dry-run",
     });
+  });
+
+  it("refreshes a single todo action through a whitelisted API payload", async () => {
+    const response = await sdk.trigger("api::todo-refresh-action", req({
+      actionId: "act_1",
+      extra: "ignored",
+    })) as { status_code: number; body: Record<string, unknown> };
+
+    expect(response.status_code).toBe(200);
+    expect(response.body).toMatchObject({
+      success: true,
+      actionId: "act_1",
+      keptOld: false,
+      reason: "replaced",
+      scannedObservations: 1,
+    });
+    expect(response.body.extra).toBeUndefined();
+  });
+
+  it("validates single todo action refresh requests", async () => {
+    const missing = await sdk.trigger("api::todo-refresh-action", req({})) as { status_code: number; body: Record<string, unknown> };
+    expect(missing.status_code).toBe(400);
+    expect(missing.body).toMatchObject({ error: "actionId is required" });
+
+    sdk.registerFunction("mem::todo-refresh-action", async () => ({
+      success: false,
+      keptOld: true,
+      reason: "action-not-found",
+      error: "action not found",
+      scannedObservations: 0,
+    }));
+    const notFound = await sdk.trigger("api::todo-refresh-action", req({ actionId: "missing" })) as { status_code: number; body: Record<string, unknown> };
+    expect(notFound.status_code).toBe(404);
+    expect(notFound.body).toMatchObject({ error: "action not found" });
   });
 
   it("exposes todo extractor config without returning the API key", async () => {
@@ -126,7 +159,7 @@ describe("review action candidates", () => {
     const oldKey = process.env.LANGEXTRACT_API_KEY;
     process.env.LANGEXTRACT_MODEL = "deepseek/deepseek-v4-flash";
     process.env.LANGEXTRACT_API_KEY = "secret";
-    const response = await sdk.trigger("api::todo-extractor-config", req()) as { status_code: number; body: { success: boolean; config: Record<string, unknown>; envPath: string; restartRequired: boolean } };
+    const response = await sdk.trigger("api::todo-extractor-config", req()) as { status_code: number; body: { success: boolean; config: Record<string, unknown>; envPath: string } };
     if (oldModel === undefined) delete process.env.LANGEXTRACT_MODEL;
     else process.env.LANGEXTRACT_MODEL = oldModel;
     if (oldKey === undefined) delete process.env.LANGEXTRACT_API_KEY;
@@ -138,22 +171,6 @@ describe("review action candidates", () => {
     expect(response.body.config.LANGEXTRACT_MODEL).toBe("deepseek/deepseek-v4-flash");
     expect(response.body.config.LANGEXTRACT_API_KEY).toBeUndefined();
     expect(response.body.config.LANGEXTRACT_API_KEY_CONFIGURED).toBe(true);
-    expect(response.body.restartRequired).toBe(false);
-  });
-
-  it("exposes todo extraction job status through the API", async () => {
-    sdk.registerFunction("mem::todo-extract-status", async () => ({
-      success: true,
-      jobId: "job-1",
-      status: "running",
-      startedAt: "2026-06-24T03:00:00Z",
-      inFlight: true,
-    }));
-
-    const response = await sdk.trigger("api::todo-extract-status", req()) as { status_code: number; body: Record<string, unknown> };
-
-    expect(response.status_code).toBe(200);
-    expect(response.body).toMatchObject({ success: true, jobId: "job-1", status: "running", inFlight: true });
   });
 
   it("rejects invalid todo extraction limits through the API", async () => {

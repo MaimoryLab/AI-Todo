@@ -21,23 +21,47 @@ LEGACY_MODELS = {"pa/gpt-5.5"}
 
 PROMPT = textwrap.dedent(
     """\
-    Extract actionable todos from AI agent session text.
+    Extract mature, user-facing todo cards from AI agent session text.
+    When refreshAction metadata is provided, use it as advisory context about the
+    existing card. Prefer a clearer title/description suggested by cleanup
+    metadata only when the nearby source quote supports it.
     Extract only UNRESOLVED, actionable items: explicit next actions, follow-ups,
     failed validations, blocked work, and in-progress work that still needs doing.
     DO NOT extract completed work, results, status reports, confirmations, or
     narration of what was already done (e.g. "…已通过", "…都能显示", "确认…完成").
-    Ignore background summaries, generic facts, read-only tool traces, and
-    anything without a source quote.
+    Ignore background summaries, generic facts, read-only tool traces, transient
+    agent process narration, and anything without a source quote.
     Use exact source text as extraction_text. Put fields in attributes:
     title, description, confidence, timeBucket, typeBucket, dedupeKey.
-    title must be a CRISP, SPECIFIC action summary — a concrete verb + the
-    specific object (+ the concrete target/outcome when it adds signal), so each
-    card's title alone makes clear what THIS todo is. Keep it short, but do not
-    drop the object or constraint just to hit a character target. DO NOT pad
-    with vague filler such as
+    The generated card must read like a mature todo app item, not a transcript
+    snippet. title must be a CRISP, SCANNABLE user-facing action summary — a
+    concrete verb + the semantic object (+ the concrete target/outcome when it
+    adds signal), so the title alone makes clear what THIS todo is. Preserve the
+    source language unless the source itself mixes languages. Keep it short, but
+    do not drop the user-relevant object or constraint just to hit a character
+    target.
+    Precise technical identifiers must be preserved, but they should usually go
+    in description rather than the title when they are long: branch names,
+    commit hashes, file paths, URLs, session ids, package names, and raw repos.
+    Prefer title "推送当前工作分支到远程仓库" with description
+    "分支：codex/todo-cleanup-flash-model。" over title
+    "推送 codex/todo-cleanup-flash-model 分支到远程仓库".
+    A good title may contain tightly related steps when they serve one outcome,
+    e.g. "修正目录显示文字（去掉重复编号）并更新页码缓存后重渲染".
+    description must be one concise sentence about the remaining user-relevant
+    work; do not start with "I will / 我会 / 现在 / 接下来".
+    DO NOT pad with vague filler such as
     "全面了解 / 了解现状 / 梳理现状 / 获取信息 / 进行 / 处理" — name the actual thing
     (the repo, the file, the bug, the command's purpose), not the process of
     "understanding" it. Prefer "克隆 AI-Todo 仓库" over "克隆仓库并全面了解其状况".
+    Do NOT turn agent workflow/status chores into todos unless a durable user
+    outcome remains. Examples to skip: "做最后一次状态确认", "启动后做健康检查",
+    "确认工作区干净", "服务可用", "健康检查已完成", "重启后再测一次" when it is just
+    suggested procedure or stale troubleshooting, and "我会/接下来/现在确认…".
+    Negative example: source text "我会做最后一次状态确认，确保工作区干净、当前分支和 PR 链接明确。服务可用，健康检查已完成。"
+    should produce no todo.
+    If text might be useful but is ambiguous or process-like, set confidence
+    below the direct-create threshold (0.55-0.81) so it goes to human review.
     dedupeKey must be a short STABLE slug of the core action+object (e.g.
     clone-aitodo-repo, read-project-config), the SAME for two todos that are the
     same task regardless of wording, so reworded duplicates collapse.
@@ -45,6 +69,9 @@ PROMPT = textwrap.dedent(
     shell flags, logs, or truncated trace fragments as title. If the only source
     text is a tool log, command payload, path, or JSON object, do not extract a
     todo.
+    Never extract dangling/truncated titles such as
+    "准备推送分支 codex/todo-cleanup-flash-model 到"; if context cannot repair
+    them into a complete, supported action, produce no todo.
     Never extract tool-call echo lines (starting with ⏺ or containing Bash(/Shell(),
     service-status reports (e.g. "服务可用", "Viewer:"/"Health:" URL lists), or
     git-ref fragments — these are not todos.
@@ -119,6 +146,11 @@ def main() -> int:
         print(json.dumps({"todos": []}, ensure_ascii=False))
         return 0
 
+    refresh_action = payload.get("refreshAction")
+    if isinstance(refresh_action, dict):
+        refresh_json = json.dumps(refresh_action, ensure_ascii=False, sort_keys=True)
+        text = f"[refreshAction]\n{refresh_json}\n\n{text}"
+
     examples = [
         lx.data.ExampleData(
             text="[obs:obs_1]\n后续需要修复 CI 失败，并重新跑测试。",
@@ -167,6 +199,74 @@ def main() -> int:
                         "timeBucket": "current",
                         "typeBucket": "to_start",
                         "dedupeKey": "read-project-config",
+                    },
+                )
+            ],
+        ),
+        lx.data.ExampleData(
+            text="[obs:obs_4]\n下一步需要修复深色模式按钮对比度，避免主操作在暗色背景下不可读。",
+            extractions=[
+                lx.data.Extraction(
+                    extraction_class="todo",
+                    extraction_text="修复深色模式按钮对比度，避免主操作在暗色背景下不可读",
+                    attributes={
+                        "title": "修复深色模式按钮对比度",
+                        "description": "修复深色模式按钮对比度，避免主操作在暗色背景下不可读。",
+                        "confidence": 0.9,
+                        "timeBucket": "current",
+                        "typeBucket": "follow_up",
+                        "dedupeKey": "fix-dark-mode-button-contrast",
+                    },
+                )
+            ],
+        ),
+        lx.data.ExampleData(
+            text="[obs:obs_5]\n下一步需要推送 codex/todo-cleanup-flash-model 分支到远程仓库。",
+            extractions=[
+                lx.data.Extraction(
+                    extraction_class="todo",
+                    extraction_text="推送 codex/todo-cleanup-flash-model 分支到远程仓库",
+                    attributes={
+                        "title": "推送当前工作分支到远程仓库",
+                        "description": "推送当前工作分支到远程仓库。分支：codex/todo-cleanup-flash-model。",
+                        "confidence": 0.88,
+                        "timeBucket": "current",
+                        "typeBucket": "to_start",
+                        "dedupeKey": "push-current-branch",
+                    },
+                )
+            ],
+        ),
+        lx.data.ExampleData(
+            text="[obs:obs_7]\n下一步需要修正目录显示文字（去掉重复编号）并更新页码缓存后重渲染。",
+            extractions=[
+                lx.data.Extraction(
+                    extraction_class="todo",
+                    extraction_text="修正目录显示文字（去掉重复编号）并更新页码缓存后重渲染",
+                    attributes={
+                        "title": "修正目录显示文字（去掉重复编号）并更新页码缓存后重渲染",
+                        "description": "修正目录显示文字，去掉重复编号，并更新页码缓存后重渲染。",
+                        "confidence": 0.9,
+                        "timeBucket": "current",
+                        "typeBucket": "follow_up",
+                        "dedupeKey": "fix-toc-numbering-rerender",
+                    },
+                )
+            ],
+        ),
+        lx.data.ExampleData(
+            text="[obs:obs_6]\n建议处理顺序：2. 重启 Codex desktop app 后再测一次。",
+            extractions=[
+                lx.data.Extraction(
+                    extraction_class="todo",
+                    extraction_text="重启 Codex desktop app 后再测一次",
+                    attributes={
+                        "title": "验证重启后的 Codex desktop app",
+                        "description": "重启 Codex desktop app 后再验证问题是否仍存在。",
+                        "confidence": 0.65,
+                        "timeBucket": "recent",
+                        "typeBucket": "follow_up",
+                        "dedupeKey": "verify-codex-desktop-after-restart",
                     },
                 )
             ],
@@ -243,7 +343,15 @@ if __name__ == "__main__":
         assert params["use_schema_constraints"] is False
         params = extract_kwargs(DummyLx, "custom/openai-compatible-model", DummyConfig)
         assert params["use_schema_constraints"] is False
-        assert "CRISP, SPECIFIC" in PROMPT
+        assert "CRISP, SCANNABLE" in PROMPT
+        assert "codex/todo-cleanup-flash-model" in PROMPT
+        assert "推送当前工作分支到远程仓库" in PROMPT
+        assert "修正目录显示文字" in PROMPT
+        assert "mature todo app item" in PROMPT
+        assert "做最后一次状态确认" in PROMPT
+        assert "Negative example" in PROMPT
+        assert "refreshAction metadata" in PROMPT
+        assert "0.55-0.81" in PROMPT
         assert "dedupeKey must be a short STABLE slug" in PROMPT
         assert "克隆 AI-Todo 仓库" in PROMPT
         print("ok")

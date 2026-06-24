@@ -7,14 +7,13 @@
           apiGet('health'),
           apiGet('sessions'),
           apiGet('actions'),
-          apiGet('review?status=pending&kind=action&limit=200'),
           apiGet('inbox?status=awaiting&limit=50')
         ]);
         state.dashboard.health = baseResults[0];
         state.dashboard.sessions = ((baseResults[1] && baseResults[1].sessions) || []).filter(function(s) { return !isDemoSession(s); });
         state.dashboard.actions = ((baseResults[2] && baseResults[2].actions) || []).filter(isActionRenderable);
-        state.dashboard.actionReviews = ((baseResults[3] && baseResults[3].items) || []).filter(isActionReviewRenderable);
-        state.dashboard.inboxAwaiting = (baseResults[4] && baseResults[4].items) || [];
+        state.dashboard.actionReviews = [];
+        state.dashboard.inboxAwaiting = (baseResults[3] && baseResults[3].items) || [];
         if (showDebug) {
           var debugResults = await Promise.all([
             apiGet('memories?latest=true&limit=500'),
@@ -147,9 +146,13 @@
       var cb = h.circuitBreaker || null;
       var workers = snap.workers || [];
       var actions = (d.actions || []).filter(isActionRenderable);
-      var actionReviews = (d.actionReviews || []).filter(isActionReviewRenderable);
-      var awaitingReplies = (d.inboxAwaiting || []).filter(function(i) { return i && i.kind === 'question'; });
-      var followUps = actions.filter(function(a) { return a.status === 'pending' || a.status === 'blocked'; });
+      var openTodoCount = actions.filter(function(a) { return a.status === 'pending' || a.status === 'blocked' || a.status === 'active'; }).length;
+      var doneTodoCount = actions.filter(function(a) { return a.status === 'done'; }).length;
+      function todoSummary(openCount, doneCount) {
+        return I18N_LANG === 'zh'
+          ? openCount + ' 个 Todo · ' + doneCount + ' 个 Done'
+          : openCount + ' open · ' + doneCount + ' done';
+      }
 
       var html = '';
 
@@ -166,10 +169,7 @@
       html += '<div class="stats-grid">';
       var latestSessionTime = d.sessions.length ? shortDateTime(sessionRecordTime(d.sessions.slice().sort(function(a, b) { return (sessionRecordTime(b) || '').localeCompare(sessionRecordTime(a) || ''); })[0])) : t('dash.noRecord');
       html += '<div class="stat-card"><div class="label">' + t('dash.stat.sessions') + '</div><div class="value">' + d.sessions.length + '</div><div class="sub">' + t('dash.stat.recent') + ' ' + esc(latestSessionTime) + '</div></div>';
-      html += '<div class="stat-card"><div class="label">' + t('dash.stat.todos') + '</div><div class="value">' + actions.length + '</div><div class="sub"><a href="#actions">' + t('dash.stat.openWorkbench') + '</a></div></div>';
-      html += '<div class="stat-card"><div class="label">' + t('act.metric.waiting') + '</div><div class="value">' + awaitingReplies.length + '</div><div class="sub"><a href="#actions">' + t('dash.stat.replyQueue') + '</a></div></div>';
-      html += '<div class="stat-card"><div class="label">' + t('act.metric.review') + '</div><div class="value">' + actionReviews.length + '</div><div class="sub"><a href="#actions">' + t('dash.stat.actionCandidates') + '</a></div></div>';
-      html += '<div class="stat-card"><div class="label">' + t('act.metric.followUp') + '</div><div class="value">' + followUps.length + '</div><div class="sub"><a href="#actions">' + t('dash.stat.pendingActions') + '</a></div></div>';
+      html += '<div class="stat-card"><div class="label">' + t('dash.stat.todos') + '</div><div class="value">' + openTodoCount + '</div><div class="sub"><a href="#actions">' + esc(todoSummary(openTodoCount, doneTodoCount)) + '</a></div></div>';
       var lessonCount = (d.lessons || []).length;
       if (showDebug) {
         html += '<div class="stat-card"><div class="label">' + t('dash.stat.memories') + '</div><div class="value">' + d.memories.length + '</div><div class="sub">' + t('dash.stat.latestVersion') + '</div></div>';
@@ -480,4 +480,3 @@
         graphSim.raf = requestAnimationFrame(runSimulation);
       }
     }
-

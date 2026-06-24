@@ -225,6 +225,8 @@ async function waitFor(predicate: () => boolean, attempts = 20) {
 }
 
 describe("viewer session rendering", () => {
+  const daysAgo = (days: number) => new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+
   it("does not throw when dashboard sessions are missing ids", () => {
     const { sandbox, getElement } = loadViewerSandbox();
     sandbox.state.dashboard = {
@@ -245,9 +247,13 @@ describe("viewer session rendering", () => {
     const html = getElement("view-dashboard").innerHTML;
     expect(html).toContain("Unnamed session");
     expect(html).toContain("Todos");
-    expect(html).toContain("Awaiting reply");
-    expect(html).toContain("To confirm");
-    expect(html).toContain("To follow up");
+    expect(html).toContain("Todos");
+    expect(html).toContain("1 open · 0 done");
+    expect(html).not.toContain("Needs attention");
+    expect(html).not.toContain("reply ·");
+    expect(html).not.toContain("Reply queue");
+    expect(html).not.toContain("Action candidates");
+    expect(html).not.toContain("Pending actions");
     expect(html).not.toContain("Memories");
     expect(html).not.toContain("Lessons");
     expect(html).not.toContain("Graph nodes");
@@ -261,7 +267,6 @@ describe("viewer session rendering", () => {
       urls.push(url);
       if (url.includes("sessions")) return { ok: true, json: async () => ({ sessions: [] }) };
       if (url.includes("actions")) return { ok: true, json: async () => ({ actions: [] }) };
-      if (url.includes("review?status=pending&kind=action")) return { ok: true, json: async () => ({ items: [] }) };
       if (url.includes("inbox?status=awaiting")) return { ok: true, json: async () => ({ items: [] }) };
       return { ok: true, json: async () => ({}) };
     };
@@ -269,7 +274,7 @@ describe("viewer session rendering", () => {
     await sandbox.loadDashboard();
 
     expect(urls.some((url) => url.includes("actions"))).toBe(true);
-    expect(urls.some((url) => url.includes("review?status=pending&kind=action"))).toBe(true);
+    expect(urls.some((url) => url.includes("review?status=pending&kind=action"))).toBe(false);
     expect(urls.some((url) => url.includes("inbox?status=awaiting"))).toBe(true);
     expect(urls.some((url) => url.includes("memories?latest=true"))).toBe(false);
     expect(urls.some((url) => url.includes("graph/stats"))).toBe(false);
@@ -829,9 +834,6 @@ describe("viewer session rendering", () => {
         posts.push({ url, body: init?.body ? JSON.parse(init.body) : null });
         return { ok: true, json: async () => ({ success: true, directCreated: 1, reviewCreated: 0 }) };
       }
-      if (url.includes("review?status=pending")) {
-        return { ok: true, json: async () => ({ items: [] }) };
-      }
       if (url.includes("frontier")) {
         return { ok: true, json: async () => ({ frontier: [] }) };
       }
@@ -860,7 +862,7 @@ describe("viewer session rendering", () => {
     expect(urls.some((url) => url.includes("inbox?status=awaiting"))).toBe(true);
     expect(urls.some((url) => url.includes("inbox?status=answered"))).toBe(true);
     expect(urls.some((url) => url.includes("inbox?status=dismissed"))).toBe(true);
-    expect(urls.some((url) => url.includes("review?status=pending&kind=action"))).toBe(true);
+    expect(urls.some((url) => url.includes("review?status=pending&kind=action"))).toBe(false);
     expect(urls.some((url) => url.includes("todo-extract/generate"))).toBe(false);
     expect(urls.some((url) => url.includes("review/actions/generate"))).toBe(false);
     expect(posts).toHaveLength(0);
@@ -919,6 +921,37 @@ describe("viewer session rendering", () => {
     expect(posts).toHaveLength(1);
   });
 
+  it("does not show Updated when full card update scans no cards", async () => {
+    const { sandbox, getElement, dispatchDocumentClick } = loadViewerSandbox();
+    const posts: Array<{ url: string; body: unknown }> = [];
+    sandbox.fetch = async (input: unknown, init?: { body?: string }) => {
+      const url = String(input);
+      if (url.includes("todo/update")) {
+        posts.push({ url, body: init?.body ? JSON.parse(init.body) : null });
+        return { ok: true, json: async () => ({ engine: "llm", scanned: 0, kept: 0, dropped: 0, completed: 0, rewritten: 0, merged: 0, preview: [], decisions: [] }) };
+      }
+      if (url.includes("review?status=pending")) return { ok: true, json: async () => ({ items: [] }) };
+      if (url.includes("frontier")) return { ok: true, json: async () => ({ frontier: [] }) };
+      if (url.includes("actions")) return { ok: true, json: async () => ({ actions: [] }) };
+      return { ok: true, json: async () => ({}) };
+    };
+    sandbox.state.activeTab = "actions";
+    sandbox.state.actions = { loaded: true, items: [], frontier: [], statusFilter: "", search: "", reviewItems: [] };
+    sandbox.state.inbox = { loaded: true, items: [] };
+    sandbox.renderActions();
+
+    const target = Object.create(sandbox.Element.prototype);
+    target.getAttribute = (name: string) => name === "data-action" ? "update-cards" : null;
+    target.closest = (selector: string) => selector === "[data-action]" ? target : null;
+    dispatchDocumentClick(target);
+    await waitFor(() => sandbox.state.actions.cleanupMessage === "No cards need updating");
+
+    expect(posts).toHaveLength(1);
+    expect(sandbox.state.actions.cleanupStatus).toBe("idle");
+    expect(getElement("view-actions").innerHTML).toContain("Update");
+    expect(getElement("view-actions").innerHTML).not.toContain(">Updated</button>");
+  });
+
   it("marks actions stale instead of reloading them on websocket updates", () => {
     const { sandbox, getElement } = loadViewerSandbox();
     let loadCalls = 0;
@@ -929,7 +962,7 @@ describe("viewer session rendering", () => {
     sandbox.window.pageYOffset = 200;
     sandbox.state.actions = {
       loaded: true,
-      items: [{ id: "act-1", title: "Keep scroll", status: "pending" }],
+      items: [{ id: "act-1", title: "Keep scroll", status: "pending", updatedAt: daysAgo(1) }],
       frontier: [],
       statusFilter: "",
       search: "",
@@ -952,7 +985,7 @@ describe("viewer session rendering", () => {
     sandbox.window.pageYOffset = 0;
     sandbox.state.actions = {
       loaded: true,
-      items: [{ id: "act-1", title: "Keep scroll", status: "pending" }],
+      items: [{ id: "act-1", title: "Keep scroll", status: "pending", updatedAt: daysAgo(1) }],
       frontier: [],
       statusFilter: "",
       search: "",
@@ -1010,7 +1043,7 @@ describe("viewer session rendering", () => {
     sandbox.state.activeTab = "actions";
     sandbox.state.actions = {
       loaded: true,
-      items: [{ id: "act-1", title: "Finish me", status: "pending", tags: [] }],
+      items: [{ id: "act-1", title: "Finish me", status: "pending", tags: [], sourceObservationIds: ["obs_1"], updatedAt: daysAgo(1) }],
       frontier: [],
       statusFilter: "",
       search: "",
@@ -1020,6 +1053,11 @@ describe("viewer session rendering", () => {
     sandbox.renderActions();
     expect(getElement("view-actions").innerHTML).toContain("Complete");
     expect(getElement("view-actions").innerHTML).toContain("Archive");
+    expect(getElement("view-actions").innerHTML).toContain("btn-primary-sm");
+    expect(getElement("view-actions").innerHTML).toContain("action-source-link");
+    expect(getElement("view-actions").innerHTML).toContain("action-refresh-link");
+    expect(getElement("view-actions").innerHTML).toContain("action-archive-link");
+    expect(getElement("view-actions").innerHTML).toMatch(/action-source-link[\s\S]*action-refresh-link[\s\S]*action-archive-link[\s\S]*btn-primary-sm/);
     // STEP-13: the duplicate "Delete" button (also status=cancelled) was removed.
     expect(getElement("view-actions").innerHTML).not.toContain("Delete");
 
@@ -1036,6 +1074,144 @@ describe("viewer session rendering", () => {
 
     expect(posts[0].body).toMatchObject({ actionId: "act-1", status: "done" });
     expect(sandbox.state.actions.items[0].status).toBe("done");
+  });
+
+  it("refreshes one action card and replaces only that card", async () => {
+    const { sandbox, getElement, dispatchDocumentClick } = loadViewerSandbox();
+    const posts: Array<{ url: string; body: any }> = [];
+    sandbox.fetch = async (input: unknown, init?: { body?: string }) => {
+      const url = String(input);
+      if (url.includes("todo/action-refresh")) {
+        posts.push({ url, body: init?.body ? JSON.parse(init.body) : null });
+        return {
+          ok: true,
+          json: async () => ({
+            success: true,
+            keptOld: false,
+            reason: "replaced",
+            action: {
+              id: "act-1",
+              title: "Fresh single-card title",
+              description: "A cleaner executable card.",
+              status: "pending",
+              tags: [],
+              sourceObservationIds: ["obs_2"],
+              updatedAt: daysAgo(0),
+            },
+          }),
+        };
+      }
+      return { ok: true, json: async () => ({}) };
+    };
+    sandbox.state.activeTab = "actions";
+    sandbox.state.actions = {
+      loaded: true,
+      items: [
+        { id: "act-1", title: "Old card title", status: "pending", tags: [], sourceObservationIds: ["obs_1"], updatedAt: daysAgo(1) },
+        { id: "act-2", title: "Other card", status: "pending", tags: [], sourceObservationIds: ["obs_3"], updatedAt: daysAgo(1) },
+      ],
+      frontier: [],
+      statusFilter: "",
+      search: "",
+      reviewItems: [],
+    };
+    sandbox.state.inbox = { loaded: true, items: [] };
+    sandbox.renderActions();
+
+    const target = Object.create(sandbox.Element.prototype);
+    target.getAttribute = (name: string) => {
+      if (name === "data-action") return "refresh-action-card";
+      if (name === "data-action-id") return "act-1";
+      return null;
+    };
+    target.closest = (selector: string) => selector === "[data-action]" ? target : null;
+    dispatchDocumentClick(target);
+
+    expect(sandbox.state.actions.cardRefreshInFlight["act-1"]).toBe(true);
+    expect(getElement("view-actions").innerHTML).toContain("Updating...");
+    await waitFor(() => sandbox.state.actions.items[0].title === "Fresh single-card title");
+
+    expect(posts[0].body).toEqual({ actionId: "act-1" });
+    expect(sandbox.state.actions.items[0].description).toBe("A cleaner executable card.");
+    expect(sandbox.state.actions.items[1].title).toBe("Other card");
+    expect(sandbox.state.actions.cardRefreshInFlight["act-1"]).toBeFalsy();
+    expect(sandbox.state.actions.cardRefreshNotice).toBe("Updated from source");
+  });
+
+  it("keeps the old card when card refresh returns a non-replacing result", async () => {
+    const { sandbox, dispatchDocumentClick } = loadViewerSandbox();
+    sandbox.fetch = async (input: unknown) => {
+      const url = String(input);
+      if (url.includes("todo/action-refresh")) {
+        return { ok: true, json: async () => ({ success: true, keptOld: true, reason: "low-quality" }) };
+      }
+      if (url.includes("frontier")) return { ok: true, json: async () => ({ frontier: [] }) };
+      if (url.includes("actions")) return { ok: true, json: async () => ({ actions: sandbox.state.actions.items }) };
+      return { ok: true, json: async () => ({}) };
+    };
+    sandbox.state.activeTab = "actions";
+    sandbox.state.actions = {
+      loaded: true,
+      items: [{ id: "act-1", title: "Old card title", status: "pending", tags: [], sourceObservationIds: ["obs_1"], updatedAt: daysAgo(1) }],
+      frontier: [],
+      statusFilter: "",
+      search: "",
+      reviewItems: [],
+    };
+    sandbox.state.inbox = { loaded: true, items: [] };
+    sandbox.renderActions();
+
+    const target = Object.create(sandbox.Element.prototype);
+    target.getAttribute = (name: string) => {
+      if (name === "data-action") return "refresh-action-card";
+      if (name === "data-action-id") return "act-1";
+      return null;
+    };
+    target.closest = (selector: string) => selector === "[data-action]" ? target : null;
+    dispatchDocumentClick(target);
+    await waitFor(() => !sandbox.state.actions.cardRefreshInFlight["act-1"]);
+
+    expect(sandbox.state.actions.items[0].title).toBe("Old card title");
+    expect(sandbox.state.actions.reviewItems).toEqual([]);
+    expect(sandbox.state.actions.cardRefreshNotice).toBe("Candidate was too vague");
+  });
+
+  it("shows a specific card refresh reason when the old card is kept", async () => {
+    const { sandbox, dispatchDocumentClick } = loadViewerSandbox();
+    sandbox.fetch = async (input: unknown) => {
+      const url = String(input);
+      if (url.includes("todo/action-refresh")) {
+        return { ok: true, json: async () => ({ success: true, keptOld: true, reason: "incomplete-title" }) };
+      }
+      if (url.includes("review?status=pending")) return { ok: true, json: async () => ({ items: [] }) };
+      if (url.includes("frontier")) return { ok: true, json: async () => ({ frontier: [] }) };
+      if (url.includes("actions")) return { ok: true, json: async () => ({ actions: sandbox.state.actions.items }) };
+      return { ok: true, json: async () => ({}) };
+    };
+    sandbox.state.activeTab = "actions";
+    sandbox.state.actions = {
+      loaded: true,
+      items: [{ id: "act-1", title: "准备推送分支 codex/todo-cleanup-flash-model 到", status: "pending", tags: [], sourceObservationIds: ["obs_1"], updatedAt: daysAgo(1) }],
+      frontier: [],
+      statusFilter: "",
+      search: "",
+      reviewItems: [],
+    };
+    sandbox.state.inbox = { loaded: true, items: [] };
+    sandbox.renderActions();
+
+    const target = Object.create(sandbox.Element.prototype);
+    target.getAttribute = (name: string) => {
+      if (name === "data-action") return "refresh-action-card";
+      if (name === "data-action-id") return "act-1";
+      return null;
+    };
+    target.closest = (selector: string) => selector === "[data-action]" ? target : null;
+    dispatchDocumentClick(target);
+    await waitFor(() => sandbox.state.actions.cardRefreshNotice.length > 0);
+
+    expect(sandbox.state.actions.items[0].title).toBe("准备推送分支 codex/todo-cleanup-flash-model 到");
+    expect(sandbox.state.actions.cardRefreshNotice).toBe("Title is incomplete");
   });
 
   it("renders and saves todo extractor config from the global settings panel", async () => {
@@ -1075,10 +1251,10 @@ describe("viewer session rendering", () => {
     target.getAttribute = (name: string) => name === "data-action" ? "save-todo-config" : null;
     target.closest = (selector: string) => selector === "[data-action]" ? target : null;
     dispatchDocumentClick(target);
-    await waitFor(() => sandbox.state.actions.extractMessage === "Config saved. It applies to the next organize run.");
+    await waitFor(() => sandbox.state.actions.extractMessage === "Config saved. Restart the service to apply it.");
 
     expect(posts[0]).toMatchObject({ LANGEXTRACT_MODEL: "deepseek/deepseek-v4-flash", AGENTMEMORY_TODO_EXTRACT_TIMEOUT_MS: "120000", LANGEXTRACT_API_KEY: "secret" });
-    expect(sandbox.state.actions.extractMessage).toBe("Config saved. It applies to the next organize run.");
+    expect(sandbox.state.actions.extractMessage).toBe("Config saved. Restart the service to apply it.");
   });
 
   it("keeps unsaved todo extractor config while the settings panel rerenders", () => {
@@ -1157,12 +1333,15 @@ describe("viewer session rendering", () => {
     expect(html).toContain("missing key");
   });
 
-  it("filters actions from metric cards", () => {
+  it("filters actions from Todo and Done metric cards", () => {
     const { sandbox, getElement, dispatchDocumentClick } = loadViewerSandbox();
     sandbox.state.activeTab = "actions";
     sandbox.state.actions = {
       loaded: true,
-      items: [{ id: "act-1", title: "Doing", status: "active", tags: [] }],
+      items: [
+        { id: "act-1", title: "Doing", status: "active", tags: [] },
+        { id: "act-2", title: "Closed", status: "done", tags: [] },
+      ],
       frontier: [],
       statusFilter: "",
       search: "",
@@ -1170,18 +1349,21 @@ describe("viewer session rendering", () => {
     };
     sandbox.state.inbox = { loaded: true, items: [] };
     sandbox.renderActions();
-    expect(getElement("view-actions").innerHTML).toContain('data-status="active"');
+    expect(getElement("view-actions").innerHTML).toContain('data-status="todo"');
+    expect(getElement("view-actions").innerHTML).toContain('data-status="done"');
+    expect(getElement("view-actions").innerHTML).not.toContain('data-status="active"');
+    expect(getElement("view-actions").innerHTML).not.toContain('data-status="attention"');
 
     const target = Object.create(sandbox.Element.prototype);
     target.getAttribute = (name: string) => {
       if (name === "data-action") return "filter-actions-status";
-      if (name === "data-status") return "active";
+      if (name === "data-status") return "todo";
       return null;
     };
     target.closest = (selector: string) => selector === "[data-action]" ? target : null;
     dispatchDocumentClick(target);
 
-    expect(sandbox.state.actions.statusFilter).toBe("active");
+    expect(sandbox.state.actions.statusFilter).toBe("todo");
   });
 
   it("soft-refreshes actions while todo extraction is still running", async () => {
@@ -1212,30 +1394,7 @@ describe("viewer session rendering", () => {
     expect(sandbox.state.actions.items[0].title).toBe("整理首版功能文档");
   });
 
-  it("restores running todo extraction state after the actions view reloads", async () => {
-    const { sandbox } = loadViewerSandbox();
-    sandbox.fetch = async (input: unknown) => {
-      const url = String(input);
-      if (url.includes("todo-extract/status")) {
-        return { ok: true, json: async () => ({ success: true, jobId: "job-1", status: "running", startedAt: "2026-06-24T03:00:00Z", inFlight: true }) };
-      }
-      if (url.includes("review?status=pending")) return { ok: true, json: async () => ({ items: [] }) };
-      if (url.includes("frontier")) return { ok: true, json: async () => ({ frontier: [] }) };
-      if (url.includes("actions")) return { ok: true, json: async () => ({ actions: [] }) };
-      if (url.includes("inbox")) return { ok: true, json: async () => ({ items: [] }) };
-      return { ok: true, json: async () => ({}) };
-    };
-
-    sandbox.state.activeTab = "actions";
-    await sandbox.loadActions();
-    await waitFor(() => sandbox.state.actions.extractInFlight === true);
-
-    expect(sandbox.state.actions.extractInFlight).toBe(true);
-    expect(sandbox.state.actions.extractStatus).toBe("running");
-    expect(sandbox.state.actions.extractMessage).toBe("Still organizing from a previous request...");
-  });
-
-  it("renders the action classification metrics without a false waiting section when inbox is empty", () => {
+  it("renders only Todo and Done metrics and never shows awaiting as a todo class", () => {
     const { sandbox, getElement } = loadViewerSandbox();
     sandbox.state.activeTab = "actions";
     sandbox.state.actions = {
@@ -1249,7 +1408,17 @@ describe("viewer session rendering", () => {
     sandbox.state.inbox = { loaded: true, items: [] };
     sandbox.renderActions();
     const html = getElement("view-actions").innerHTML;
-    expect(html).toContain("Awaiting reply");
+    expect(html).toContain("Todo");
+    expect(html).toContain("Done");
+    expect(html).toContain("data-status=\"todo\"");
+    expect(html).toContain("data-status=\"done\"");
+    expect(html).not.toContain("Needs attention");
+    expect(html).not.toContain("In progress");
+    expect(html).not.toContain("Follow up");
+    expect(html).not.toContain("Reply");
+    expect(html).not.toContain("Confirm");
+    expect(html).not.toContain("to confirm");
+    expect(html).not.toContain("attention-chip-row");
     expect(html).toContain("No todos yet");
     expect(html).not.toContain("awaiting-reply-section");
     expect(html).not.toContain("No awaiting replies");
@@ -1262,10 +1431,162 @@ describe("viewer session rendering", () => {
     };
     sandbox.renderActions();
     const withQuestion = getElement("view-actions").innerHTML;
-    const idxAwaiting = withQuestion.indexOf("awaiting-reply-section");
-    const idxGroups = withQuestion.indexOf("action-group");
-    expect(idxAwaiting).toBeGreaterThan(-1);
-    expect(idxGroups === -1 || idxAwaiting < idxGroups).toBe(true);
+    expect(withQuestion).not.toContain("awaiting-reply-section");
+    expect(withQuestion).not.toContain("需要拍板");
+  });
+
+  it("keeps the default action view focused on recent open todos", () => {
+    const { sandbox, getElement } = loadViewerSandbox();
+    sandbox.state.activeTab = "actions";
+    sandbox.state.actions = {
+      loaded: true,
+      items: [
+        { id: "act_recent", title: "Current build check", status: "pending", priority: "normal", tags: [], updatedAt: daysAgo(1) },
+        { id: "act_earlier", title: "Earlier follow up", status: "pending", priority: "normal", tags: [], updatedAt: daysAgo(5) },
+        { id: "act_old", title: "Old migration reminder", status: "active", priority: "normal", tags: [], updatedAt: daysAgo(12) },
+      ],
+      frontier: [],
+      statusFilter: "",
+      search: "",
+      reviewItems: [{ id: "review-1", status: "pending", kind: "action", title: "Confirm launch", content: "Confirm this todo." }],
+    };
+    sandbox.state.inbox = { loaded: true, items: [] };
+
+    sandbox.renderActions();
+    const html = getElement("view-actions").innerHTML;
+
+    expect(html).not.toContain("action-focus-guide");
+    expect(html).not.toContain("Focus:");
+    expect(html).not.toContain("Confirm launch");
+    expect(html).toContain("Current build check");
+    expect(html).toContain("Earlier open items");
+    expect(html).toContain("Older backlog");
+    expect(html).not.toContain("Earlier follow up");
+    expect(html).not.toContain("Old migration reminder");
+  });
+
+  it("renders the Todo toolbar as search, Todo, Done, organize, update, refresh", () => {
+    const { sandbox, getElement } = loadViewerSandbox();
+    sandbox.state.activeTab = "actions";
+    sandbox.state.actions = {
+      loaded: true,
+      items: [
+        { id: "act-1", title: "Open item", status: "pending", tags: [] },
+        { id: "act-2", title: "Done item", status: "done", tags: [] },
+      ],
+      frontier: [],
+      statusFilter: "",
+      search: "",
+      reviewItems: [{ id: "review-1", status: "pending", kind: "action", title: "Confirm me", content: "Confirm this todo." }],
+    };
+    sandbox.state.inbox = { loaded: true, items: [] };
+
+    sandbox.renderActions();
+    const html = getElement("view-actions").innerHTML;
+    const searchIndex = html.indexOf('id="actions-search"');
+    const todoIndex = html.indexOf('data-status="todo"');
+    const doneIndex = html.indexOf('data-status="done"');
+    const extractIndex = html.indexOf('data-action="extract-actions"');
+    const updateIndex = html.indexOf('data-action="update-cards"');
+    const refreshIndex = html.indexOf('data-action="refresh-actions"');
+
+    expect([searchIndex, todoIndex, doneIndex, extractIndex, updateIndex, refreshIndex].every((i) => i >= 0)).toBe(true);
+    expect(searchIndex).toBeLessThan(todoIndex);
+    expect(todoIndex).toBeLessThan(doneIndex);
+    expect(doneIndex).toBeLessThan(extractIndex);
+    expect(extractIndex).toBeLessThan(updateIndex);
+    expect(updateIndex).toBeLessThan(refreshIndex);
+    expect(html).not.toContain("action-focus-guide");
+    expect(html).not.toContain("59 Todo · 0 Done");
+    expect(html).not.toContain("Confirm me");
+    expect(html).not.toContain("action-candidate-card");
+  });
+
+  it("uses source checkpoints instead of cleanup updatedAt for default backlog folding", () => {
+    const { sandbox, getElement } = loadViewerSandbox();
+    sandbox.state.activeTab = "actions";
+    sandbox.state.actions = {
+      loaded: true,
+      items: [
+        {
+          id: "act_old_source",
+          title: "Old source task rewritten today",
+          status: "pending",
+          priority: "normal",
+          tags: [],
+          createdAt: daysAgo(1),
+          updatedAt: daysAgo(0),
+          metadata: { todoExtraction: { sourceCheckpoint: `${daysAgo(12)}:1234` } },
+        },
+      ],
+      frontier: [],
+      statusFilter: "",
+      search: "",
+      reviewItems: [],
+    };
+    sandbox.state.inbox = { loaded: true, items: [] };
+
+    sandbox.renderActions();
+    const html = getElement("view-actions").innerHTML;
+
+    expect(html).toContain("Older backlog");
+    expect(html).not.toContain("Old source task rewritten today");
+  });
+
+  it("shows source age on stale backlog cards instead of cleanup updatedAt", () => {
+    const { sandbox, getElement } = loadViewerSandbox();
+    sandbox.state.activeTab = "actions";
+    sandbox.state.actions = {
+      loaded: true,
+      items: [
+        {
+          id: "act_old_source",
+          title: "Old source task rewritten today",
+          status: "pending",
+          priority: "normal",
+          tags: [],
+          createdAt: daysAgo(1),
+          updatedAt: daysAgo(0),
+          metadata: { todoExtraction: { sourceCheckpoint: `${daysAgo(12)}:1234` } },
+        },
+      ],
+      frontier: [],
+      statusFilter: "",
+      search: "",
+      reviewItems: [],
+      olderBacklogExpanded: true,
+    };
+    sandbox.state.inbox = { loaded: true, items: [] };
+
+    sandbox.renderActions();
+    const html = getElement("view-actions").innerHTML;
+
+    expect(html).toContain("Old source task rewritten today");
+    expect(html).toContain("12d ago");
+    expect(html).not.toContain("just now");
+  });
+
+  it("surfaces old open todos when search matches them", () => {
+    const { sandbox, getElement } = loadViewerSandbox();
+    sandbox.state.activeTab = "actions";
+    sandbox.state.actions = {
+      loaded: true,
+      items: [
+        { id: "act_recent", title: "Current build check", status: "pending", priority: "normal", tags: [], updatedAt: daysAgo(1) },
+        { id: "act_old", title: "Old migration reminder", status: "active", priority: "normal", tags: [], updatedAt: daysAgo(12) },
+      ],
+      frontier: [],
+      statusFilter: "",
+      search: "migration",
+      reviewItems: [],
+    };
+    sandbox.state.inbox = { loaded: true, items: [] };
+
+    sandbox.renderActions();
+    const html = getElement("view-actions").innerHTML;
+
+    expect(html).toContain("Old migration reminder");
+    expect(html).not.toContain("Older backlog");
   });
 
   it("calm action card shows title without classification tags (STEP-16)", () => {
@@ -1282,7 +1603,7 @@ describe("viewer session rendering", () => {
           priority: "normal",
           tags: ["todo-extracted", "time:current", "type:to_start"],
           sourceObservationIds: ["obs_1"],
-          updatedAt: "2026-06-17T10:00:00Z",
+          updatedAt: daysAgo(1),
         },
       ],
       frontier: [],
@@ -1352,7 +1673,7 @@ describe("viewer session rendering", () => {
     expect(html).not.toContain("limit 20");
   });
 
-  it("keeps review candidates out of the default action view", () => {
+  it("ignores review candidates in the Todo view", () => {
     const { sandbox, getElement } = loadViewerSandbox();
     sandbox.state.activeTab = "actions";
     sandbox.state.actions = {
@@ -1366,7 +1687,7 @@ describe("viewer session rendering", () => {
           priority: "normal",
           tags: ["todo-extracted", "time:current", "type:to_start"],
           sourceObservationIds: ["obs_1"],
-          updatedAt: "2026-06-17T10:00:00Z",
+          updatedAt: daysAgo(1),
         },
       ],
       frontier: [],
@@ -1399,19 +1720,21 @@ describe("viewer session rendering", () => {
     const html = getElement("view-actions").innerHTML;
 
     expect(html).toContain("整理验收截图");
-    expect(html).toContain("1 to confirm");
+    expect(html).not.toContain("修复待办候选展示");
     expect(html).not.toContain("action-candidate-card");
+    expect(html).not.toContain("Confirm");
+    expect(html).not.toContain("Ignore");
     expect(html).not.toContain("记忆总结卡片");
     expect(html).not.toContain("No todos yet");
   });
 
-  it("renders action reviews as compact decision cards while keeping tool pollution hidden", () => {
+  it("does not render action reviews as Todo decision cards", () => {
     const { sandbox, getElement } = loadViewerSandbox();
     sandbox.state.actions = {
       loaded: true,
       items: [],
       frontier: [],
-      statusFilter: "review",
+      statusFilter: "todo",
       search: "",
       reviewItems: [
         {
@@ -1465,12 +1788,15 @@ describe("viewer session rendering", () => {
     sandbox.renderActions();
     const html = getElement("view-actions").innerHTML;
 
-    expect(html).toContain("修复待办候选展示");
-    expect(html).toContain("action-candidate-card");
+    expect(html).not.toContain("修复待办候选展示");
+    expect(html).not.toContain("action-candidate-card");
     expect(html).not.toContain("记忆总结卡片");
-    expect(html).toContain("To confirm");
-    expect(html).toContain("Confirm");
-    expect(html).toContain("Ignore");
+    expect(html).toContain("Todo");
+    expect(html).not.toContain("To confirm");
+    expect(html).not.toContain("Needs confirmation");
+    expect(html).not.toContain("to confirm");
+    expect(html).not.toContain("Confirm");
+    expect(html).not.toContain("Ignore");
     expect(html).not.toContain("View original");
     expect(html).not.toContain("待办生成链路与前端展示修复计划");
     expect(html).not.toContain("## Summary");
@@ -1478,14 +1804,17 @@ describe("viewer session rendering", () => {
     expect(html).not.toContain(">action-candidate<");
   });
 
-  it("keeps action metric filters exclusive", () => {
+  it("folds former attention and active work into Todo without subfilters", () => {
     const { sandbox, getElement } = loadViewerSandbox();
     sandbox.state.activeTab = "actions";
     sandbox.state.actions = {
       loaded: true,
-      items: [{ id: "act-1", title: "Follow up", status: "pending", tags: [] }],
+      items: [
+        { id: "act-1", title: "Call project owner", status: "pending", tags: [] },
+        { id: "act-2", title: "Keep building", status: "active", tags: [] },
+      ],
       frontier: [],
-      statusFilter: "awaiting",
+      statusFilter: "todo",
       search: "",
       reviewItems: [{ id: "review-1", status: "pending", kind: "action", title: "Confirm me", content: "Confirm this todo." }],
     };
@@ -1493,25 +1822,31 @@ describe("viewer session rendering", () => {
 
     sandbox.renderActions();
     let html = getElement("view-actions").innerHTML;
-    expect(html).toContain("Need an answer?");
+    expect(html).toContain('<div class="action-overview-label">Todo</div><div class="action-overview-value">2</div>');
+    expect(html).toContain('data-status="todo"');
+    expect(html).not.toContain("attention-chip-row");
+    expect(html).not.toContain("Need an answer?");
+    expect(html).not.toContain("Confirm me");
+    expect(html).toContain("Call project owner");
+    expect(html).toContain("Keep building");
+    expect(html).not.toContain("Needs your reply");
+    expect(html).not.toContain("Needs confirmation");
+    expect(html).not.toContain("Needs follow-up");
+    expect(html).not.toContain("In progress");
     expect(html).not.toContain("Follow up");
-    expect(html).not.toContain("action-candidate-card");
 
     sandbox.state.actions.statusFilter = "review";
     sandbox.renderActions();
     html = getElement("view-actions").innerHTML;
-    expect(html).toContain("action-candidate-card");
-    expect(html).toContain('<div class="action-overview-label">To follow up</div><div class="action-overview-value">1</div>');
-    expect(html).toContain('<div class="action-overview-label">To confirm</div><div class="action-overview-value">1</div>');
-    expect(html).not.toContain("Need an answer?");
-    expect(html).not.toContain("Follow up");
+    expect(html).not.toContain("action-candidate-card");
+    expect(html).toContain("Call project owner");
+    expect(html).toContain("Keep building");
 
     sandbox.state.actions.statusFilter = "pending";
     sandbox.renderActions();
     html = getElement("view-actions").innerHTML;
-    expect(html).toContain("Follow up");
-    expect(html).not.toContain("Need an answer?");
-    expect(html).not.toContain("action-candidate-card");
+    expect(html).toContain("Call project owner");
+    expect(html).not.toContain("Confirm me");
   });
 
   it("does not load memory or lesson review candidates in the frontend", async () => {

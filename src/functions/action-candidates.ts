@@ -23,10 +23,13 @@ export interface ActionCandidateOptions {
 type BrowserTurn = { role?: string; text?: string };
 
 const READ_ONLY_TYPES = new Set(["file_read", "search", "web_fetch"]);
-const ACTION_VERB_PATTERN = "(修复|补充|实现|调整|验证|排查|定位|跟进|提交|创建|更新|移除|处理|合并|重试|重新(?:运行|跑))";
+const ACTION_VERB_PATTERN = "(修复|修正|补充|实现|调整|验证|排查|定位|跟进|整理|生成|上传|提交|创建|更新|移除|删除|处理|审查|合并|推送|构建|重试|重新(?:运行|跑))";
 const ENGLISH_ACTION_VERB = "(fix|add|update|create|remove|validate|retry|rerun|re-run|submit|handle|implement|investigate|debug|resolve)";
 const ENGLISH_FOLLOW_UP_PATTERN = new RegExp(`\\b(follow up|follow-up|need to|must)\\b.{0,80}\\b${ENGLISH_ACTION_VERB}\\b`, "i");
 const ACTION_DESCRIPTION_MAX_LENGTH = 180;
+const PROCESS_CHECK_PHRASES = /(?:做最后一次状态确认|最后一次状态确认|启动后做健康检查|做健康检查|健康检查已完成|确认工作区干净|确认当前分支|确认 PR 链接|服务可用|重启 Codex desktop app 后再测一次|重启 Codex desktop app 后再测|重启后再测一次|重启后再测)/i;
+const PROCESS_CHECK_REWRITEABLE = /(?:重启 Codex desktop app 后再测一次|重启 Codex desktop app 后再测|重启后再测一次|重启后再测)/i;
+const DURABLE_DELIVERABLE_TERMS = new RegExp(ACTION_VERB_PATTERN + `|\\b${ENGLISH_ACTION_VERB}\\b`, "i");
 
 function normalizeText(value: string | undefined): string {
   return String(value || "").replace(/\s+/g, " ").trim();
@@ -140,10 +143,18 @@ function cleanTitle(text: string): string {
   return (boundary > 0 ? head.slice(0, boundary) : head).join("").replace(/[，,；;：:\s]+$/u, "");
 }
 
+function stripActionPrefix(text: string): string {
+  return normalizeText(text)
+    .replace(/^(todo|fixme)\s*[:：-]\s*/i, "")
+    .replace(/^(下一步|后续|待办)\s*[:：-]?\s*/u, "")
+    .replace(/^(请|需要|必须)\s*/u, "")
+    .replace(/^(follow up|follow-up|fix)\s*[:：-]?\s*/i, "");
+}
+
 function titleFromText(text: string, fallback: string): string {
   const followUpMatch = text.match(new RegExp(`(?:下一步|后续)\\s*(?:请|需要|必须)?\\s*(${ACTION_VERB_PATTERN}[^。！？\\n]*)`, "u"))?.[1];
   const failureRepairMatch = text.match(new RegExp(`(?:验证未通过|验证失败|测试未通过|测试失败|command failed|exit code [1-9]\\d*|exited with code [1-9]\\d*)[，,。\\s]*(?:请|需要|必须)?\\s*(${ACTION_VERB_PATTERN}[^。！？\\n]*)`, "iu"))?.[1];
-  const explicit = text.match(/\b(?:TODO|FIXME)\b\s*[:：-]\s*([^。！？\n]+)/i)?.[1] ||
+  const explicit = text.match(/(?:^|[\s（(])(?:TODO|FIXME)\b\s*[:：-]\s*([^。！？\n]+)/i)?.[1] ||
     text.match(/待办\s*[:：-]\s*([^。！？\n]+)/u)?.[1] ||
     followUpMatch ||
     failureRepairMatch ||
@@ -171,10 +182,31 @@ function isStatusReport(text: string): boolean {
   return false;
 }
 
+function isProcessCheckText(text: string): boolean {
+  return PROCESS_CHECK_PHRASES.test(normalizeText(text));
+}
+
+function isRewriteableProcessCheck(text: string): boolean {
+  return PROCESS_CHECK_REWRITEABLE.test(normalizeText(text));
+}
+
+function isPureProcessCheck(text: string): boolean {
+  const normalized = normalizeText(text);
+  if (!normalized || !isProcessCheckText(normalized)) return false;
+  if (isRewriteableProcessCheck(normalized)) return false;
+  return !DURABLE_DELIVERABLE_TERMS.test(stripActionPrefix(normalized).replace(PROCESS_CHECK_PHRASES, ""));
+}
+
+function confidenceFor(reason: ActionCandidate["reason"], description: string): number {
+  if (isRewriteableProcessCheck(description)) return 0.56;
+  return reason === "follow_up" ? 0.62 : 0.72;
+}
+
 function sentenceReason(text: string): ActionCandidate["reason"] | null {
   if (isToolTrace(text) || isStatusReport(text)) return null;
+  if (isPureProcessCheck(text)) return null;
   if (/不应生成待办|不要生成待办|无需生成待办|不是待办|not an action|not a todo/i.test(text)) return null;
-  if (/\b(?:TODO|FIXME)\b\s*[:：-]\s*\S/i.test(text) || /待办\s*[:：-]\s*\S/u.test(text)) return "todo";
+  if (/(?:^|[\s（(])(?:TODO|FIXME)\b\s*[:：-]\s*\S/i.test(text) || /待办\s*[:：-]\s*\S/u.test(text)) return "todo";
   if (hasExplicitFollowUpAction(text)) return "follow_up";
   if (/\bblocked\b|未完成|被阻塞|阻塞/u.test(text)) return "blocked";
   if (hasExplicitFailureRepair(text)) return "validation_failed";
@@ -301,7 +333,7 @@ export function extractActionCandidatesFromObservations(
       source: "observation",
       sourceObservationIds: [obs.id],
       tags: tagsFor(reason),
-      confidence: reason === "follow_up" ? 0.62 : 0.72,
+      confidence: confidenceFor(reason, description),
       reason,
     });
   }
@@ -331,7 +363,7 @@ export function extractActionCandidatesFromTurns(
       source: "browser-review",
       sourceObservationIds: [],
       tags: tagsFor(reason),
-      confidence: reason === "follow_up" ? 0.62 : 0.72,
+      confidence: confidenceFor(reason, description),
       reason,
     });
   }

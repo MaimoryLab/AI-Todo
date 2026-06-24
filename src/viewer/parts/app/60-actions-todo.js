@@ -5,32 +5,27 @@
       var results = await Promise.all([
         apiGet('actions'),
         apiGet('frontier'),
-        apiGet('review?status=pending&kind=action&limit=200'),
         apiGet('inbox?status=awaiting&limit=50'),
         apiGet('inbox?status=answered&limit=50'),
         apiGet('inbox?status=dismissed&limit=50')
       ]);
       var explicitActions = (results[0] && results[0].actions) || [];
       var frontier = (results[1] && (results[1].frontier || results[1].actions)) || [];
-      var reviewItems = ((results[2] && results[2].items) || []).filter(function(item) {
-        return item && item.status === 'pending' && item.kind === 'action' && isActionReviewRenderable(item);
-      });
 
       state.actions.items = explicitActions;
-      state.actions.reviewItems = reviewItems;
+      state.actions.reviewItems = [];
       state.actions.frontier = frontier;
       state.actions.loaded = true;
       state.actions.stale = false;
-      state.inbox.awaitingItems = (results[3] && results[3].items) || [];
-      state.inbox.answeredItems = (results[4] && results[4].items) || [];
-      state.inbox.dismissedItems = (results[5] && results[5].items) || [];
+      state.inbox.awaitingItems = (results[2] && results[2].items) || [];
+      state.inbox.answeredItems = (results[3] && results[3].items) || [];
+      state.inbox.dismissedItems = (results[4] && results[4].items) || [];
       state.inbox.items = state.inbox.awaitingItems;
       state.inbox.loaded = true;
       renderActions();
       if (state.settings.open) {
         loadTodoExtractorConfig().then(renderSettingsPanel).catch(function() {});
       }
-      apiGet('todo-extract/status').then(syncTodoExtractJob).catch(function() {});
       if (opts.generate === true) startTodoExtraction(opts.force === true);
     }
 
@@ -57,54 +52,14 @@
       return !!result && (result.engine === 'langextract' || result.engine === 'mixed') && !result.llmFallback;
     }
 
-    function todoExtractionErrorMessage(result) {
-      var code = result && (result.errorCode || (result.result && result.result.errorCode));
-      if (code === 'provider_timeout') return t('act.extract.timeout');
-      if (code === 'config_error') return t('act.extract.configError');
-      if (code === 'provider_error' || code === 'llm_unavailable') return t('act.extract.providerError');
-      return t('act.extract.failedExisting');
-    }
-
-    function todoExtractionResultFromJob(job) {
-      if (!job) return null;
-      return job.result || (job.success === true && job.engine ? job : null);
-    }
-
-    function syncTodoExtractJob(job) {
-      if (!job || !job.status || job.status === 'idle') return job;
-      state.actions.extractJob = job;
-      if (job.status === 'running') {
-        state.actions.extractInFlight = true;
-        state.actions.extractStatus = 'running';
-        state.actions.extractMessage = t('act.extract.runningExisting');
-        if (state.activeTab === 'actions') renderActions();
-        return job;
-      }
-      state.actions.extractInFlight = false;
-      if (job.status === 'done') {
-        var result = todoExtractionResultFromJob(job);
-        state.actions.extractStatus = 'done';
-        state.actions.extractFallback = !todoExtractionUsedLlm(result);
-        state.actions.extractMessage = todoExtractionSummary(result);
-      } else if (job.status === 'error') {
-        state.actions.extractStatus = 'error';
-        state.actions.extractMessage = todoExtractionErrorMessage(job);
-      }
-      if (state.activeTab === 'actions') renderActions();
-      return job;
-    }
-
     function refreshActionListsAfterExtract() {
       return Promise.all([
         apiGet('actions'),
-        apiGet('frontier'),
-        apiGet('review?status=pending&kind=action&limit=200')
+        apiGet('frontier')
       ]).then(function(results) {
         state.actions.items = (results[0] && results[0].actions) || state.actions.items || [];
         state.actions.frontier = (results[1] && (results[1].frontier || results[1].actions)) || state.actions.frontier || [];
-        state.actions.reviewItems = ((results[2] && results[2].items) || []).filter(function(item) {
-          return item && item.status === 'pending' && item.kind === 'action' && isActionReviewRenderable(item);
-        });
+        state.actions.reviewItems = [];
         return null;
       });
     }
@@ -165,7 +120,6 @@
       html += '<input id="todo-config-LANGEXTRACT_BASE_URL" class="search-input" value="' + value('LANGEXTRACT_BASE_URL', 'https://api.novita.ai/openai/v1') + '" placeholder="https://api.novita.ai/openai/v1" />';
       html += '<input id="todo-config-LANGEXTRACT_THINKING_DEPTH" class="search-input" value="' + value('LANGEXTRACT_THINKING_DEPTH', 'medium') + '" placeholder="medium" />';
       html += '<input id="todo-config-AGENTMEMORY_TODO_EXTRACT_TIMEOUT_MS" class="search-input" value="' + value('AGENTMEMORY_TODO_EXTRACT_TIMEOUT_MS', '120000') + '" placeholder="120000" />';
-      html += '<div><div class="action-meta-text" style="margin-bottom:4px;">' + esc(t('settings.maxLlmSessions')) + '</div><input id="todo-config-AGENTMEMORY_TODO_EXTRACT_MAX_LLM_SESSIONS" class="search-input" type="number" min="1" value="' + value('AGENTMEMORY_TODO_EXTRACT_MAX_LLM_SESSIONS', '12') + '" placeholder="12" /></div>';
       html += '<div><div class="action-meta-text" style="margin-bottom:4px;">' + esc(t('settings.sinceDays')) + '</div><input id="todo-config-AGENTMEMORY_TODO_EXTRACT_SINCE_DAYS" class="search-input" type="number" min="1" value="' + value('AGENTMEMORY_TODO_EXTRACT_SINCE_DAYS', '7') + '" placeholder="7" /></div>';
       html += '<div><div class="action-meta-text" style="margin-bottom:4px;">' + esc(t('settings.maxInteractions')) + '</div><input id="todo-config-AGENTMEMORY_TODO_EXTRACT_MAX_INTERACTIONS_PER_SESSION" class="search-input" type="number" min="1" value="' + value('AGENTMEMORY_TODO_EXTRACT_MAX_INTERACTIONS_PER_SESSION', '10') + '" placeholder="10" /></div>';
       html += '<div><input id="todo-config-LANGEXTRACT_API_KEY" class="search-input" type="password" placeholder="' + esc(keyLabel) + '" />';
@@ -190,7 +144,6 @@
         'LANGEXTRACT_BASE_URL',
         'LANGEXTRACT_THINKING_DEPTH',
         'AGENTMEMORY_TODO_EXTRACT_TIMEOUT_MS',
-        'AGENTMEMORY_TODO_EXTRACT_MAX_LLM_SESSIONS',
         'AGENTMEMORY_TODO_EXTRACT_SINCE_DAYS',
         'AGENTMEMORY_TODO_EXTRACT_MAX_INTERACTIONS_PER_SESSION',
         'LANGEXTRACT_API_KEY'
@@ -211,7 +164,6 @@
         'LANGEXTRACT_BASE_URL',
         'LANGEXTRACT_THINKING_DEPTH',
         'AGENTMEMORY_TODO_EXTRACT_TIMEOUT_MS',
-        'AGENTMEMORY_TODO_EXTRACT_MAX_LLM_SESSIONS',
         'AGENTMEMORY_TODO_EXTRACT_SINCE_DAYS',
         'AGENTMEMORY_TODO_EXTRACT_MAX_INTERACTIONS_PER_SESSION',
         'LANGEXTRACT_API_KEY'
@@ -257,6 +209,47 @@
       });
     }
 
+    function cardRefreshKeptNotice(reason) {
+      var key = {
+        'incomplete-title': 'act.cardRefresh.kept.incompleteTitle',
+        'evidence-invalid': 'act.cardRefresh.kept.evidenceInvalid',
+        'low-quality': 'act.cardRefresh.kept.lowQuality',
+        'low-confidence': 'act.cardRefresh.kept.lowQuality',
+        'completed-or-history': 'act.cardRefresh.kept.completedOrHistory',
+        'polluted': 'act.cardRefresh.kept.polluted'
+      }[String(reason || '')];
+      return key ? t(key) : t('act.cardRefresh.kept');
+    }
+
+    function refreshActionCard(actionId) {
+      if (!actionId) return;
+      state.actions.cardRefreshInFlight = state.actions.cardRefreshInFlight || {};
+      if (state.actions.cardRefreshInFlight[actionId]) return;
+      state.actions.cardRefreshInFlight[actionId] = true;
+      state.actions.cardRefreshNotice = '';
+      renderActions();
+      apiPost('todo/action-refresh', { actionId: actionId }).then(function(res) {
+        if (!res || res.success === false) {
+          state.actions.cardRefreshNotice = t('act.cardRefresh.error');
+          return null;
+        }
+        if (res.action && res.action.id) {
+          state.actions.items = (state.actions.items || []).map(function(a) {
+            return a.id === res.action.id ? res.action : a;
+          });
+          state.actions.cardRefreshNotice = t('act.cardRefresh.done');
+          return null;
+        }
+        state.actions.cardRefreshNotice = cardRefreshKeptNotice(res.reason);
+        return null;
+      }).catch(function() {
+        state.actions.cardRefreshNotice = t('act.cardRefresh.error');
+      }).then(function() {
+        delete state.actions.cardRefreshInFlight[actionId];
+        renderActions();
+      });
+    }
+
     function startTodoExtraction(force) {
       if (state.actions.extractInFlight) return;
       state.actions.extractInFlight = true;
@@ -288,21 +281,13 @@
       // settings would never take effect on this primary extraction path.
       apiPost('todo-extract/generate', {
         force: force === true
-      }).then(function(job) {
-        var result = todoExtractionResultFromJob(job);
-        if (job && job.status === 'running') {
-          state.actions.extractJob = job;
-          state.actions.extractStatus = 'running';
-          state.actions.extractMessage = t('act.extract.runningExisting');
-          return refreshActionListsAfterExtract();
-        }
+      }).then(function(result) {
         var delta = todoExtractionDelta(result);
         if (!result || result.success !== true) {
           state.actions.extractStatus = 'error';
-          state.actions.extractMessage = todoExtractionErrorMessage(job || result);
+          state.actions.extractMessage = t('act.extract.failedExisting');
           return null;
         }
-        state.actions.extractJob = job;
         state.actions.extractStatus = 'done';
         state.actions.extractFallback = !todoExtractionUsedLlm(result);
         state.actions.extractMessage = todoExtractionSummary(result);
@@ -316,9 +301,7 @@
         state.actions.extractMessage = t('act.extract.failedExisting');
       }).then(function() {
         clearTimeout(softRefreshTimer);
-        if (!state.actions.extractJob || state.actions.extractJob.status !== 'running') {
-          state.actions.extractInFlight = false;
-        }
+        state.actions.extractInFlight = false;
         if (state.activeTab === 'actions' && !actionsScrolledAway()) {
           renderActions();
         } else if (state.activeTab !== 'actions') {
@@ -380,8 +363,8 @@
             return;
           }
           // Nothing changed at all.
-          state.actions.cleanupStatus = 'done';
-          state.actions.cleanupMessage = t('act.cleanup.clean');
+          state.actions.cleanupStatus = 'idle';
+          state.actions.cleanupMessage = t('act.cleanup.none');
           if (state.activeTab === 'actions') renderActions();
           return;
         }
@@ -626,7 +609,7 @@
       if (!questions.length) return '';
       var html = '<section class="card memory-section awaiting-reply-section" style="padding:14px 16px;margin-bottom:14px;background:#ffffff;">';
       html += '<div class="memory-section-head"><div>';
-      html += '<div class="memory-section-title"><span class="awaiting-dot" aria-hidden="true"></span>待回应 (' + questions.length + ')</div>';
+      html += '<div class="memory-section-title"><span class="awaiting-dot" aria-hidden="true"></span>' + t('act.section.awaiting') + ' (' + questions.length + ')</div>';
       html += '<div class="memory-summary-sub" style="margin-top:3px;">Agent 运行中抛给你的、时间敏感的问题会汇集到这里。</div>';
       html += '</div><span class="badge badge-muted">Agent 在等你回</span></div>';
       html += '<div class="inbox-card-list">';
@@ -687,57 +670,6 @@
       html += '</section>';
       return html;
     }
-    function renderAwaitingReplySection() {
-      var search = (state.actions.search || '').toLowerCase();
-      var items = filterInboxItems(sortInboxItems(inboxAwaiting()), search);
-      var questions = items.filter(function(i) { return i && i.kind === 'question'; });
-      var briefings = items.filter(function(i) { return i && i.kind === 'briefing'; });
-
-      // 搜索时无命中:整区不渲染,避免空壳占位干扰搜索结果。
-      if (search && !items.length) return '';
-
-      var html = '<section class="card memory-section awaiting-reply-section" style="padding:14px 16px;margin-bottom:14px;background:#ffffff;">';
-      html += '<div class="memory-section-head"><div>';
-      html += '<div class="memory-section-title"><span class="awaiting-dot" aria-hidden="true"></span>待回应';
-      if (questions.length) html += ' (' + questions.length + ')';
-      html += '</div>';
-      html += '<div class="memory-summary-sub" style="margin-top:3px;">Agent 运行中抛给你的、时间敏感的问题会汇集到这里。</div>';
-      html += '</div>';
-      if (questions.length) html += '<span class="badge badge-muted">Agent 在等你回</span>';
-      html += '</div>';
-
-      if (!items.length) {
-        html += '<div class="awaiting-reply-empty">';
-        html += '<div class="awaiting-reply-empty-title">暂无待回应</div>';
-        html += '<div class="awaiting-reply-empty-lead">Agent 在会话中抛给你、在等你回的问题会出现在这里。目前没有待回应的条目。</div>';
-        html += '</div>';
-        html += '</section>';
-        return html;
-      }
-
-      if (questions.length) {
-        html += '<div class="inbox-card-list">';
-        questions.forEach(function(it) { html += renderInboxCard(it, 'question'); });
-        html += '</div>';
-      }
-      if (briefings.length) {
-        // briefing 知悉即可、优先级低,默认折叠以缩短首屏、让 question 不被压下去。
-        // 搜索命中时强制展开(否则命中的 briefing 藏在折叠里看不到)。
-        var bExpanded = !!state.inbox.briefingExpanded || !!search;
-        html += '<button type="button" class="inbox-subhead inbox-subhead-toggle" data-action="toggle-briefings" aria-expanded="' + (bExpanded ? 'true' : 'false') + '">';
-        html += '<span class="inbox-subhead-marker" aria-hidden="true">📋</span>Agent 整理 (' + briefings.length + ')<span class="inbox-subhead-note">知悉即可</span>';
-        html += '<span class="inbox-subhead-caret">' + (bExpanded ? '▾' : '▸') + '</span>';
-        html += '</button>';
-        if (bExpanded) {
-          html += '<div class="inbox-card-list">';
-          briefings.forEach(function(it) { html += renderInboxCard(it, 'briefing'); });
-          html += '</div>';
-        }
-      }
-      html += '</section>';
-      return html;
-    }
-
     // STEP-C3 收件箱动作。每个动作改后端状态后,从 state.inbox.items 本地剔除该项 +
     // 重渲染(乐观更新),避免全量 loadActions 抖动;失败用 flashHint 提示。
     function removeInboxItemLocal(id) {
@@ -848,7 +780,7 @@
       }
     }
 
-    // STEP-C4「已完成」折叠区:只读现有 action.status==='done' 且当天 updatedAt 的项,
+    // STEP-C4 Done 折叠区:只读现有 action.status==='done' 且当天 updatedAt 的项,
     // 默认折叠(§3.2)。不新增抽取器、不动后端,纯前端筛 state.actions.items。
     function isUpdatedToday(ts) {
       if (!ts) return false;
@@ -865,7 +797,7 @@
       var expanded = !!state.actions.doneExpanded;
       var html = '<section class="action-group done-today-section">';
       html += '<button type="button" class="action-group-head done-today-head" data-action="toggle-done-today" aria-expanded="' + (expanded ? 'true' : 'false') + '">';
-      html += '<div class="action-group-title">🟢 已完成 <span class="done-today-sub">今天完成了 ' + today.length + ' 件</span></div>';
+      html += '<div class="action-group-title">' + esc(t('act.metric.done')) + ' <span class="done-today-sub">' + today.length + ' ' + esc(t('act.itemsUnit')) + '</span></div>';
       html += '<span class="done-today-caret">' + (expanded ? '▾' : '▸') + '</span>';
       html += '</button>';
       if (expanded && typeof cardRenderer === 'function') {
@@ -882,36 +814,29 @@
     function renderActions() {
       var el = document.getElementById('view-actions');
       var items = (state.actions.items || []).filter(isActionRenderable).slice();
-      var reviewItems = (state.actions.reviewItems || []).filter(isActionReviewRenderable);
+      state.actions.reviewItems = [];
       var search = state.actions.search.toLowerCase();
       var statusFilter = state.actions.statusFilter === 'all' ? '' : state.actions.statusFilter;
+      if (['attention', 'awaiting', 'review', 'pending', 'blocked', 'active'].indexOf(statusFilter) >= 0) statusFilter = 'todo';
+      var defaultView = !statusFilter && !search;
+      var FOCUS_DAYS = 3;
+      var STALE_DAYS = 10;
+      var todoFilterActive = statusFilter === 'todo';
       var frontierIds = new Set((state.actions.frontier || []).map(function(a) { return a.id; }));
 
       if (search) {
         items = items.filter(function(a) {
           return (a.title + ' ' + (a.description || '') + ' ' + (a.tags || []).join(' ') + ' ' + (a.project || '')).toLowerCase().indexOf(search) >= 0;
         });
-        reviewItems = reviewItems.filter(function(item) {
-          return ((item.title || '') + ' ' + (item.content || '') + ' ' + (reviewProject(item) || '') + ' ' + reviewTags(item).join(' ')).toLowerCase().indexOf(search) >= 0;
-        });
       }
       var metricItems = items.slice();
-      var metricReviewItems = reviewItems.slice();
-      if (statusFilter && statusFilter !== 'review' && statusFilter !== 'awaiting') {
-        // STEP-13: the "待跟进 / Follow-up" metric card counts pending + blocked
-        // and filters with data-status="pending", so the pending filter must show
-        // blocked too — otherwise its count and its results disagree.
+      if (statusFilter) {
         items = items.filter(function(a) {
-          return statusFilter === 'pending' ? (a.status === 'pending' || a.status === 'blocked') : a.status === statusFilter;
+          return statusFilter === 'todo'
+            ? (a.status === 'pending' || a.status === 'blocked' || a.status === 'active')
+            : a.status === statusFilter;
         });
       }
-      if (statusFilter === 'review' || statusFilter === 'awaiting') {
-        items = [];
-      }
-      var showReviewItems = statusFilter === 'review';
-      var showAwaitingItems = !statusFilter || statusFilter === 'awaiting';
-      var showBriefingItems = !statusFilter;
-
       function actionAttentionKey(a, isFrontier) {
         if (a.status === 'done' || a.status === 'cancelled') return '';
         if (isFrontier) return 'next';
@@ -922,6 +847,7 @@
       function actionDescriptionText(text) {
         var s = String(text || '').trim();
         if (!s) return '';
+        s = todoDisplayText(s);
         if (I18N_LANG !== 'zh') return s;
         var map = [
           [/^Execute launch promotion for GitHub, Xiaohongshu, V2EX, Reddit, X, and other target communities\..*$/i, '继续推进 GitHub、小红书、V2EX、Reddit 和 X 等渠道的发布推广。'],
@@ -938,6 +864,11 @@
           if (map[i][0].test(s)) return s.replace(map[i][0], map[i][1]);
         }
         return s;
+      }
+      function todoDisplayText(text) {
+        return String(text || '')
+          .replace(/Needs attention|Needs your reply|Needs confirmation|Needs follow-up|In progress|Follow up|To confirm|Reply queue|Reply/gi, 'Todo')
+          .replace(/需处理|需要你回应|需要确认|需要跟进|进行中|待跟进|待确认|待回应|待回复队列|回应/g, 'Todo');
       }
       function actionSourceText(a) {
         var parts = [];
@@ -961,6 +892,7 @@
       }
       function actionTitleText(text) {
         var s = String(text || t('act.untitled')).trim();
+        s = todoDisplayText(s);
         if (I18N_LANG !== 'zh') return s;
         var map = [
           [/^Create README 30s demo GIF and backup MP4 for taught-master-applications-skill$/i, '制作留学申请 Skill 的 README 演示视频'],
@@ -1020,50 +952,64 @@
           .replace(/\s+/g, ' ')
           .trim();
       }
-      function candidatePreviewText(item) {
-        var title = compactActionTitle(item && item.title);
-        var content = String((item && item.content) || '').trim();
-        if (!content) return '';
-        var isStructured = isMarkdownPlanText(content);
-        var cleaned = isStructured ? stripMarkdownPlanText(content) : content;
-        if (isStructured) {
-          var sentence = (cleaned.match(/(?:TODO|FIXME|下一步|后续|待办|修复|补充|实现|调整|验证|提交|创建|更新|移除|处理)[^。！？\n]{4,80}[。！？]?/u) || [])[0];
-          cleaned = sentence || '';
-        }
-        cleaned = cleaned
-          .replace(/^(TODO|FIXME)\s*[:：-]\s*/i, '')
-          .replace(/^(下一步|后续|待办)\s*[:：-]?\s*/u, '')
-          .replace(/^(请|需要|必须)\s*/u, '')
-          .replace(/\s+/g, ' ')
-          .trim();
-        if (!cleaned || cleaned === title || cleaned.indexOf(title) === 0) return '';
-        return truncate(actionDescriptionText(cleaned), 96);
-      }
-      function actionMetricCards(counts, reviewCount, waitingCount) {
+      function actionMetricCards(counts) {
+        var todoCount = counts.pending + counts.blocked + counts.active;
         var metrics = [
-          { label: t('act.metric.waiting'), value: waitingCount, filter: 'awaiting', primary: waitingCount > 0 },
-          { label: t('act.metric.review'), value: reviewCount, filter: 'review', primary: waitingCount === 0 && reviewCount > 0 },
-          { label: t('act.metric.followUp'), value: counts.pending + counts.blocked, filter: 'pending', primary: waitingCount === 0 && reviewCount === 0 && (counts.pending + counts.blocked) > 0 },
-          { label: t('act.metric.active'), value: counts.active, filter: 'active', primary: false },
+          { label: t('act.metric.todo'), value: todoCount, filter: 'todo', primary: todoCount > 0 },
           { label: t('act.metric.done'), value: counts.done, filter: 'done', primary: false }
         ];
         var html = '<div class="action-overview">';
         metrics.forEach(function(m) {
-          var active = (state.actions.statusFilter || '') === m.filter;
+          var current = state.actions.statusFilter || '';
+          if (['attention', 'awaiting', 'review', 'pending', 'blocked', 'active'].indexOf(current) >= 0) current = 'todo';
+          var active = current === m.filter;
           html += '<button class="action-overview-card' + (m.primary ? ' primary' : '') + (active ? ' active' : '') + '" data-action="filter-actions-status" data-status="' + esc(m.filter) + '" type="button"><div class="action-overview-label">' + esc(m.label) + '</div><div class="action-overview-value">' + m.value + '</div></button>';
         });
         html += '</div>';
         return html;
       }
+      function actionNeedsRecheck(a) {
+        var tags = Array.isArray(a && a.tags) ? a.tags : [];
+        return tags.indexOf('todo-recheck') >= 0;
+      }
+      function normalizeActionTimestamp(value) {
+        var raw = String(value || '').trim();
+        if (!raw) return '';
+        var m = raw.match(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z/);
+        return m ? m[0] : raw;
+      }
+      function actionTimestamp(a) {
+        var extraction = (a && a.metadata && a.metadata.todoExtraction) || {};
+        if (actionNeedsRecheck(a) && extraction.latestSourceCheckpoint) {
+          return normalizeActionTimestamp(extraction.latestSourceCheckpoint);
+        }
+        return normalizeActionTimestamp(extraction.sourceCheckpoint || (a && (a.createdAt || a.updatedAt)) || '');
+      }
+      function actionAgeDays(a) {
+        var ts = actionTimestamp(a);
+        if (!ts) return 0;
+        var ms = new Date(ts).getTime();
+        if (!isFinite(ms)) return 0;
+        return Math.max(0, (Date.now() - ms) / 86400000);
+      }
+      function isOpenAction(a) {
+        return a && (a.status === 'active' || a.status === 'blocked' || a.status === 'pending');
+      }
+      function splitDefaultOpenItems(list) {
+        var split = { focus: [], earlier: [], older: [] };
+        (list || []).forEach(function(a) {
+          if (!isOpenAction(a)) return;
+          var age = actionAgeDays(a);
+          if (age <= FOCUS_DAYS || (actionNeedsRecheck(a) && age <= STALE_DAYS)) split.focus.push(a);
+          else if (age > STALE_DAYS) split.older.push(a);
+          else split.earlier.push(a);
+        });
+        return split;
+      }
       function renderActionFilters() {
-        // STEP-13: the status-filter chip row duplicated the metric overview
-        // cards below (actionMetricCards) — same state.actions.statusFilter, same
-        // values (pending/review/active/done). Keep the metric cards (they carry
-        // counts) as the single status filter; this row keeps only search + the
-        // action buttons.
         var html = '<div class="actions-filter-row">';
         html += '<input id="actions-search" class="search-input" type="text" placeholder="' + esc(t('act.searchPlaceholder')) + '" value="' + esc(state.actions.search) + '" style="flex:1;min-width:200px" />';
-        html += '<span style="font-size:12px;color:var(--ink-faint);align-self:center;">' + metricReviewItems.length + ' ' + t('act.nToConfirm') + ' · ' + metricItems.length + ' ' + t('act.nConfirmed') + '</span>';
+        html += actionMetricCards(statusCounts);
         var extractTitle = state.actions.extractMessage || t('act.extract.title');
         var extractLabel = t('act.extract.run');
         if (state.actions.extractInFlight) extractLabel = t('act.extract.running');
@@ -1079,30 +1025,6 @@
         html += '</div>';
         return html;
       }
-      function renderActionCandidateCard(item) {
-        var priority = reviewActionPriority(item);
-        var project = reviewProject(item);
-        var title = compactActionTitle(item.title || t('act.untitledCandidate'));
-        var preview = candidatePreviewText(item);
-        var raw = String(item.content || '').trim();
-        var showOriginal = raw && isMarkdownPlanText(raw);
-        var html = '<article class="action-item-card action-candidate-card">';
-        html += '<div class="action-priority-rail ' + priorityClass(priority) + '"></div>';
-        html += '<div class="action-candidate-main">';
-        html += '<div class="action-candidate-head"><span class="badge badge-green">' + t('filter.review') + '</span><span class="badge badge-muted">' + esc(priorityLabel(priority)) + '</span></div>';
-        html += '<div class="action-item-title" style="margin-top:6px;">' + esc(title) + '</div>';
-        if (preview) html += '<div class="action-item-desc">' + esc(preview) + '</div>';
-        html += '<div class="action-item-meta">';
-        if (project) html += '<span class="badge badge-muted">' + esc(projectDisplayName(project)) + '</span>';
-        html += '</div>';
-        if (showOriginal) {
-          html += '<details class="action-original-disclosure"><summary>' + t('act.viewOriginal') + '</summary><pre>' + esc(truncate(raw, 1200)) + '</pre></details>';
-        }
-        html += '</div>';
-        html += '<div class="action-item-actions"><button class="btn btn-primary" data-action="edit-review" data-review-id="' + esc(item.id) + '">' + t('act.confirm') + '</button><button class="btn" data-action="dismiss-review" data-review-id="' + esc(item.id) + '">' + t('act.ignore') + '</button></div>';
-        html += '</article>';
-        return html;
-      }
       function renderActionCard(a, isFrontier) {
         var html = '<article class="action-item-card action-approved-card">';
         html += '<div class="action-priority-rail ' + priorityClass(a.priority) + '"></div>';
@@ -1110,51 +1032,79 @@
         html += '<div class="action-item-title">' + esc(compactActionTitle(a.title)) + '</div>';
         var actionDesc = actionDescriptionText(a.description);
         if (actionDesc) html += '<div class="action-item-desc">' + esc(truncate(actionDesc, 120)) + '</div>';
+        if (actionNeedsRecheck(a)) html += '<div class="action-recheck-note">' + esc(t('act.recheck')) + '</div>';
         // STEP-16 calm card: source + relative time are hidden at rest and fade in
         // on hover; priority shows on the rail, status via the group. No badges /
         // status icon / classification tags.
         var metaParts = [];
         var sourceText = actionSourceText(a);
+        var sourceTs = actionTimestamp(a);
         if (sourceText) metaParts.push(t('act.from') + ' ' + esc(sourceText));
-        if (a.updatedAt) metaParts.push(esc(relativeTime(a.updatedAt)));
-        if (metaParts.length) html += '<div class="action-item-submeta"' + (a.updatedAt ? ' title="' + esc(absoluteHour(a.updatedAt)) + '"' : '') + '>' + metaParts.join(' · ') + '</div>';
+        if (sourceTs) metaParts.push(esc(relativeTime(sourceTs)));
+        if (metaParts.length) html += '<div class="action-item-submeta"' + (sourceTs ? ' title="' + esc(absoluteHour(sourceTs)) + '"' : '') + '>' + metaParts.join(' · ') + '</div>';
         html += '</div>';
         html += '<div class="action-item-actions">';
         html += '<div class="action-secondary">';
         var jumpObsId = Array.isArray(a.sourceObservationIds) ? a.sourceObservationIds.find(function(id) { return typeof id === 'string' && id.length > 0; }) : '';
-        if (jumpObsId) html += '<button class="btn-ghost-sm" type="button" data-action="jump-to-evidence" data-obs-id="' + esc(jumpObsId) + '">' + esc(t('act.viewSource')) + '</button>';
-        if (a.status !== 'cancelled') html += '<button class="btn-ghost-sm" data-action="action-status" data-action-id="' + esc(a.id || '') + '" data-status="cancelled" type="button">' + esc(t('act.status.archive')) + '</button>';
+        var refreshing = !!(state.actions.cardRefreshInFlight && state.actions.cardRefreshInFlight[a.id]);
+        if (jumpObsId) html += '<button class="btn-ghost-sm action-source-link" type="button" data-action="jump-to-evidence" data-obs-id="' + esc(jumpObsId) + '">' + esc(t('act.viewSource')) + '</button>';
+        html += '<button class="btn-ghost-sm action-refresh-link' + (refreshing ? ' btn-working' : '') + '" data-action="refresh-action-card" data-action-id="' + esc(a.id || '') + '" type="button"' + (refreshing ? ' disabled aria-busy="true"' : '') + '>' + esc(refreshing ? t('act.cardRefresh.running') : t('act.cardRefresh.run')) + '</button>';
+        if (a.status !== 'cancelled') html += '<button class="btn-ghost-sm action-archive-link" data-action="action-status" data-action-id="' + esc(a.id || '') + '" data-status="cancelled" type="button">' + esc(t('act.status.archive')) + '</button>';
         html += '</div>';
-        if (a.status !== 'done') html += '<button class="btn-outline-sm" data-action="action-status" data-action-id="' + esc(a.id || '') + '" data-status="done" type="button">' + esc(t('act.status.complete')) + '</button>';
+        if (a.status !== 'done') html += '<button class="btn-primary-sm" data-action="action-status" data-action-id="' + esc(a.id || '') + '" data-status="done" type="button">' + esc(t('act.status.complete')) + '</button>';
         html += '</div>';
         html += '</article>';
         return html;
       }
-      var statusCounts = { active: 0, blocked: 0, pending: 0, done: 0, cancelled: 0 };
-      metricItems.forEach(function(a) { if (statusCounts[a.status] !== undefined) statusCounts[a.status] += 1; });
-      var searchForInbox = (state.actions.search || '').toLowerCase();
-      var waitingCount = filterInboxItems(sortInboxItems(inboxAwaiting()), searchForInbox).filter(function(i) { return i && i.kind === 'question'; }).length;
-      var awaitingQuestionsHtml = showAwaitingItems ? renderAwaitingQuestionSection() : '';
-      var awaitingBriefingsHtml = showBriefingItems ? renderAwaitingBriefingSection() : '';
-      var inboxArchiveHtml = showBriefingItems ? renderInboxArchiveSection() : '';
-
-      var html = renderActionFilters();
-      html += actionMetricCards(statusCounts, metricReviewItems.length, waitingCount);
-      html += awaitingQuestionsHtml;
-
-      if (showReviewItems && reviewItems.length) {
-        html += '<section class="card memory-section" style="padding:14px 16px;margin-bottom:14px;background:#ffffff;">';
-        html += '<div class="memory-section-head"><div><div class="memory-section-title">' + t('filter.review') + '</div></div><span class="memory-section-count">' + reviewItems.length + ' ' + t('act.itemsUnit') + '</span></div>';
+      function renderActionGroup(status, group) {
+        if (!group.length) return '';
+        var html = '<section class="action-group">';
+        var title = status === 'todo' ? t('act.metric.todo') : (status === 'done' ? t('act.metric.done') : statusLabel(status));
+        html += '<div class="action-group-head"><div class="action-group-title">' + esc(title) + '</div><div class="lesson-count-pill">' + group.length + ' ' + t('act.itemsUnit') + '</div></div>';
         html += '<div class="action-card-list">';
-        reviewItems.forEach(function(item) {
-          html += renderActionCandidateCard(item);
+        group.forEach(function(a) {
+          html += renderActionCard(a, frontierIds.has(a.id));
         });
         html += '</div></section>';
+        return html;
       }
+      function renderTodoGroup(group) {
+        var cards = Array.isArray(group) ? group : [];
+        var total = cards.length;
+        if (!total) return '';
+        var html = '<section class="action-group unified-todo-section">';
+        html += '<div class="action-group-head"><div class="action-group-title">' + esc(t('act.metric.todo')) + '</div><div class="lesson-count-pill">' + total + ' ' + t('act.itemsUnit') + '</div></div>';
+        html += '<div class="action-card-list">';
+        cards.forEach(function(a) {
+          html += renderActionCard(a, frontierIds.has(a.id));
+        });
+        html += '</div></section>';
+        return html;
+      }
+      function renderFoldedOpenSection(group, title, lead, stateKey, actionName) {
+        if (!group.length) return '';
+        var expanded = !!state.actions[stateKey];
+        var html = '<section class="action-group action-folded-section">';
+        html += '<button type="button" class="action-folded-head" data-action="' + esc(actionName) + '" aria-expanded="' + (expanded ? 'true' : 'false') + '">';
+        html += '<div><div class="action-group-title">' + esc(title) + '</div><div class="action-folded-lead">' + esc(lead) + '</div></div>';
+        html += '<div class="action-folded-meta"><span class="lesson-count-pill">' + group.length + ' ' + t('act.itemsUnit') + '</span><span class="done-today-caret">' + (expanded ? '▾' : '▸') + '</span></div>';
+        html += '</button>';
+        if (expanded) {
+          html += '<div class="action-card-list">';
+          group.forEach(function(a) {
+            html += renderActionCard(a, frontierIds.has(a.id));
+          });
+          html += '</div>';
+        }
+        html += '</section>';
+        return html;
+      }
+      var statusCounts = { active: 0, blocked: 0, pending: 0, done: 0, cancelled: 0 };
+      metricItems.forEach(function(a) { if (statusCounts[a.status] !== undefined) statusCounts[a.status] += 1; });
 
-      html += awaitingBriefingsHtml;
+      var html = renderActionFilters();
 
-      if (items.length === 0 && (!showReviewItems || reviewItems.length === 0) && !awaitingQuestionsHtml && !awaitingBriefingsHtml && !inboxArchiveHtml) {
+      if (items.length === 0) {
         html += '<div class="empty-state">' +
           '<div class="empty-icon">&#9745;</div>' +
           '<div class="empty-title">' + t('act.empty.title') + '</div>' +
@@ -1165,32 +1115,26 @@
           var order = { active: 1, blocked: 2, pending: 3, done: 4, cancelled: 5 };
           return (order[a.status] || 9) - (order[b.status] || 9) || (Number(b.priority) || 0) - (Number(a.priority) || 0);
         });
-        // STEP-C4:无筛选的默认视图里,done 不混在分组流中,改由底部「已完成」
-        // 折叠区单独承载、且只显当天完成的(§3.2/§3.3)。点了「已完成」筛选 chip
+        // STEP-C4:无筛选的默认视图里,done 不混在分组流中,改由底部 Done
+        // 折叠区单独承载、且只显当天完成的(§3.2/§3.3)。点了 Done 筛选 chip
         // (statusFilter==='done')时则照常全列,不走折叠区。
         // STEP-12:cancelled(归档/被更新丢弃/被合并)也不进默认活动视图——否则
         // 合并/丢弃后卡片仍以「已取消」分组留在原处,看着像「没生效」。
-        var defaultView = !statusFilter;
-        var inlineStatuses = defaultView
-          ? ['active','blocked','pending']
-          : ['active','blocked','pending','done','cancelled'];
-        inlineStatuses.forEach(function(status) {
-          var group = items.filter(function(a) { return a.status === status; });
-          if (!group.length) return;
-          html += '<section class="action-group">';
-          html += '<div class="action-group-head"><div class="action-group-title">' + esc(statusLabel(status)) + '</div><div class="lesson-count-pill">' + group.length + ' ' + t('act.itemsUnit') + '</div></div>';
-          html += '<div class="action-card-list">';
-          group.forEach(function(a) {
-            var isFrontier = frontierIds.has(a.id);
-            html += renderActionCard(a, isFrontier);
-          });
-          html += '</div></section>';
-        });
         if (defaultView) {
+          var defaultSplit = splitDefaultOpenItems(items);
+          html += renderTodoGroup(defaultSplit.focus);
+          html += renderFoldedOpenSection(defaultSplit.earlier, t('act.section.earlier'), t('act.section.earlierLead'), 'earlierOpenExpanded', 'toggle-earlier-open');
+          html += renderFoldedOpenSection(defaultSplit.older, t('act.section.older'), t('act.section.olderLead'), 'olderBacklogExpanded', 'toggle-older-backlog');
           html += renderDoneTodaySection(items.filter(function(a) { return a.status === 'done'; }), frontierIds, renderActionCard);
+        } else {
+          if (statusFilter !== 'done') {
+            html += renderTodoGroup(items.filter(function(a) { return a.status === 'pending' || a.status === 'blocked' || a.status === 'active'; }));
+          }
+          if (!todoFilterActive) {
+            html += renderActionGroup('done', items.filter(function(a) { return a.status === 'done'; }));
+          }
         }
       }
-      html += inboxArchiveHtml;
 
       var __focus = captureSearchFocus(['actions-search']);
       el.innerHTML = html;

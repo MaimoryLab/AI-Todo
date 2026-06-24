@@ -112,7 +112,7 @@ describe("STEP-C4 已完成折叠区", () => {
       (a: { title: string }) => "<article>" + a.title + "</article>",
     );
     expect(html).toContain("done-today-section");
-    expect(html).toContain("今天完成了 2 件"); // old 不计入
+    expect(html).toContain("Done <span class=\"done-today-sub\">2 items</span>"); // old 不计入
     expect(html).toContain('aria-expanded="false"');
     expect(html).toContain("▸");
     // 折叠时不渲染卡片正文
@@ -156,8 +156,8 @@ describe("STEP-C4 已完成折叠区", () => {
     sandbox.renderActions();
     const html = getElement("view-actions").innerHTML;
     expect(html).toContain("done-today-section");
-    expect(html).toContain("今天完成了 1 件");
-    expect(html).toContain("进行中"); // active 分组照常显示(STEP-01 起状态标签统一走 i18n 目录)
+    expect(html).toContain("Done <span class=\"done-today-sub\">1 items</span>");
+    expect(html).toContain("Todo"); // active 合并进 Todo 分组
     // 默认折叠:done 卡正文不出现(在折叠区里、未展开)
     expect(html).not.toContain("今天完成项");
     // 切到 done 筛选:照常全列(走 inline 分组,不进折叠区)

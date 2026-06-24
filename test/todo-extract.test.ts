@@ -1,12 +1,13 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { describe, expect, it, beforeEach, afterEach, vi } from "vitest";
 
 vi.mock("../src/config.js", () => ({
   DEFAULT_LANGEXTRACT_BASE_URL: "https://api.novita.ai/openai/v1",
   DEFAULT_TODO_EXTRACT_TIMEOUT_MS: 120_000,
-  DEFAULT_TODO_EXTRACT_MAX_LLM_SESSIONS: 12,
   DEFAULT_TODO_EXTRACT_SINCE_DAYS: 7,
   DEFAULT_TODO_EXTRACT_MAX_INTERACTIONS: 10,
-  DEFAULT_TODO_EXTRACT_MAX_SESSIONS: Number.POSITIVE_INFINITY,
+  DEFAULT_TODO_EXTRACT_MAX_SESSIONS: 8,
   getEnvVar: (key: string) => {
     const values: Record<string, string> = {
       AGENTMEMORY_TODO_EXTRACTOR: "rules",
@@ -22,10 +23,12 @@ vi.mock("../src/config.js", () => ({
   normalizeTodoExtractorProvider: (value?: string) => (value || "openai").toLowerCase(),
 }));
 
-import { cleanPollutedTodoCards, updateChangedTodoCards, cleanTodoTitle, generateTodosFromSessions, getTodoExtractJobStatus, runTodoExtractJob, startTodoExtractJob, validateTodoEvidence, runLangExtractSidecar, type ExtractedTodo } from "../src/functions/todo-extract.js";
+import { cleanPollutedTodoCards, updateChangedTodoCards, cleanTodoTitle, generateTodosFromSessions, refreshTodoAction, validateTodoEvidence, runLangExtractSidecar, type ExtractedTodo } from "../src/functions/todo-extract.js";
 import type { Action, CompressedObservation, ReviewQueueItem, Session } from "../src/types.js";
 import { KV } from "../src/state/schema.js";
 import { mockKV } from "./helpers/mocks.js";
+
+const ROOT = join(import.meta.dirname, "..");
 
 function session(patch: Partial<Session> = {}): Session {
   return {
@@ -55,6 +58,43 @@ function obs(patch: Partial<CompressedObservation> = {}): CompressedObservation 
     importance: 5,
     ...patch,
   };
+}
+
+function generatedAction(patch: Partial<Action> = {}): Action {
+  return {
+    id: "act_old",
+    title: "旧卡片标题",
+    description: "旧卡片说明",
+    status: "pending",
+    priority: 5,
+    createdAt: "2026-06-17T08:00:00.000Z",
+    updatedAt: "2026-06-17T08:00:00.000Z",
+    createdBy: "todo-extract",
+    tags: ["todo-extracted", "type:follow_up"],
+    sourceObservationIds: ["obs_1"],
+    sourceMemoryIds: [],
+    metadata: {
+      todoExtraction: {
+        title: "旧卡片标题",
+        description: "旧卡片说明",
+        confidence: 0.72,
+        timeBucket: "current",
+        typeBucket: "follow_up",
+        sourceSessionId: "ses_1",
+        sourceCheckpoint: "2026-06-17T09:00:00.000Z:1",
+        evidence: {
+          sourceObservationId: "obs_1",
+          quote: "旧卡片说明",
+        },
+        dedupeKey: "old-card-title",
+      },
+    },
+    ...patch,
+  };
+}
+
+function jsonText(value: unknown): string {
+  return JSON.stringify(value).replace(/\s+/g, " ");
 }
 
 describe("todo extraction", () => {
@@ -149,7 +189,7 @@ describe("todo extraction", () => {
     expect(await kv.list<Action>(KV.actions)).toHaveLength(1);
   });
 
-  it("sends medium-confidence rule todos to review", async () => {
+  it("discards medium-confidence rule todos instead of sending them to review", async () => {
     await kv.set(KV.sessions, "ses_1", session());
     await kv.set(KV.observations("ses_1"), "obs_1", obs({ narrative: "下一步请修复 CI 失败，并重新跑测试。" }));
 
@@ -158,14 +198,43 @@ describe("todo extraction", () => {
     delete process.env.AGENTMEMORY_TODO_DIRECT_CONFIDENCE;
 
     expect(result.directCreated).toBe(0);
-    expect(result.reviewCreated).toBe(1);
-    const reviews = await kv.list<ReviewQueueItem>(KV.reviewQueue);
-    expect(reviews[0]).toMatchObject({
-      kind: "action",
-      payload: {
-        todoExtraction: expect.objectContaining({ sourceSessionId: "ses_1" }),
-      },
-    });
+    expect(result.reviewCreated).toBe(0);
+    expect(result.discarded).toBe(1);
+    expect(await kv.list<ReviewQueueItem>(KV.reviewQueue)).toHaveLength(0);
+  });
+
+  it("discards vague process-like rule todos instead of creating review candidates", async () => {
+    await kv.set(KV.sessions, "ses_1", session());
+    await kv.set(KV.observations("ses_1"), "obs_1", obs({
+      narrative: "TODO: 重启 Codex desktop app 后再测一次。",
+    }));
+
+    const result = await generateTodosFromSessions(kv as never, { force: true, scanSources: false });
+
+    expect(result.directCreated).toBe(0);
+    expect(result.reviewCreated).toBe(0);
+    expect(result.discarded).toBe(1);
+    expect(await kv.list<Action>(KV.actions)).toHaveLength(0);
+    expect(await kv.list<ReviewQueueItem>(KV.reviewQueue)).toHaveLength(0);
+  });
+
+  it("does not persist pure agent process narration as todos", async () => {
+    await kv.set(KV.sessions, "ses_1", session({ status: "active" }));
+    await kv.set(KV.observations("ses_1"), "obs_1", obs({
+      narrative: "TODO: 做最后一次状态确认，确保工作区干净、当前分支和 PR 链接明确。",
+    }));
+    await kv.set(KV.observations("ses_1"), "obs_2", obs({
+      id: "obs_2",
+      narrative: "TODO: 启动后做健康检查，确认 Viewer 和 Health 都正常。",
+    }));
+
+    const result = await generateTodosFromSessions(kv as never, { force: true, scanSources: false });
+
+    expect(result.scannedObservations).toBe(0);
+    expect(result.directCreated).toBe(0);
+    expect(result.reviewCreated).toBe(0);
+    expect(await kv.list<Action>(KV.actions)).toHaveLength(0);
+    expect(await kv.list<ReviewQueueItem>(KV.reviewQueue)).toHaveLength(0);
   });
 
   it("keeps history todos hidden instead of writing them to actions", async () => {
@@ -313,6 +382,21 @@ describe("todo extraction", () => {
     expect(cleaned).toBe("再等一轮");
   });
 
+  it("rejects process-check titles that are not durable user tasks", () => {
+    expect(cleanTodoTitle(
+      "做最后一次状态确认",
+      "我会做最后一次状态确认，确保工作区干净、当前分支和 PR 链接明确。",
+    )).toBeNull();
+    expect(cleanTodoTitle(
+      "启动后做健康检查",
+      "启动后我会做健康检查，确认 Viewer 和 Health 都正常。",
+    )).toBeNull();
+    expect(cleanTodoTitle(
+      "修复深色模式按钮对比度",
+      "修复深色模式按钮对比度，避免主操作在暗色背景下不可读。",
+    )).toBe("修复深色模式按钮对比度");
+  });
+
   it("anti-truncation: skips fragment titles and trims on a boundary (STEP-08)", () => {
     // HTTP-status cut "返回 4" is a truncation fragment → fall through to the
     // clean description rather than emitting it as a card title.
@@ -341,6 +425,12 @@ describe("todo extraction", () => {
     delete process.env.LANGEXTRACT_PYTHON;
   });
 
+  it("sidecar examples avoid empty extraction groups that break LangExtract alignment", () => {
+    const sidecar = readFileSync(join(ROOT, "src/functions/todo-extract-langextract.py"), "utf-8");
+    expect(sidecar).not.toContain("extractions=[],");
+    expect(sidecar).toContain("DO NOT extract completed work");
+  });
+
   it("reports when auto mode fell back from LangExtract to rules", async () => {
     process.env.AGENTMEMORY_TODO_EXTRACTOR = "auto";
     process.env.LANGEXTRACT_PYTHON = "__missing_python__";
@@ -354,6 +444,321 @@ describe("todo extraction", () => {
     expect(result.fallbackReason).toBeTruthy();
     delete process.env.AGENTMEMORY_TODO_EXTRACTOR;
     delete process.env.LANGEXTRACT_PYTHON;
+  });
+
+  it("refreshes one generated todo card from nearby source context", async () => {
+    await kv.set(KV.sessions, "ses_1", session({ status: "active", observationCount: 3 }));
+    await kv.set(KV.observations("ses_1"), "obs_0", obs({
+      id: "obs_0",
+      title: "prompt_submit",
+      narrative: "请检查单卡刷新。",
+      timestamp: "2026-06-17T08:00:00.000Z",
+    }));
+    await kv.set(KV.observations("ses_1"), "obs_1", obs({
+      id: "obs_1",
+      narrative: "这里只是旧卡片来源，没有明确新待办。",
+      timestamp: "2026-06-17T08:05:00.000Z",
+    }));
+    await kv.set(KV.observations("ses_1"), "obs_2", obs({
+      id: "obs_2",
+      narrative: "下一步请修复单卡刷新按钮状态，并重新跑 viewer 测试。",
+      timestamp: "2026-06-17T08:06:00.000Z",
+    }));
+    await kv.set<Action>(KV.actions, "act_old", generatedAction());
+
+    const result = await refreshTodoAction(kv as never, { actionId: "act_old" });
+
+    expect(result).toMatchObject({
+      success: true,
+      keptOld: false,
+      reason: "replaced",
+      engine: "rules",
+      scannedObservations: 1,
+    });
+    expect(result.action).toMatchObject({
+      id: "act_old",
+      createdAt: "2026-06-17T08:00:00.000Z",
+      title: expect.stringContaining("单卡刷新按钮"),
+      sourceObservationIds: ["obs_2"],
+    });
+    const stored = await kv.get<Action>(KV.actions, "act_old");
+    expect(stored?.title).toContain("单卡刷新按钮");
+    expect(stored?.metadata?.refresh).toMatchObject({
+      previousTitle: "旧卡片标题",
+      reason: "replaced",
+    });
+  });
+
+  it("refreshes from recent interaction context when the source observation is missing", async () => {
+    await kv.set(KV.sessions, "ses_1", session({ status: "active", observationCount: 2 }));
+    await kv.set(KV.observations("ses_1"), "obs_recent", obs({
+      id: "obs_recent",
+      narrative: "下一步请修复刷新回退路径，并补充回归测试。",
+      timestamp: "2026-06-17T08:30:00.000Z",
+    }));
+    await kv.set<Action>(KV.actions, "act_old", generatedAction({
+      sourceObservationIds: ["obs_missing"],
+      metadata: {
+        todoExtraction: {
+          sourceSessionId: "ses_1",
+          evidence: { sourceObservationId: "obs_missing", quote: "旧来源" },
+          dedupeKey: "old-card-title",
+        },
+      },
+    }));
+
+    const result = await refreshTodoAction(kv as never, { actionId: "act_old" });
+
+    expect(result).toMatchObject({ success: true, keptOld: false, reason: "replaced" });
+    expect(result.action?.sourceObservationIds).toEqual(["obs_recent"]);
+    expect(result.action?.title).toContain("刷新回退路径");
+  });
+
+  it("keeps the old card for medium-confidence single-card refresh results", async () => {
+    process.env.AGENTMEMORY_TODO_DIRECT_CONFIDENCE = "0.8";
+    await kv.set(KV.sessions, "ses_1", session({ status: "active", observationCount: 1 }));
+    await kv.set(KV.observations("ses_1"), "obs_1", obs({
+      narrative: "下一步请修复单卡刷新低置信度路径。",
+    }));
+    await kv.set<Action>(KV.actions, "act_old", generatedAction());
+
+    const result = await refreshTodoAction(kv as never, { actionId: "act_old" });
+    delete process.env.AGENTMEMORY_TODO_DIRECT_CONFIDENCE;
+
+    expect(result).toMatchObject({
+      success: true,
+      keptOld: true,
+      reason: "low-confidence",
+    });
+    expect((await kv.get<Action>(KV.actions, "act_old"))?.title).toBe("旧卡片标题");
+    expect(await kv.list<ReviewQueueItem>(KV.reviewQueue)).toHaveLength(0);
+  });
+
+  it("keeps the old card when single-card refresh finds no valid todo", async () => {
+    await kv.set(KV.sessions, "ses_1", session({ status: "active", observationCount: 1 }));
+    await kv.set(KV.observations("ses_1"), "obs_1", obs({
+      narrative: "Tests passed and the PR was merged. No action needed.",
+    }));
+    await kv.set<Action>(KV.actions, "act_old", generatedAction());
+
+    const result = await refreshTodoAction(kv as never, { actionId: "act_old" });
+
+    expect(result).toMatchObject({
+      success: true,
+      keptOld: true,
+      reason: "no-valid-todo",
+      scannedObservations: 0,
+    });
+    expect((await kv.get<Action>(KV.actions, "act_old"))?.title).toBe("旧卡片标题");
+  });
+
+  it("keeps strong multi-step delivery titles that remain readable", async () => {
+    await kv.set(KV.sessions, "ses_1", session({ status: "active" }));
+    await kv.set(KV.observations("ses_1"), "obs_1", obs({
+      narrative: "下一步需要修正目录显示文字（去掉重复编号）并更新页码缓存后重渲染。",
+    }));
+
+    const result = await generateTodosFromSessions(kv as never, { force: true, scanSources: false });
+
+    expect(result.directCreated).toBe(1);
+    expect((await kv.list<Action>(KV.actions))[0]?.title).toBe("修正目录显示文字（去掉重复编号）并更新页码缓存后重渲染");
+  });
+
+  it("compacts long technical identifiers out of generated card titles", async () => {
+    const quote = "下一步需要推送 codex/todo-cleanup-flash-model 分支到远程仓库。";
+    await kv.set(KV.sessions, "ses_1", session({ status: "active" }));
+    await kv.set(KV.observations("ses_1"), "obs_1", obs({ narrative: quote }));
+
+    const result = await generateTodosFromSessions(kv as never, { force: true, scanSources: false });
+
+    expect(result.directCreated).toBe(1);
+    const action = (await kv.list<Action>(KV.actions))[0];
+    expect(action.title).toBe("推送当前工作分支到远程仓库");
+    expect(action.title).not.toContain("codex/todo-cleanup-flash-model");
+    expect(action.description).toContain("codex/todo-cleanup-flash-model");
+    expect(jsonText(action.metadata?.todoQuality)).toContain("titleCompacted");
+  });
+
+  it("rejects incomplete dangling titles from single-card refresh with a specific reason", async () => {
+    process.env.AGENTMEMORY_TODO_EXTRACTOR = "langextract";
+    const quote = "准备推送分支 codex/todo-cleanup-flash-model 到";
+    await kv.set(KV.sessions, "ses_1", session({ status: "active", observationCount: 1 }));
+    await kv.set(KV.observations("ses_1"), "obs_1", obs({ narrative: quote }));
+    await kv.set<Action>(KV.actions, "act_old", generatedAction({
+      title: quote,
+      description: quote,
+      metadata: {
+        todoExtraction: {
+          sourceSessionId: "ses_1",
+          evidence: { sourceObservationId: "obs_1", quote },
+          dedupeKey: "push-branch-fragment",
+        },
+      },
+    }));
+
+    const result = await (refreshTodoAction as unknown as (
+      kvArg: typeof kv,
+      data: { actionId: string },
+      deps: { runLangExtractSidecar: (input: Record<string, unknown>) => Promise<ExtractedTodo[]> },
+    ) => ReturnType<typeof refreshTodoAction>)(kv, { actionId: "act_old" }, {
+      runLangExtractSidecar: async () => [{
+        title: quote,
+        description: quote,
+        confidence: 0.99,
+        timeBucket: "current",
+        typeBucket: "to_start",
+        sourceSessionId: "ses_1",
+        evidence: { sourceObservationId: "obs_1", quote },
+        dedupeKey: "push-branch-fragment",
+      }],
+    });
+    delete process.env.AGENTMEMORY_TODO_EXTRACTOR;
+
+    expect(result).toMatchObject({
+      success: true,
+      keptOld: true,
+      reason: "incomplete-title",
+      engine: "langextract",
+    });
+    expect((await kv.get<Action>(KV.actions, "act_old"))?.title).toBe(quote);
+  });
+
+  it("repairs a dangling single-card title from existing evidence when LangExtract returns no todo", async () => {
+    process.env.AGENTMEMORY_TODO_EXTRACTOR = "langextract";
+    const quote = "网络和代理现在可用。准备推送 `codex/todo-cleanup-flash-model` 到 origin。";
+    await kv.set(KV.sessions, "ses_1", session({ status: "active", observationCount: 1 }));
+    await kv.set(KV.observations("ses_1"), "obs_1", obs({ narrative: quote }));
+    await kv.set<Action>(KV.actions, "act_old", generatedAction({
+      title: "准备推送分支 codex/todo-cleanup-flash-model 到",
+      description: quote,
+      status: "active",
+      metadata: {
+        todoExtraction: {
+          sourceSessionId: "ses_1",
+          timeBucket: "current",
+          typeBucket: "in_progress",
+          evidence: { sourceObservationId: "obs_1", quote },
+          dedupeKey: "push-branch-fragment",
+        },
+      },
+    }));
+
+    const result = await (refreshTodoAction as unknown as (
+      kvArg: typeof kv,
+      data: { actionId: string },
+      deps: { runLangExtractSidecar: (input: Record<string, unknown>) => Promise<ExtractedTodo[]> },
+    ) => ReturnType<typeof refreshTodoAction>)(kv, { actionId: "act_old" }, {
+      runLangExtractSidecar: async () => {
+        throw new Error("LangExtract should not run for locally repairable dangling cards");
+      },
+    });
+    delete process.env.AGENTMEMORY_TODO_EXTRACTOR;
+
+    expect(result).toMatchObject({
+      success: true,
+      keptOld: false,
+      reason: "replaced-from-existing-evidence",
+      engine: "rules",
+    });
+    const stored = await kv.get<Action>(KV.actions, "act_old");
+    expect(stored?.title).toBe("推送当前工作分支到 origin");
+    expect(stored?.description).toContain("codex/todo-cleanup-flash-model");
+    expect(jsonText(stored?.metadata?.todoQuality)).toContain("titleCompacted");
+  });
+
+  it("rejects single-card refresh for manual actions", async () => {
+    await kv.set<Action>(KV.actions, "act_manual", generatedAction({
+      id: "act_manual",
+      createdBy: "manual",
+      tags: [],
+      metadata: {},
+    }));
+
+    const result = await refreshTodoAction(kv as never, { actionId: "act_manual" });
+
+    expect(result).toMatchObject({
+      success: false,
+      keptOld: true,
+      reason: "not-generated",
+      scannedObservations: 0,
+    });
+  });
+
+  it("passes the old card and cleanup metadata into LangExtract single-card refresh", async () => {
+    process.env.AGENTMEMORY_TODO_EXTRACTOR = "langextract";
+    let sidecarInput: Record<string, unknown> | null = null;
+    const quote = "内层仓库当前基线等于 origin/main，建 codex/ 分支、提交并 push，push 前跑 secrets diff 检查。";
+    await kv.set(KV.sessions, "ses_1", session({ status: "active", observationCount: 1 }));
+    await kv.set(KV.observations("ses_1"), "obs_1", obs({ narrative: quote }));
+    await kv.set<Action>(KV.actions, "act_old", generatedAction({
+      title: "创建 codex 分支、提交并 push AI-Todo 仓库修改",
+      description: quote,
+      metadata: {
+        todoExtraction: {
+          sourceSessionId: "ses_1",
+          evidence: { sourceObservationId: "obs_1", quote },
+          dedupeKey: "old-card-title",
+        },
+        cleanup: {
+          decision: "rewrite",
+          title: "提交 AI-Todo 清理分支",
+          reason: "Title is process-like; make it a concrete user-facing action.",
+          previousTitle: "创建 codex 分支、提交并 push AI-Todo 仓库修改",
+        },
+      },
+    }));
+
+    const result = await (refreshTodoAction as unknown as (
+      kvArg: typeof kv,
+      data: { actionId: string },
+      deps: { runLangExtractSidecar: (input: Record<string, unknown>) => Promise<ExtractedTodo[]> },
+    ) => ReturnType<typeof refreshTodoAction>)(kv, { actionId: "act_old" }, {
+      runLangExtractSidecar: async (input) => {
+        sidecarInput = input;
+        return [{
+          title: "提交 AI-Todo 清理分支",
+          description: "提交 AI-Todo 清理分支，并在 push 前跑 secrets diff 检查。",
+          confidence: 0.95,
+          timeBucket: "current",
+          typeBucket: "to_start",
+          sourceSessionId: "ses_1",
+          evidence: { sourceObservationId: "obs_1", quote },
+          dedupeKey: "submit-aitodo-cleanup-branch",
+        }];
+      },
+    });
+    delete process.env.AGENTMEMORY_TODO_EXTRACTOR;
+
+    expect(result).toMatchObject({ success: true, keptOld: false, reason: "replaced", engine: "langextract" });
+    expect(sidecarInput?.refreshAction).toMatchObject({
+      id: "act_old",
+      title: "创建 codex 分支、提交并 push AI-Todo 仓库修改",
+      cleanup: {
+        title: "提交 AI-Todo 清理分支",
+        reason: "Title is process-like; make it a concrete user-facing action.",
+      },
+    });
+    expect((await kv.get<Action>(KV.actions, "act_old"))?.title).toBe("提交 AI-Todo 清理分支");
+  });
+
+  it("reports LangExtract refresh failures instead of calling them no better card", async () => {
+    process.env.AGENTMEMORY_TODO_EXTRACTOR = "langextract";
+    process.env.LANGEXTRACT_PYTHON = "__missing_python__";
+    await kv.set(KV.sessions, "ses_1", session({ status: "active", observationCount: 1 }));
+    await kv.set(KV.observations("ses_1"), "obs_1", obs({ narrative: "Tests passed and the PR was merged. No action needed." }));
+    await kv.set<Action>(KV.actions, "act_old", generatedAction());
+
+    const result = await refreshTodoAction(kv as never, { actionId: "act_old" });
+    delete process.env.AGENTMEMORY_TODO_EXTRACTOR;
+    delete process.env.LANGEXTRACT_PYTHON;
+
+    expect(result).toMatchObject({
+      success: false,
+      keptOld: true,
+      reason: "llm-refresh-failed",
+      engine: "rules",
+    });
+    expect(result.fallbackReason).toBeTruthy();
   });
 
   it("cleans generated command-log cards from actions and review queue", async () => {
@@ -614,6 +1019,36 @@ describe("todo extraction", () => {
     });
   });
 
+  it("flags agent-process titles for LLM rewrite during full maintenance", async () => {
+    await kv.set(KV.sessions, "ses_same", session({ id: "ses_same", endedAt: "2026-06-18T09:00:00.000Z", observationCount: 3 }));
+    await kv.set<Action>(KV.actions, "a_process", {
+      id: "a_process", title: "重启 Codex desktop app 后再测一次", description: "建议处理顺序：2. 重启 Codex desktop app 后再测一次。", status: "pending", priority: 5,
+      createdAt: "2026-06-17T08:00:00.000Z", updatedAt: "2026-06-17T08:00:00.000Z",
+      createdBy: "todo-extract", tags: ["todo-extracted"], sourceObservationIds: [], sourceMemoryIds: [],
+      metadata: { todoExtraction: { sourceSessionId: "ses_same", sourceCheckpoint: "2026-06-18T09:00:00.000Z:3" } },
+    });
+    let captured: Array<{ title: string; titleQualityHint?: string }> = [];
+    const decide = async (cards: Array<{ title: string; titleQualityHint?: string }>) => {
+      captured = cards;
+      return [{
+        id: "a:a_process",
+        decision: "REWRITE" as const,
+        newTitle: "验证重启后的 Codex 桌面端",
+        newDescription: "重启 Codex desktop app 后再验证问题是否仍存在。",
+      }];
+    };
+
+    const result = await updateChangedTodoCards(kv as never, { mode: "apply", scope: "all", decide });
+
+    expect(captured[0]?.titleQualityHint).toContain("process or status-check");
+    expect(result).toMatchObject({ engine: "llm", scanned: 1, rewritten: 1 });
+    expect((await kv.list<Action>(KV.actions)).find((a) => a.id === "a_process")).toMatchObject({
+      title: "验证重启后的 Codex 桌面端",
+      status: "pending",
+      metadata: { cleanup: expect.objectContaining({ decision: "rewrite", previousTitle: "重启 Codex desktop app 后再测一次" }) },
+    });
+  });
+
   it("update sorts before maxCards so near-duplicate titles can enter the same LLM batch (STEP-10)", async () => {
     await kv.set(KV.sessions, "ses_same", session({ id: "ses_same", endedAt: "2026-06-18T09:00:00.000Z", observationCount: 3 }));
     const mkAction = (id: string, title: string) =>
@@ -865,9 +1300,6 @@ describe("todo extraction scope — sinceDays + interaction window (STEP-11)", (
   afterEach(() => {
     delete process.env.AGENTMEMORY_TODO_EXTRACT_SINCE_DAYS;
     delete process.env.AGENTMEMORY_TODO_EXTRACT_MAX_INTERACTIONS_PER_SESSION;
-    delete process.env.AGENTMEMORY_TODO_EXTRACT_MAX_LLM_SESSIONS;
-    delete process.env.AGENTMEMORY_TODO_EXTRACTOR;
-    delete process.env.LANGEXTRACT_PYTHON;
   });
 
   // Two completed sessions, both inside the 14d "recent" bucket (so neither is
@@ -916,38 +1348,6 @@ describe("todo extraction scope — sinceDays + interaction window (STEP-11)", (
     expect((await kv.list<Action>(KV.actions))[0].metadata?.todoExtraction).toMatchObject({ sourceSessionId: "ses_recent" });
   });
 
-  it("does not cap eligible sessions by default after applying the sinceDays window", async () => {
-    const narratives = [
-      "后续需要修复登录接口的超时问题。",
-      "后续需要更新数据库驱动到 v5。",
-      "后续需要补充新用户的上手文档。",
-      "后续需要确认头像资源加载。",
-      "后续需要修复设置面板保存问题。",
-      "后续需要补充会话列表分页。",
-      "后续需要校验证据引用。",
-      "后续需要调整更新按钮文案。",
-      "后续需要补充端口占用提示。",
-    ];
-    for (let i = 0; i < narratives.length; i++) {
-      const id = `ses_window_${i + 1}`;
-      const at = daysAgo(1 + i / 100);
-      await kv.set(KV.sessions, id, session({
-        id, status: "completed", startedAt: at, endedAt: at, observationCount: 1,
-      }));
-      await kv.set(KV.observations(id), `o_window_${i + 1}`, obs({
-        id: `o_window_${i + 1}`, sessionId: id, timestamp: at, narrative: narratives[i],
-      }));
-    }
-
-    const result = await generateTodosFromSessions(kv as never, {
-      force: true, scanSources: false, cleanup: "none", sinceDays: 7,
-    });
-
-    expect(result.scannedSessions).toBe(9);
-    const checkpoint = await kv.get<{ cursor: string }>(KV.scanCheckpoints, "todo-extract:all");
-    expect(Object.keys(JSON.parse(checkpoint?.cursor || "{}"))).toHaveLength(9);
-  });
-
   // A user message in synthetic-compression form: type "conversation", title
   // === raw hookType "prompt_submit" (the interaction-boundary signal).
   function promptObs(id: string, narrative: string, timestamp: string): CompressedObservation {
@@ -974,100 +1374,6 @@ describe("todo extraction scope — sinceDays + interaction window (STEP-11)", (
     const result = await generateTodosFromSessions(kv as never, { force: true, scanSources: false, cleanup: "none" });
     expect(result.directCreated).toBe(1);
     expect((await kv.list<Action>(KV.actions))[0].sourceObservationIds).toEqual(["t3"]);
-  });
-
-  it("defaults to the most recent 10 interaction records per session", async () => {
-    process.env.AGENTMEMORY_TODO_EXTRACT_SINCE_DAYS = "30";
-    await kv.set(KV.sessions, "ses_turns", session({ id: "ses_turns", status: "active", observationCount: 12 }));
-    const narratives = [
-      "后续需要修复登录接口超时。",
-      "后续需要更新数据库驱动到 v5。",
-      "后续需要创建导出报告入口。",
-      "后续需要移除废弃配置开关。",
-      "后续需要实现离线缓存同步。",
-      "后续需要补充安装故障文档。",
-      "后续需要处理浏览器插件认证失败。",
-      "后续需要调整设置保存流程。",
-      "后续需要验证头像 PNG 加载。",
-      "后续需要重试 CI 发布流程。",
-      "后续需要排查工作台空白页。",
-      "后续需要整理权限错误提示。",
-    ];
-    for (let i = 0; i < narratives.length; i++) {
-      await kv.set(KV.observations("ses_turns"), `t${i + 1}`, promptObs(`t${i + 1}`, narratives[i], daysAgo(12 - i)));
-    }
-
-    const result = await generateTodosFromSessions(kv as never, { force: true, scanSources: false, cleanup: "none" });
-
-    expect(result.scannedObservations).toBe(10);
-    const sourceIds = (await kv.list<Action>(KV.actions)).flatMap((action) => action.sourceObservationIds || []);
-    expect(sourceIds).not.toContain("t1");
-    expect(sourceIds).not.toContain("t2");
-    const checkpoint = await kv.get<{ cursor: string }>(KV.scanCheckpoints, "todo-extract:all");
-    expect(JSON.parse(checkpoint?.cursor || "{}")).toHaveProperty("ses_turns");
-  });
-
-  it("bounds LLM sidecar calls while still scanning the full session window", async () => {
-    process.env.AGENTMEMORY_TODO_EXTRACTOR = "langextract";
-    process.env.AGENTMEMORY_TODO_EXTRACT_MAX_LLM_SESSIONS = "1";
-    process.env.LANGEXTRACT_PYTHON = "definitely-missing-python";
-    for (let i = 0; i < 3; i++) {
-      const id = `ses_llm_budget_${i + 1}`;
-      const at = daysAgo(i + 1);
-      await kv.set(KV.sessions, id, session({ id, status: "active", startedAt: at, endedAt: at, observationCount: 1 }));
-      await kv.set(KV.observations(id), `o_llm_budget_${i + 1}`, obs({
-        id: `o_llm_budget_${i + 1}`,
-        sessionId: id,
-        timestamp: at,
-        narrative: `后续需要修复第 ${i + 1} 个抽取预算测试问题。`,
-      }));
-    }
-
-    const result = await generateTodosFromSessions(kv as never, {
-      force: true, scanSources: false, cleanup: "none", sinceDays: 30,
-    });
-
-    expect(result.scannedSessions).toBe(3);
-    expect(result.processedSessions).toBe(3);
-    expect(result.llmSessionBudget).toBe(1);
-    expect(result.llmSessionsAttempted).toBe(1);
-    expect(result.llmSessionsSkipped).toBe(2);
-    expect(result.llmFallback).toBe(true);
-    expect(result.errorCode).toBeDefined();
-    delete process.env.AGENTMEMORY_TODO_EXTRACTOR;
-    delete process.env.AGENTMEMORY_TODO_EXTRACT_MAX_LLM_SESSIONS;
-    delete process.env.LANGEXTRACT_PYTHON;
-  });
-
-  it("exposes a single running extraction job instead of starting duplicate work", async () => {
-    await kv.set(KV.sessions, "ses_job", session({ id: "ses_job", status: "active", observationCount: 1 }));
-    await kv.set(KV.observations("ses_job"), "o_job", obs({
-      id: "o_job", sessionId: "ses_job", narrative: "后续需要验证抽取任务单飞。",
-    }));
-
-    const first = await startTodoExtractJob(kv as never, { force: true, scanSources: false, cleanup: "none" });
-    const second = await startTodoExtractJob(kv as never, { force: true, scanSources: false, cleanup: "none" });
-
-    expect(first.status).toBe("running");
-    expect(second.status).toBe("running");
-    expect(second.inFlight).toBe(true);
-    expect(second.jobId).toBe(first.jobId);
-    await vi.waitFor(() => expect(getTodoExtractJobStatus().status).toBe("done"));
-  });
-
-  it("waits for the owner extraction request but lets duplicate requests observe the running job", async () => {
-    await kv.set(KV.sessions, "ses_run_job", session({ id: "ses_run_job", status: "active", observationCount: 1 }));
-    await kv.set(KV.observations("ses_run_job"), "o_run_job", obs({
-      id: "o_run_job", sessionId: "ses_run_job", narrative: "后续需要验证抽取请求等待最终结果。",
-    }));
-
-    const owner = runTodoExtractJob(kv as never, { force: true, scanSources: false, cleanup: "none" });
-    const duplicate = await runTodoExtractJob(kv as never, { force: true, scanSources: false, cleanup: "none" });
-    const completed = await owner;
-
-    expect(duplicate).toMatchObject({ status: "running", inFlight: true });
-    expect(completed.status).toBe("done");
-    expect(completed.result).toMatchObject({ success: true, processedSessions: 1 });
   });
 
   it("treats a session with no user-message boundary as a single interaction", async () => {

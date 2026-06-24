@@ -421,6 +421,10 @@
         updateActionStatus(target.getAttribute('data-action-id') || '', target.getAttribute('data-status') || '');
         return;
       }
+      if (action === 'refresh-action-card') {
+        refreshActionCard(target.getAttribute('data-action-id') || '');
+        return;
+      }
       if (action === 'refresh-sessions') {
         state.sessions.loaded = false;
         loadSessions({ showLoading: true, reason: 'manual' });
@@ -459,6 +463,16 @@
       }
       if (action === 'toggle-done-today') {
         state.actions.doneExpanded = !state.actions.doneExpanded;
+        renderActions();
+        return;
+      }
+      if (action === 'toggle-earlier-open') {
+        state.actions.earlierOpenExpanded = !state.actions.earlierOpenExpanded;
+        renderActions();
+        return;
+      }
+      if (action === 'toggle-older-backlog') {
+        state.actions.olderBacklogExpanded = !state.actions.olderBacklogExpanded;
         renderActions();
         return;
       }
@@ -555,6 +569,7 @@
       }
       if (action === 'filter-actions-status') {
         var nextFilter = target.getAttribute('data-status') || '';
+        if (['attention', 'awaiting', 'review', 'pending', 'blocked', 'active'].indexOf(nextFilter) >= 0) nextFilter = 'todo';
         // STEP-13: clicking the already-active filter clears it — with the chip
         // row gone, this is how the metric cards restore the "show all" view.
         state.actions.statusFilter = (state.actions.statusFilter || '') === nextFilter ? '' : nextFilter;
@@ -696,4 +711,3 @@
       state.actions.configDraft = state.actions.configDraft || {};
       state.actions.configDraft[String(target.id).slice('todo-config-'.length)] = String(target.value || '');
     });
-

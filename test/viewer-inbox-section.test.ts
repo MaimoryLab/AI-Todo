@@ -2,9 +2,8 @@ import * as vm from "node:vm";
 import { describe, expect, it } from "vitest";
 import { renderViewerDocument } from "../src/viewer/document.js";
 
-// STEP-C2: 待回应分区接真实 inbox 数据。这些用例锁定 renderAwaitingReplySection()
-// 的纯渲染契约——给定 state.inbox.items,产出 question/briefing 两类卡片、
-// 复用「看原文 →」跳证据、空态去掉「尚未接通」。不依赖运行中的 daemon。
+// STEP-C2/C3: inbox actions are still supported, but Todo no longer renders
+// a separate awaiting-reply candidate section.
 
 function htmlEscape(value: string): string {
   return value
@@ -113,140 +112,28 @@ function loadViewerSandbox() {
 }
 
 describe("STEP-C2 viewer 待回应分区接真数据", () => {
-  it("空 inbox 渲染诚实空态,且不再出现「尚未接通」", () => {
+  it("Todo 页不再渲染待回应 inbox 分区", () => {
     const { sandbox } = loadViewerSandbox();
-    sandbox.state.inbox = { loaded: true, items: [] };
-    const html = sandbox.renderAwaitingReplySection();
-    expect(html).toContain("暂无待回应");
-    expect(html).not.toContain("尚未接通");
-    expect(html).not.toContain("即将上线");
+    sandbox.state.activeTab = "actions";
+    sandbox.state.actions = {
+      loaded: true,
+      statusFilter: "",
+      search: "",
+      reviewItems: [],
+      frontier: [],
+      items: [{ id: "a1", status: "pending", title: "处理真实待办", updatedAt: new Date().toISOString() }],
+    };
+    sandbox.state.inbox = {
+      loaded: true,
+      items: [{ id: "q1", kind: "question", body: "要不要加鉴权", status: "awaiting", createdAt: "2026-06-13T09:00:00Z" }],
+    };
+
+    sandbox.renderActions();
+    const html = sandbox.document.getElementById("view-actions").innerHTML;
+    expect(html).toContain("处理真实待办");
+    expect(html).not.toContain("awaiting-reply-section");
+    expect(html).not.toContain("要不要加鉴权");
     expect(html).not.toContain("inbox-card");
-  });
-
-  it("question 渲染为 🔴 卡片,带「来自」与计数", () => {
-    const { sandbox } = loadViewerSandbox();
-    sandbox.state.inbox = {
-      loaded: true,
-      items: [
-        { id: "inbox_1", kind: "question", body: "要不要给 `/admin/*` 加鉴权?", fromAgent: "auth-refactor", status: "awaiting", createdAt: "2026-06-13T09:00:00Z" },
-      ],
-    };
-    const html = sandbox.renderAwaitingReplySection();
-    expect(html).toContain("inbox-card-question");
-    expect(html).toContain("待回应 (1)");
-    expect(html).toContain("来自 auth-refactor");
-    expect(html).toContain("Agent 在等你回");
-    // body 走 renderMarkdownSafe:反引号代码片段成 <code class="md-code">
-    expect(html).toContain('<code class="md-code">');
-    expect(html).not.toContain("inbox-card-briefing");
-  });
-
-  it("briefing 渲染为 📋 子区卡片,不计入待回应计数", () => {
-    const { sandbox } = loadViewerSandbox();
-    sandbox.state.inbox = {
-      loaded: true, briefingExpanded: true,
-      items: [
-        { id: "inbox_b", kind: "briefing", body: "今天完成了 3 件", fromAgent: "line-c", status: "awaiting", createdAt: "2026-06-13T09:00:00Z" },
-      ],
-    };
-    const html = sandbox.renderAwaitingReplySection();
-    expect(html).toContain("inbox-card-briefing");
-    expect(html).toContain("Agent 整理 (1)");
-    expect(html).toContain("知悉即可");
-    // 没有 question 时,标题不带 (n) 计数、不显示「在等你回」徽标
-    expect(html).not.toContain("待回应 (");
-    expect(html).not.toContain("Agent 在等你回");
-  });
-
-  it("有 sourceObservationIds 时渲染「看原文 →」按钮,复用 jump-to-evidence", () => {
-    const { sandbox } = loadViewerSandbox();
-    sandbox.state.inbox = {
-      loaded: true,
-      items: [
-        { id: "inbox_e", kind: "question", body: "看证据", status: "awaiting", createdAt: "2026-06-13T09:00:00Z", sourceObservationIds: ["obs_xyz"] },
-      ],
-    };
-    const html = sandbox.renderAwaitingReplySection();
-    expect(html).toContain('data-action="jump-to-evidence"');
-    expect(html).toContain('data-obs-id="obs_xyz"');
-    expect(html).toContain("看原文");
-  });
-
-  it("无 sourceObservationIds 时不渲染「看原文 →」", () => {
-    const { sandbox } = loadViewerSandbox();
-    sandbox.state.inbox = {
-      loaded: true,
-      items: [{ id: "inbox_n", kind: "question", body: "无证据", status: "awaiting", createdAt: "2026-06-13T09:00:00Z" }],
-    };
-    const html = sandbox.renderAwaitingReplySection();
-    expect(html).not.toContain("jump-to-evidence");
-    expect(html).not.toContain("看原文");
-  });
-
-  it("question 与 briefing 混合:各自分区,question 在前", () => {
-    const { sandbox } = loadViewerSandbox();
-    sandbox.state.inbox = {
-      loaded: true, briefingExpanded: true,
-      items: [
-        { id: "b1", kind: "briefing", body: "汇报", status: "awaiting", createdAt: "2026-06-13T09:05:00Z" },
-        { id: "q1", kind: "question", body: "问题", status: "awaiting", createdAt: "2026-06-13T09:00:00Z" },
-      ],
-    };
-    const html = sandbox.renderAwaitingReplySection();
-    expect(html).toContain("inbox-card-question");
-    expect(html).toContain("inbox-card-briefing");
-    // question 子区在 briefing 子区之前
-    expect(html.indexOf("inbox-card-question")).toBeLessThan(html.indexOf("Agent 整理 ("));
-  });
-
-  it("body 经 renderMarkdownSafe 转义,杜绝 XSS 注入", () => {
-    const { sandbox } = loadViewerSandbox();
-    sandbox.state.inbox = {
-      loaded: true,
-      items: [{ id: "x", kind: "question", body: "<img src=x onerror=alert(1)>", status: "awaiting", createdAt: "2026-06-13T09:00:00Z" }],
-    };
-    const html = sandbox.renderAwaitingReplySection();
-    expect(html).not.toContain("<img src=x onerror");
-    expect(html).toContain("&lt;img");
-  });
-
-  // --- STEP-C3 动作按钮 + 行内回应 ---
-
-  it("question 卡渲染 回应/转待处理/知道了 三动作,绑定 data-inbox-id", () => {
-    const { sandbox } = loadViewerSandbox();
-    sandbox.state.inbox = {
-      loaded: true, replyingId: null,
-      items: [{ id: "q9", kind: "question", body: "要加鉴权吗?", status: "awaiting", createdAt: "2026-06-13T09:00:00Z" }],
-    };
-    const html = sandbox.renderAwaitingReplySection();
-    expect(html).toContain('data-action="inbox-reply"');
-    expect(html).toContain('data-action="inbox-to-todo"');
-    expect(html).toContain('data-action="inbox-ack"');
-    expect(html).toContain('data-inbox-id="q9"');
-  });
-
-  it("briefing 卡只有 知道了/转待处理,无 回应", () => {
-    const { sandbox } = loadViewerSandbox();
-    sandbox.state.inbox = {
-      loaded: true, replyingId: null, briefingExpanded: true,
-      items: [{ id: "b9", kind: "briefing", body: "完成 3 件", status: "awaiting", createdAt: "2026-06-13T09:00:00Z" }],
-    };
-    const html = sandbox.renderAwaitingReplySection();
-    expect(html).toContain('data-action="inbox-ack"');
-    expect(html).toContain('data-action="inbox-to-todo"');
-    expect(html).not.toContain('data-action="inbox-reply"');
-  });
-
-  it("回应输入框仅在 replyingId 命中该卡时渲染", () => {
-    const { sandbox } = loadViewerSandbox();
-    const base = { id: "q5", kind: "question", body: "问", status: "awaiting", createdAt: "2026-06-13T09:00:00Z" };
-    sandbox.state.inbox = { loaded: true, replyingId: null, items: [base] };
-    expect(sandbox.renderAwaitingReplySection()).not.toContain("inbox-reply-input-q5");
-    sandbox.state.inbox.replyingId = "q5";
-    const opened = sandbox.renderAwaitingReplySection();
-    expect(opened).toContain('id="inbox-reply-input-q5"');
-    expect(opened).toContain('data-action="inbox-reply-submit"');
-    expect(opened).toContain('data-action="inbox-reply-cancel"');
   });
 
   it("removeInboxItemLocal 本地剔除该项并清回应态", () => {
@@ -397,204 +284,6 @@ describe("STEP-C2 viewer 待回应分区接真数据", () => {
     expect(sandbox.state.inbox.pendingById.q9).toBeUndefined();
   });
 
-  // --- P1 搜索过滤:搜索框作用于待回应区 ---
-
-  it("搜索词过滤 inbox 项(匹配 body 或 fromAgent)", () => {
-    const { sandbox } = loadViewerSandbox();
-    sandbox.state.inbox = {
-      loaded: true, replyingId: null, pendingById: {},
-      items: [
-        { id: "q1", kind: "question", body: "要不要加鉴权", fromAgent: "auth-refactor", status: "awaiting", createdAt: "2026-06-13T09:00:00Z" },
-        { id: "q2", kind: "question", body: "导出格式选哪个", fromAgent: "export-fmt", status: "awaiting", createdAt: "2026-06-13T09:01:00Z" },
-        { id: "b1", kind: "briefing", body: "鉴权批量加固完成", fromAgent: "auth-batch", status: "awaiting", createdAt: "2026-06-13T09:02:00Z" },
-      ],
-    };
-    // 搜 fromAgent
-    sandbox.state.actions.search = "auth-refactor";
-    let html = sandbox.renderAwaitingReplySection();
-    expect(html).toContain("要不要加鉴权");
-    expect(html).not.toContain("导出格式选哪个");
-    expect(html).not.toContain("鉴权批量加固完成");
-    // 搜 body 关键词(跨 question/briefing)
-    sandbox.state.actions.search = "鉴权";
-    html = sandbox.renderAwaitingReplySection();
-    expect(html).toContain("要不要加鉴权");
-    expect(html).toContain("鉴权批量加固完成");
-    expect(html).not.toContain("导出格式选哪个");
-  });
-
-  it("搜索无命中时整区不渲染(返回空串)", () => {
-    const { sandbox } = loadViewerSandbox();
-    sandbox.state.inbox = {
-      loaded: true, replyingId: null, pendingById: {},
-      items: [{ id: "q1", kind: "question", body: "abc", fromAgent: "x", status: "awaiting", createdAt: "2026-06-13T09:00:00Z" }],
-    };
-    sandbox.state.actions.search = "zzz-no-match";
-    expect(sandbox.renderAwaitingReplySection()).toBe("");
-  });
-
-  it("无搜索词时照常渲染全部", () => {
-    const { sandbox } = loadViewerSandbox();
-    sandbox.state.inbox = {
-      loaded: true, replyingId: null, pendingById: {}, briefingExpanded: true,
-      items: [
-        { id: "q1", kind: "question", body: "问一", fromAgent: "a", status: "awaiting", createdAt: "2026-06-13T09:00:00Z" },
-        { id: "b1", kind: "briefing", body: "报一", fromAgent: "b", status: "awaiting", createdAt: "2026-06-13T09:01:00Z" },
-      ],
-    };
-    sandbox.state.actions.search = "";
-    const html = sandbox.renderAwaitingReplySection();
-    expect(html).toContain("问一");
-    expect(html).toContain("报一");
-  });
-
-  // --- P1 briefing 分区折叠 ---
-
-  it("briefing 默认折叠:显示可点开的子区头但不渲染卡片", () => {
-    const { sandbox } = loadViewerSandbox();
-    sandbox.state.inbox = {
-      loaded: true, replyingId: null, pendingById: {}, briefingExpanded: false,
-      items: [
-        { id: "q1", kind: "question", body: "问题正文", fromAgent: "a", status: "awaiting", createdAt: "2026-06-13T09:00:00Z" },
-        { id: "b1", kind: "briefing", body: "简报正文", fromAgent: "b", status: "awaiting", createdAt: "2026-06-13T09:01:00Z" },
-      ],
-    };
-    const html = sandbox.renderAwaitingReplySection();
-    // question 仍直接显示
-    expect(html).toContain("问题正文");
-    // briefing 子区头在,但折叠态:卡片正文不渲染
-    expect(html).toContain('data-action="toggle-briefings"');
-    expect(html).toContain('aria-expanded="false"');
-    expect(html).toContain("Agent 整理 (1)");
-    expect(html).not.toContain("简报正文");
-  });
-
-  it("briefingExpanded 为真时渲染 briefing 卡片", () => {
-    const { sandbox } = loadViewerSandbox();
-    sandbox.state.inbox = {
-      loaded: true, replyingId: null, pendingById: {}, briefingExpanded: true,
-      items: [{ id: "b1", kind: "briefing", body: "简报正文", fromAgent: "b", status: "awaiting", createdAt: "2026-06-13T09:01:00Z" }],
-    };
-    const html = sandbox.renderAwaitingReplySection();
-    expect(html).toContain('aria-expanded="true"');
-    expect(html).toContain("简报正文");
-  });
-
-  it("搜索命中时强制展开 briefing(否则命中项被折叠藏住)", () => {
-    const { sandbox } = loadViewerSandbox();
-    sandbox.state.inbox = {
-      loaded: true, replyingId: null, pendingById: {}, briefingExpanded: false,
-      items: [{ id: "b1", kind: "briefing", body: "鉴权加固完成", fromAgent: "auth", status: "awaiting", createdAt: "2026-06-13T09:01:00Z" }],
-    };
-    sandbox.state.actions.search = "鉴权";
-    const html = sandbox.renderAwaitingReplySection();
-    expect(html).toContain('aria-expanded="true"');
-    expect(html).toContain("鉴权加固完成");
-  });
-
-  // --- STEP-D4 飞书投递状态徽标(只读,join 自 mem:delivery) ---
-
-  it("delivery sent → 显示「已推送 ✓」徽标", () => {
-    const { sandbox } = loadViewerSandbox();
-    sandbox.state.inbox = {
-      loaded: true, replyingId: null, pendingById: {},
-      items: [{
-        id: "q1", kind: "question", body: "问", status: "awaiting", createdAt: "2026-06-13T09:00:00Z",
-        delivery: { channel: "lark", status: "sent", messageId: "om_x", urgent: false, attempts: 1, deliveredAt: "2026-06-13T09:00:05Z" },
-      }],
-    };
-    const html = sandbox.renderAwaitingReplySection();
-    expect(html).toContain("inbox-delivery-sent");
-    expect(html).toContain("已推送 ✓");
-    expect(html).not.toContain("推送失败");
-  });
-
-  it("delivery sent + urgent → 徽标带「加急」", () => {
-    const { sandbox } = loadViewerSandbox();
-    sandbox.state.inbox = {
-      loaded: true, replyingId: null, pendingById: {},
-      items: [{
-        id: "q1", kind: "question", body: "问", status: "awaiting", createdAt: "2026-06-13T09:00:00Z",
-        delivery: { channel: "lark", status: "sent", messageId: "om_x", urgent: true, attempts: 1 },
-      }],
-    };
-    const html = sandbox.renderAwaitingReplySection();
-    expect(html).toContain("已推送 ✓");
-    expect(html).toContain("加急");
-  });
-
-  it("delivery failed → 显示「推送失败 ⚠」+ 短错误摘要", () => {
-    const { sandbox } = loadViewerSandbox();
-    sandbox.state.inbox = {
-      loaded: true, replyingId: null, pendingById: {},
-      items: [{
-        id: "q1", kind: "question", body: "问", status: "awaiting", createdAt: "2026-06-13T09:00:00Z",
-        delivery: { channel: "lark", status: "failed", error: "missing scope im:message", attempts: 1 },
-      }],
-    };
-    const html = sandbox.renderAwaitingReplySection();
-    expect(html).toContain("inbox-delivery-failed");
-    expect(html).toContain("推送失败 ⚠");
-    expect(html).toContain("missing scope im:message");
-  });
-
-  it("delivery failed 超长错误被截断到 ≤61 字符(含省略号)", () => {
-    const { sandbox } = loadViewerSandbox();
-    const longErr = "x".repeat(200);
-    sandbox.state.inbox = {
-      loaded: true, replyingId: null, pendingById: {},
-      items: [{
-        id: "q1", kind: "question", body: "问", status: "awaiting", createdAt: "2026-06-13T09:00:00Z",
-        delivery: { channel: "lark", status: "failed", error: longErr, attempts: 2 },
-      }],
-    };
-    const html = sandbox.renderAwaitingReplySection();
-    // 截断后的可见摘要不含完整 200 长串
-    const m = html.match(/inbox-delivery-err">([^<]*)</);
-    expect(m).toBeTruthy();
-    expect(m![1].length).toBeLessThanOrEqual(61); // 60 + '…'
-    expect(m![1].endsWith("…")).toBe(true);
-  });
-
-  it("delivery skipped → 不显示任何徽标(不污染 UI)", () => {
-    const { sandbox } = loadViewerSandbox();
-    sandbox.state.inbox = {
-      loaded: true, replyingId: null, pendingById: {},
-      items: [{
-        id: "q1", kind: "question", body: "问", status: "awaiting", createdAt: "2026-06-13T09:00:00Z",
-        delivery: { channel: "lark", status: "skipped", attempts: 0 },
-      }],
-    };
-    const html = sandbox.renderAwaitingReplySection();
-    expect(html).not.toContain("inbox-delivery");
-    expect(html).not.toContain("已推送");
-    expect(html).not.toContain("推送失败");
-  });
-
-  it("无 delivery 字段 → 不显示徽标(向后兼容 D3 前的数据)", () => {
-    const { sandbox } = loadViewerSandbox();
-    sandbox.state.inbox = {
-      loaded: true, replyingId: null, pendingById: {},
-      items: [{ id: "q1", kind: "question", body: "问", status: "awaiting", createdAt: "2026-06-13T09:00:00Z" }],
-    };
-    const html = sandbox.renderAwaitingReplySection();
-    expect(html).not.toContain("inbox-delivery");
-  });
-
-  it("failed 错误摘要经 esc 转义,杜绝 XSS", () => {
-    const { sandbox } = loadViewerSandbox();
-    sandbox.state.inbox = {
-      loaded: true, replyingId: null, pendingById: {},
-      items: [{
-        id: "q1", kind: "question", body: "问", status: "awaiting", createdAt: "2026-06-13T09:00:00Z",
-        delivery: { channel: "lark", status: "failed", error: "<img src=x onerror=alert(1)>", attempts: 1 },
-      }],
-    };
-    const html = sandbox.renderAwaitingReplySection();
-    expect(html).not.toContain("<img src=x onerror");
-    expect(html).toContain("&lt;img");
-  });
-
   it("answered question 进入已回应归档并显示用户回复", () => {
     const { sandbox } = loadViewerSandbox();
     sandbox.state.inbox = {
@@ -635,7 +324,6 @@ describe("STEP-C2 viewer 待回应分区接真数据", () => {
       ],
       answeredExpanded: true,
     };
-    expect(sandbox.renderAwaitingReplySection()).toContain("暂无待回应");
     const html = sandbox.renderInboxArchiveSection();
     expect(html).toContain("已知悉 (2)");
     expect(html).toContain("本次整理完成");

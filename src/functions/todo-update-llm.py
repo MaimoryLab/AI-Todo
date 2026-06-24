@@ -31,7 +31,8 @@ because a full-list maintenance pass is improving existing card quality. Your
 job is to UPDATE each card using only the card, its evidence, its sessionDelta
 when present, and other cards in this same batch. Keep the list trustworthy —
 every surviving card must be a REAL, SPECIFIC, STILL-OPEN action with a clear
-title.
+mature todo-card title. The title should read like something a developer can
+execute from a task list, not like an AI agent progress log.
 
 For EACH input card, output exactly one decision:
 - KEEP    — still a genuine, still-open action and the new activity does not
@@ -59,12 +60,26 @@ Rules:
    scope, steps, or detail.
 4. KEEP bar: a specific subject + a verb/action + a discernible outcome
    (e.g. "Fix the N+1 query in the dashboard loader"). Reject pure observations,
-   logs, status lines, and vibes.
-5. Title quality bar: use concrete verb + specific object (+ target/outcome when
-   it adds signal). Remove filler such as "全面了解", "了解现状", "梳理现状",
+   logs, status lines, one-off status checks, and vibes.
+5. Title quality bar: use concrete verb + semantic object (+ target/outcome when
+   it adds signal), but keep the title scannable. Precise technical identifiers
+   must be preserved in `newDescription` when needed, not allowed to dominate
+   `newTitle`. Move long branch names, commit hashes, file paths, URLs, session
+   ids, package names, and raw repos out of the title. Prefer
+   newTitle "推送当前工作分支到远程仓库" + newDescription
+   "分支：codex/todo-cleanup-flash-model。" over
+   "推送 codex/todo-cleanup-flash-model 分支到远程仓库".
+   Remove filler such as "全面了解", "了解现状", "梳理现状",
    "获取信息", "进行", "处理". Prefer "克隆 AI-Todo 仓库" over
    "克隆仓库并全面了解其状况".
-6. If a card has `titleQualityHint`, actively consider REWRITE even if it is
+   A good title may contain tightly related steps when they serve one outcome,
+   e.g. "修正目录显示文字（去掉重复编号）并更新页码缓存后重渲染".
+6. Agent process/status-check titles are not good todo titles. If still useful,
+   REWRITE them into the durable user outcome; otherwise DROP. Examples:
+   "重启 Codex desktop app 后再测一次" -> "验证重启后的 Codex 桌面端";
+   "做最后一次状态确认" / "启动后做健康检查" / "确认工作区干净" -> DROP unless
+   evidence clearly shows a still-open deliverable.
+7. If a card has `titleQualityHint`, actively consider REWRITE even if it is
    still open. If that card is also the best MERGE target, output REWRITE for
    the target card and MERGE the duplicates into that same id.
 
@@ -77,6 +92,9 @@ Examples of decisions:
 - sessionDelta shows the change was committed/merged/tests passed             -> DONE
 - "⏺ Bash(npm test)" / "Viewer: http://localhost:3114" / "abc1234 (HEAD)"     -> DROP
 - "克隆仓库并全面了解其状况" with AI-Todo evidence                            -> REWRITE to "克隆 AI-Todo 仓库"
+- "推送 codex/todo-cleanup-flash-model 分支到远程仓库"                      -> REWRITE to "推送当前工作分支到远程仓库" and keep the branch in description
+- "重启 Codex desktop app 后再测一次" with live issue evidence                -> REWRITE to "验证重启后的 Codex 桌面端"
+- "做最后一次状态确认" / "启动后做健康检查" as agent procedure                 -> DROP
 - a real task whose wording is vague or stale given the new activity          -> REWRITE
 - two cards describing the same fix                                           -> MERGE duplicates + KEEP/REWRITE canonical
 - a still-open task the new activity does not touch                           -> KEEP
@@ -194,6 +212,12 @@ if __name__ == "__main__":
         assert _out[2]["mergeIntoId"] == "b"
         assert "KEEP" in SYSTEM_PROMPT and "MERGE" in SYSTEM_PROMPT
         assert "Title quality bar" in SYSTEM_PROMPT and "克隆 AI-Todo 仓库" in SYSTEM_PROMPT
+        assert "推送当前工作分支到远程仓库" in SYSTEM_PROMPT
+        assert "codex/todo-cleanup-flash-model" in SYSTEM_PROMPT
+        assert "修正目录显示文字" in SYSTEM_PROMPT
+        assert "mature todo-card title" in SYSTEM_PROMPT
+        assert "重启 Codex desktop app 后再测一次" in SYSTEM_PROMPT
+        assert "做最后一次状态确认" in SYSTEM_PROMPT
         print("ok")
         raise SystemExit(0)
     raise SystemExit(main())

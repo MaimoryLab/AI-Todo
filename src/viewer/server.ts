@@ -12,7 +12,7 @@ import { homedir } from "node:os";
 import { renderViewerDocument } from "./document.js";
 import type { Action, CompressedObservation, Memory, ReviewQueueItem, Session } from "../types.js";
 import { KV, fingerprintId } from "../state/schema.js";
-import { getTodoExtractJobStatus, runTodoExtractJob, updateChangedTodoCards } from "../functions/todo-extract.js";
+import { generateTodosFromSessions, refreshTodoAction, updateChangedTodoCards } from "../functions/todo-extract.js";
 import { getTodoExtractorUserConfig, getUserEnvPath, writeUserEnv, WRITABLE_TODO_EXTRACT_KEYS } from "../config.js";
 
 // Self-host the viewer favicon at /favicon.svg instead of an inline
@@ -1382,13 +1382,29 @@ export function startViewerServer(
     if (method === "POST" && pathname === "/agentmemory/todo-extract/generate") {
       const raw = await readBody(req);
       const body = raw ? JSON.parse(raw) as Record<string, unknown> : {};
-      const result = await runTodoExtractJob(kv as ViewerKv, body);
+      const result = await generateTodosFromSessions(kv as ViewerKv, body);
       json(res, 200, result, req);
       return;
     }
 
-    if (method === "GET" && pathname === "/agentmemory/todo-extract/status") {
-      json(res, 200, getTodoExtractJobStatus(), req);
+    if (method === "POST" && pathname === "/agentmemory/todo/action-refresh") {
+      const raw = await readBody(req);
+      const body = raw ? JSON.parse(raw) as Record<string, unknown> : {};
+      const actionId = asText(body.actionId);
+      if (!actionId) {
+        json(res, 400, { error: "actionId is required" }, req);
+        return;
+      }
+      const result = await refreshTodoAction(kv as ViewerKv, { actionId });
+      if (!result.success && result.reason === "action-not-found") {
+        json(res, 404, result, req);
+        return;
+      }
+      if (!result.success) {
+        json(res, 400, result, req);
+        return;
+      }
+      json(res, 200, result, req);
       return;
     }
 
@@ -1424,7 +1440,7 @@ export function startViewerServer(
         success: true,
         envPath: getUserEnvPath(),
         config: getTodoExtractorUserConfig(),
-        restartRequired: false,
+        restartRequired: true,
       }, req);
       return;
     }
