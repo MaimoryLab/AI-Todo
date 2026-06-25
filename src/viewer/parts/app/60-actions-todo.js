@@ -223,7 +223,8 @@
       apiPost('config/todo-extractor', body).then(function(res) {
         if (res && res.config) state.actions.config = res;
         state.actions.configDraft = {};
-        state.actions.extractMessage = t('settings.savedRestart');
+        state.actions.forceNextExtract = true;
+        state.actions.extractMessage = t('settings.savedReady');
       }).catch(function() {
         state.actions.extractStatus = 'error';
         state.actions.extractMessage = t('settings.saveFailed');
@@ -297,6 +298,8 @@
 
     function startTodoExtraction(force) {
       if (state.actions.extractInFlight) return;
+      var shouldForce = force === true || state.actions.forceNextExtract === true;
+      state.actions.forceNextExtract = false;
       state.actions.extractInFlight = true;
       state.actions.extractStatus = 'running';
       state.actions.extractMessage = t('act.extract.starting');
@@ -325,7 +328,7 @@
       // don't hard-code maxSessions/maxObservationsPerSession here or the
       // settings would never take effect on this primary extraction path.
       apiPost('todo-extract/generate', {
-        force: force === true
+        force: shouldForce
       }).then(function(result) {
         var delta = todoExtractionDelta(result);
         if (!result || result.success !== true) {

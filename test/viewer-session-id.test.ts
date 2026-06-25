@@ -1267,12 +1267,20 @@ describe("viewer session rendering", () => {
   it("renders and saves todo extractor config from the global settings panel", async () => {
     const { sandbox, getElement, dispatchDocumentClick } = loadViewerSandbox();
     const posts: any[] = [];
+    const extractPosts: any[] = [];
     sandbox.fetch = async (input: unknown, init?: { body?: string }) => {
       const url = String(input);
       if (url.includes("config/todo-extractor") && init?.body) {
         posts.push(JSON.parse(init.body));
         return { ok: true, json: async () => ({ success: true, envPath: "/tmp/.env", config: { LANGEXTRACT_MODEL: "deepseek/deepseek-v4-flash", LANGEXTRACT_API_KEY_CONFIGURED: true } }) };
       }
+      if (url.includes("todo-extract/generate") && init?.body) {
+        extractPosts.push(JSON.parse(init.body));
+        return { ok: true, json: async () => ({ success: true, engine: "langextract", directCreated: 0, reviewCreated: 0, hiddenHistory: 0, discarded: 0 }) };
+      }
+      if (url.includes("actions")) return { ok: true, json: async () => ({ actions: [] }) };
+      if (url.includes("frontier")) return { ok: true, json: async () => ({ frontier: [] }) };
+      if (url.includes("inbox")) return { ok: true, json: async () => ({ items: [] }) };
       return { ok: true, json: async () => ({ success: true, envPath: "/tmp/.env", config: { LANGEXTRACT_MODEL: "deepseek/deepseek-v4-flash", LANGEXTRACT_API_KEY_CONFIGURED: false } }) };
     };
     sandbox.state.activeTab = "actions";
@@ -1301,10 +1309,16 @@ describe("viewer session rendering", () => {
     target.getAttribute = (name: string) => name === "data-action" ? "save-todo-config" : null;
     target.closest = (selector: string) => selector === "[data-action]" ? target : null;
     dispatchDocumentClick(target);
-    await waitFor(() => sandbox.state.actions.extractMessage === "Config saved. Restart the service to apply it.");
+    await waitFor(() => sandbox.state.actions.extractMessage === "Config saved. The next organize run will use it now.");
 
     expect(posts[0]).toMatchObject({ LANGEXTRACT_MODEL: "deepseek/deepseek-v4-flash", AGENTMEMORY_TODO_EXTRACT_TIMEOUT_MS: "120000", LANGEXTRACT_API_KEY: "secret" });
-    expect(sandbox.state.actions.extractMessage).toBe("Config saved. Restart the service to apply it.");
+    expect(sandbox.state.actions.extractMessage).toBe("Config saved. The next organize run will use it now.");
+    expect(sandbox.state.actions.forceNextExtract).toBe(true);
+
+    sandbox.startTodoExtraction(false);
+    await waitFor(() => extractPosts.length === 1);
+    expect(extractPosts[0]).toMatchObject({ force: true });
+    expect(sandbox.state.actions.forceNextExtract).toBe(false);
   });
 
   it("keeps unsaved todo extractor config while the settings panel rerenders", () => {

@@ -4330,7 +4330,7 @@
         'settings.apiKeyLabel': 'API key:',
         'settings.save': 'Save config',
         'settings.saving': 'Saving...',
-        'settings.savedRestart': 'Config saved. Restart the service to apply it.',
+        'settings.savedReady': 'Config saved. The next organize run will use it now.',
         'settings.saveFailed': 'Config save failed',
         'act.status.updateFailed': 'Todo status update failed',
         'obs.type.file_read': 'Read file',
@@ -4558,7 +4558,7 @@
         'settings.apiKeyLabel': 'API key:',
         'settings.save': '保存配置',
         'settings.saving': '保存中...',
-        'settings.savedRestart': '配置已保存，重启后生效。',
+        'settings.savedReady': '配置已保存，下次整理会立即使用新配置。',
         'settings.saveFailed': '配置保存失败',
         'act.status.updateFailed': '待办状态更新失败',
         'obs.type.file_read': '读取文件',
@@ -4767,7 +4767,7 @@
       audit: { loaded: false, entries: [], opFilter: '' },
       activity: { loaded: false, observations: [], sessions: [], typeFilter: '', loadingPhase: '', warnings: [] },
       lessons: { loaded: false, items: [], search: '', skillSearch: '', skillRootFilter: 'all', mode: 'explicit', projects: [] },
-      actions: { loaded: false, items: [], reviewItems: [], frontier: [], statusFilter: '', search: '', doneExpanded: false, earlierOpenExpanded: false, olderBacklogExpanded: false, extractStatus: '', extractMessage: '', extractInFlight: false, cardRefreshInFlight: {}, cardRefreshNotice: '', stale: false, config: null, configSaving: false, configDraft: {} },
+      actions: { loaded: false, items: [], reviewItems: [], frontier: [], statusFilter: '', search: '', doneExpanded: false, earlierOpenExpanded: false, olderBacklogExpanded: false, extractStatus: '', extractMessage: '', extractInFlight: false, cardRefreshInFlight: {}, cardRefreshNotice: '', stale: false, config: null, configSaving: false, configDraft: {}, forceNextExtract: false },
       inbox: { loaded: false, items: [], awaitingItems: [], answeredItems: [], dismissedItems: [], replyingId: null, pendingById: {}, briefingExpanded: false, answeredExpanded: false },
       crystals: { loaded: false, items: [], search: '', lessonMap: {} },
       profile: { loaded: false, projects: [], selectedProject: '', data: null },
@@ -9064,7 +9064,8 @@
       apiPost('config/todo-extractor', body).then(function(res) {
         if (res && res.config) state.actions.config = res;
         state.actions.configDraft = {};
-        state.actions.extractMessage = t('settings.savedRestart');
+        state.actions.forceNextExtract = true;
+        state.actions.extractMessage = t('settings.savedReady');
       }).catch(function() {
         state.actions.extractStatus = 'error';
         state.actions.extractMessage = t('settings.saveFailed');
@@ -9138,6 +9139,8 @@
 
     function startTodoExtraction(force) {
       if (state.actions.extractInFlight) return;
+      var shouldForce = force === true || state.actions.forceNextExtract === true;
+      state.actions.forceNextExtract = false;
       state.actions.extractInFlight = true;
       state.actions.extractStatus = 'running';
       state.actions.extractMessage = t('act.extract.starting');
@@ -9166,7 +9169,7 @@
       // don't hard-code maxSessions/maxObservationsPerSession here or the
       // settings would never take effect on this primary extraction path.
       apiPost('todo-extract/generate', {
-        force: force === true
+        force: shouldForce
       }).then(function(result) {
         var delta = todoExtractionDelta(result);
         if (!result || result.success !== true) {
