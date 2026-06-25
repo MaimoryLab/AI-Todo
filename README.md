@@ -16,11 +16,24 @@ Requirements: **Node.js 20+**.
 
 ```bash
 npm install
+.agentmemory-python/bin/python -c "import langextract; print('langextract ok')"
 npm run build
 npm run start:local-memory
 ```
 
 The daemon prints a local viewer URL (default REST API on port **3111**). Open it in your browser.
+
+If the LangExtract check fails, install the Python deps into the managed runtime:
+
+```bash
+.agentmemory-python/bin/python -m pip install -r requirements-langextract.txt
+```
+
+If you created your own venv instead, point Settings or `~/.agentmemory/.env` at it:
+
+```bash
+LANGEXTRACT_PYTHON=/absolute/path/to/.venv-langextract/bin/python
+```
 
 **Try it with sample data** — in another terminal:
 
