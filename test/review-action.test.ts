@@ -159,7 +159,7 @@ describe("review action candidates", () => {
     const oldKey = process.env.LANGEXTRACT_API_KEY;
     process.env.LANGEXTRACT_MODEL = "deepseek/deepseek-v4-flash";
     process.env.LANGEXTRACT_API_KEY = "secret";
-    const response = await sdk.trigger("api::todo-extractor-config", req()) as { status_code: number; body: { success: boolean; config: Record<string, unknown>; envPath: string } };
+    const response = await sdk.trigger("api::todo-extractor-config", req()) as { status_code: number; body: { success: boolean; config: Record<string, unknown>; envPath: string; restartRequired: boolean } };
     if (oldModel === undefined) delete process.env.LANGEXTRACT_MODEL;
     else process.env.LANGEXTRACT_MODEL = oldModel;
     if (oldKey === undefined) delete process.env.LANGEXTRACT_API_KEY;
@@ -171,6 +171,7 @@ describe("review action candidates", () => {
     expect(response.body.config.LANGEXTRACT_MODEL).toBe("deepseek/deepseek-v4-flash");
     expect(response.body.config.LANGEXTRACT_API_KEY).toBeUndefined();
     expect(response.body.config.LANGEXTRACT_API_KEY_CONFIGURED).toBe(true);
+    expect(response.body.restartRequired).toBe(false);
   });
 
   it("rejects invalid todo extraction limits through the API", async () => {

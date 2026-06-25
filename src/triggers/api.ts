@@ -522,7 +522,7 @@ export function registerApiTriggers(
           success: true,
           envPath: getUserEnvPath(),
           config: getTodoExtractorUserConfig(),
-          restartRequired: true,
+          restartRequired: false,
         },
       };
     },

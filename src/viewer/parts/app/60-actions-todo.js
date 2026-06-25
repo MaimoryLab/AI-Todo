@@ -88,6 +88,7 @@
       if (st.status === 'done' && st.summary) {
         state.actions.extractStatus = 'done';
         state.actions.extractFallback = !todoExtractionUsedLlm(st.summary);
+        state.actions.extractPartial = st.summary && st.summary.engine === 'mixed';
         state.actions.extractMessage = todoExtractionSummary(st.summary);
       } else if (st.status === 'error') {
         state.actions.extractStatus = 'error';
@@ -170,6 +171,7 @@
       html += '<div><input id="todo-config-LANGEXTRACT_API_KEY" class="search-input" type="password" placeholder="' + esc(keyLabel) + '" />';
       if (maskedKey) html += '<div class="action-meta-text" style="margin-top:4px;">' + esc(t('settings.apiKeyLabel')) + ' ' + esc(maskedKey) + '</div>';
       html += '</div></div>';
+      html += '<div class="settings-sub" style="margin-top:8px;">' + esc(cfg.LANGEXTRACT_RUNTIME_READY ? t('settings.runtimeReady') : t('settings.runtimeMissing')) + (cfg.LANGEXTRACT_RUNTIME_ERROR ? ': ' + esc(cfg.LANGEXTRACT_RUNTIME_ERROR) : '') + '</div>';
       html += '<div style="display:flex;gap:8px;margin-top:12px;align-items:center;flex-wrap:wrap;">';
       html += '<button class="btn btn-primary" data-action="save-todo-config" type="button"' + (state.actions.configSaving ? ' disabled' : '') + '>' + esc(state.actions.configSaving ? t('settings.saving') : t('settings.save')) + '</button>';
       if (state.actions.config && state.actions.config.envPath) html += '<span class="action-meta-text">' + esc(state.actions.config.envPath) + '</span>';
@@ -223,7 +225,8 @@
       apiPost('config/todo-extractor', body).then(function(res) {
         if (res && res.config) state.actions.config = res;
         state.actions.configDraft = {};
-        state.actions.extractMessage = t('settings.savedRestart');
+        state.actions.forceNextExtract = true;
+        state.actions.extractMessage = t('settings.savedReady');
       }).catch(function() {
         state.actions.extractStatus = 'error';
         state.actions.extractMessage = t('settings.saveFailed');
@@ -297,6 +300,8 @@
 
     function startTodoExtraction(force) {
       if (state.actions.extractInFlight) return;
+      var shouldForce = force === true || state.actions.forceNextExtract === true;
+      state.actions.forceNextExtract = false;
       state.actions.extractInFlight = true;
       state.actions.extractStatus = 'running';
       state.actions.extractMessage = t('act.extract.starting');
@@ -325,7 +330,7 @@
       // don't hard-code maxSessions/maxObservationsPerSession here or the
       // settings would never take effect on this primary extraction path.
       apiPost('todo-extract/generate', {
-        force: force === true
+        force: shouldForce
       }).then(function(result) {
         var delta = todoExtractionDelta(result);
         if (!result || result.success !== true) {
@@ -335,6 +340,7 @@
         }
         state.actions.extractStatus = 'done';
         state.actions.extractFallback = !todoExtractionUsedLlm(result);
+        state.actions.extractPartial = result && result.engine === 'mixed';
         state.actions.extractMessage = todoExtractionSummary(result);
         if (actionsScrolledAway()) {
           state.actions.stale = delta > 0;
@@ -1088,7 +1094,7 @@
         var extractTitle = state.actions.extractMessage || t('act.extract.title');
         var extractLabel = t('act.extract.run');
         if (state.actions.extractInFlight) extractLabel = t('act.extract.running');
-        else if (state.actions.extractStatus === 'done') extractLabel = state.actions.extractFallback ? t('act.extract.rules') : t('act.extract.done');
+        else if (state.actions.extractStatus === 'done') extractLabel = state.actions.extractPartial ? t('act.extract.partial') : (state.actions.extractFallback ? t('act.extract.rules') : t('act.extract.done'));
         else if (state.actions.extractStatus === 'error') extractLabel = t('act.extract.error');
         html += '<button class="btn btn-primary' + (state.actions.extractInFlight ? ' btn-working' : '') + '" data-action="extract-actions" type="button" title="' + esc(extractTitle) + '" style="margin-left:auto;"' + (state.actions.extractInFlight ? ' disabled aria-busy="true"' : '') + '>' + esc(extractLabel) + '</button>';
         var cleanupLabel = t('act.cleanup.run');

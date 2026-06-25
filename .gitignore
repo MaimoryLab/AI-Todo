@@ -1,4 +1,5 @@
 node_modules/
+.agentmemory-python/
 dist/
 artifacts/
 *.tsbuildinfo

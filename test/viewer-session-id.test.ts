@@ -1267,13 +1267,21 @@ describe("viewer session rendering", () => {
   it("renders and saves todo extractor config from the global settings panel", async () => {
     const { sandbox, getElement, dispatchDocumentClick } = loadViewerSandbox();
     const posts: any[] = [];
+    const extractPosts: any[] = [];
     sandbox.fetch = async (input: unknown, init?: { body?: string }) => {
       const url = String(input);
       if (url.includes("config/todo-extractor") && init?.body) {
         posts.push(JSON.parse(init.body));
-        return { ok: true, json: async () => ({ success: true, envPath: "/tmp/.env", config: { LANGEXTRACT_MODEL: "deepseek/deepseek-v4-flash", LANGEXTRACT_API_KEY_CONFIGURED: true } }) };
+        return { ok: true, json: async () => ({ success: true, envPath: "/tmp/.env", config: { LANGEXTRACT_MODEL: "deepseek/deepseek-v4-flash", LANGEXTRACT_API_KEY_CONFIGURED: true, LANGEXTRACT_RUNTIME_READY: true, LANGEXTRACT_RUNTIME_ERROR: "" } }) };
       }
-      return { ok: true, json: async () => ({ success: true, envPath: "/tmp/.env", config: { LANGEXTRACT_MODEL: "deepseek/deepseek-v4-flash", LANGEXTRACT_API_KEY_CONFIGURED: false } }) };
+      if (url.includes("todo-extract/generate") && init?.body) {
+        extractPosts.push(JSON.parse(init.body));
+        return { ok: true, json: async () => ({ success: true, engine: "langextract", directCreated: 0, reviewCreated: 0, hiddenHistory: 0, discarded: 0 }) };
+      }
+      if (url.includes("actions")) return { ok: true, json: async () => ({ actions: [] }) };
+      if (url.includes("frontier")) return { ok: true, json: async () => ({ frontier: [] }) };
+      if (url.includes("inbox")) return { ok: true, json: async () => ({ items: [] }) };
+      return { ok: true, json: async () => ({ success: true, envPath: "/tmp/.env", config: { LANGEXTRACT_MODEL: "deepseek/deepseek-v4-flash", LANGEXTRACT_API_KEY_CONFIGURED: false, LANGEXTRACT_RUNTIME_READY: false, LANGEXTRACT_RUNTIME_ERROR: "No module named langextract" } }) };
     };
     sandbox.state.activeTab = "actions";
     sandbox.state.actions = {
@@ -1283,7 +1291,7 @@ describe("viewer session rendering", () => {
       statusFilter: "",
       search: "",
       reviewItems: [],
-      config: { envPath: "/tmp/.env", config: { LANGEXTRACT_MODEL: "deepseek/deepseek-v4-flash", LANGEXTRACT_API_KEY_CONFIGURED: false } },
+      config: { envPath: "/tmp/.env", config: { LANGEXTRACT_MODEL: "deepseek/deepseek-v4-flash", LANGEXTRACT_API_KEY_CONFIGURED: false, LANGEXTRACT_RUNTIME_READY: false, LANGEXTRACT_RUNTIME_ERROR: "No module named langextract" } },
     };
     sandbox.state.inbox = { loaded: true, items: [] };
     sandbox.renderActions();
@@ -1292,6 +1300,8 @@ describe("viewer session rendering", () => {
     sandbox.state.settings.open = true;
     sandbox.renderSettingsPanel();
     expect(getElement("settings-panel").innerHTML).toContain("LLM extraction config");
+    expect(getElement("settings-panel").innerHTML).toContain("LLM runtime missing");
+    expect(getElement("settings-panel").innerHTML).not.toContain("restart");
     expect(getElement("settings-panel").innerHTML).not.toContain("pa/gpt-5.5");
 
     getElement("todo-config-LANGEXTRACT_MODEL").value = "deepseek/deepseek-v4-flash";
@@ -1301,10 +1311,16 @@ describe("viewer session rendering", () => {
     target.getAttribute = (name: string) => name === "data-action" ? "save-todo-config" : null;
     target.closest = (selector: string) => selector === "[data-action]" ? target : null;
     dispatchDocumentClick(target);
-    await waitFor(() => sandbox.state.actions.extractMessage === "Config saved. Restart the service to apply it.");
+    await waitFor(() => sandbox.state.actions.extractMessage === "Config saved. The next organize run will use it now.");
 
     expect(posts[0]).toMatchObject({ LANGEXTRACT_MODEL: "deepseek/deepseek-v4-flash", AGENTMEMORY_TODO_EXTRACT_TIMEOUT_MS: "120000", LANGEXTRACT_API_KEY: "secret" });
-    expect(sandbox.state.actions.extractMessage).toBe("Config saved. Restart the service to apply it.");
+    expect(sandbox.state.actions.extractMessage).toBe("Config saved. The next organize run will use it now.");
+    expect(sandbox.state.actions.forceNextExtract).toBe(true);
+
+    sandbox.startTodoExtraction(false);
+    await waitFor(() => extractPosts.length === 1);
+    expect(extractPosts[0]).toMatchObject({ force: true });
+    expect(sandbox.state.actions.forceNextExtract).toBe(false);
   });
 
   it("keeps unsaved todo extractor config while the settings panel rerenders", () => {
@@ -1381,6 +1397,30 @@ describe("viewer session rendering", () => {
     const html = getElement("view-actions").innerHTML;
     expect(html).toContain("LLM unavailable");
     expect(html).toContain("missing key");
+  });
+
+  it("labels mixed extraction as partial instead of saying the LLM was unavailable", () => {
+    const { sandbox, getElement } = loadViewerSandbox();
+    sandbox.state.activeTab = "actions";
+    sandbox.state.actions = {
+      loaded: true,
+      items: [],
+      frontier: [],
+      statusFilter: "",
+      search: "",
+      reviewItems: [],
+      extractStatus: "done",
+      extractFallback: true,
+      extractPartial: true,
+      extractMessage: "Partial LLM extraction complete · reason: sidecar timed out",
+    };
+    sandbox.state.inbox = { loaded: true, items: [] };
+    sandbox.renderActions();
+
+    const html = getElement("view-actions").innerHTML;
+    expect(html).toContain("Partially organized");
+    expect(html).not.toContain("LLM unavailable");
+    expect(html).toContain("sidecar timed out");
   });
 
   it("filters actions from Todo and Done metric cards", () => {

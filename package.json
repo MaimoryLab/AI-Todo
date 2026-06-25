@@ -19,6 +19,7 @@
   "scripts": {
     "build": "tsdown && node scripts/build-viewer-html.mjs --check && (cp iii-config.yaml dist/ 2>/dev/null || true) && (cp iii-config.docker.yaml dist/ 2>/dev/null || true) && (cp docker-compose.yml dist/ 2>/dev/null || true) && (cp .env.example dist/ 2>/dev/null || true) && mkdir -p dist/viewer/agent-avatars dist/viewer/demo dist/functions && cp src/viewer/index.html dist/viewer/ && cp src/viewer/favicon.svg dist/viewer/ && cp src/viewer/agent-avatars/* dist/viewer/agent-avatars/ && cp src/viewer/demo/* dist/viewer/demo/ && cp src/functions/todo-extract-langextract.py dist/functions/ && cp src/functions/todo-update-llm.py dist/functions/",
     "dev": "tsx src/index.ts",
+    "postinstall": "node scripts/install-langextract.mjs",
     "viewer:build": "node scripts/build-viewer-html.mjs",
     "viewer:watch": "node scripts/build-viewer-html.mjs --watch",
     "start": "node dist/cli.mjs",
@@ -64,10 +65,12 @@
   "files": [
     "dist/",
     "plugin/",
+    "scripts/install-langextract.mjs",
     "iii-config.yaml",
     "iii-config.docker.yaml",
     "docker-compose.yml",
     ".env.example",
+    "requirements-langextract.txt",
     "LICENSE",
     "README.md",
     "AGENTS.md"

@@ -14,6 +14,7 @@ import type { Action, CompressedObservation, Memory, ReviewQueueItem, Session } 
 import { KV, fingerprintId } from "../state/schema.js";
 import { generateTodosFromSessions, refreshTodoAction, updateChangedTodoCards } from "../functions/todo-extract.js";
 import {
+  DEFAULT_TODO_EXTRACT_MAX_SESSIONS,
   detectEmbeddingProvider,
   detectLlmProviderKind,
   getTodoExtractorUserConfig,
@@ -648,7 +649,7 @@ async function readTodoExtractStatus(kv: ViewerKv): Promise<TodoExtractStatus> {
     if (!parsed || typeof parsed !== "object" || !parsed.status) return { status: "idle" };
     if (parsed.status !== "running") return parsed;
     const startedAt = parsed.startedAt ? Date.parse(parsed.startedAt) : NaN;
-    const maxAgeMs = proxyTimeoutMsForPath("/agentmemory/todo-extract/generate") + 30_000;
+    const maxAgeMs = todoExtractRunningMaxAgeMs();
     if (!Number.isFinite(startedAt) || Date.now() - startedAt <= maxAgeMs) return parsed;
     return {
       status: "error",
@@ -659,6 +660,15 @@ async function readTodoExtractStatus(kv: ViewerKv): Promise<TodoExtractStatus> {
   } catch {
     return { status: "idle" };
   }
+}
+
+function todoExtractRunningMaxAgeMs(): number {
+  const perSessionMs = proxyTimeoutMsForPath("/agentmemory/todo-extract/generate");
+  const rawMaxSessions = Number(process.env.AGENTMEMORY_TODO_EXTRACT_MAX_SESSIONS);
+  const maxSessions = Number.isFinite(rawMaxSessions) && rawMaxSessions > 0
+    ? Math.min(100, Math.floor(rawMaxSessions))
+    : DEFAULT_TODO_EXTRACT_MAX_SESSIONS;
+  return perSessionMs * maxSessions + 60_000;
 }
 
 async function writeTodoExtractStatus(kv: ViewerKv, status: TodoExtractStatus): Promise<void> {
@@ -1560,7 +1570,7 @@ export function startViewerServer(
         success: true,
         envPath: getUserEnvPath(),
         config: getTodoExtractorUserConfig(),
-        restartRequired: true,
+        restartRequired: false,
       }, req);
       return;
     }

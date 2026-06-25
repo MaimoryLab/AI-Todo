@@ -24,7 +24,7 @@ vi.mock("../src/config.js", () => ({
 }));
 
 import { cleanPollutedTodoCards, updateChangedTodoCards, cleanTodoTitle, generateTodosFromSessions, refreshTodoAction, validateTodoEvidence, runLangExtractSidecar, type ExtractedTodo } from "../src/functions/todo-extract.js";
-import type { Action, CompressedObservation, ReviewQueueItem, Session } from "../src/types.js";
+import type { Action, CompressedObservation, ReviewQueueItem, ScanCheckpoint, Session } from "../src/types.js";
 import { KV } from "../src/state/schema.js";
 import { mockKV } from "./helpers/mocks.js";
 
@@ -178,15 +178,71 @@ describe("todo extraction", () => {
   });
 
   it("uses scan checkpoints to skip unchanged sessions", async () => {
+    process.env.AGENTMEMORY_TODO_EXTRACTOR = "langextract";
     await kv.set(KV.sessions, "ses_1", session());
     await kv.set(KV.observations("ses_1"), "obs_1", obs());
 
-    await generateTodosFromSessions(kv as never, { force: true, scanSources: false });
+    await generateTodosFromSessions(kv as never, {
+      force: true,
+      scanSources: false,
+      runLangExtractSidecar: async () => [{
+        title: "修复 CI 失败并重新跑测试",
+        description: "下一步请修复 CI 失败，并重新跑测试。",
+        confidence: 0.95,
+        timeBucket: "current",
+        typeBucket: "follow_up",
+        sourceSessionId: "ses_1",
+        evidence: { sourceObservationId: "obs_1", quote: "下一步请修复 CI 失败，并重新跑测试。" },
+        dedupeKey: "fix-ci",
+      }],
+    });
     const second = await generateTodosFromSessions(kv as never, { scanSources: false });
+    delete process.env.AGENTMEMORY_TODO_EXTRACTOR;
 
     expect(second.scannedObservations).toBe(0);
     expect(second.directCreated).toBe(0);
     expect(await kv.list<Action>(KV.actions)).toHaveLength(1);
+  });
+
+  it("does not write scan checkpoints when LangExtract falls back to rules", async () => {
+    process.env.AGENTMEMORY_TODO_EXTRACTOR = "langextract";
+    await kv.set(KV.sessions, "ses_1", session());
+    await kv.set(KV.observations("ses_1"), "obs_1", obs());
+
+    const first = await generateTodosFromSessions(kv as never, {
+      force: true,
+      scanSources: false,
+      runLangExtractSidecar: async () => {
+        throw new Error("langextract unavailable: No module named 'langextract'");
+      },
+    });
+    expect(await kv.get<ScanCheckpoint>(KV.scanCheckpoints, "todo-extract:all")).toBeNull();
+    const second = await generateTodosFromSessions(kv as never, {
+      scanSources: false,
+      runLangExtractSidecar: async () => [],
+    });
+    delete process.env.AGENTMEMORY_TODO_EXTRACTOR;
+
+    expect(first).toMatchObject({ engine: "rules", llmFallback: true });
+    expect(second.scannedObservations).toBe(1);
+  });
+
+  it("ignores legacy untagged scan checkpoints before LangExtract runs", async () => {
+    process.env.AGENTMEMORY_TODO_EXTRACTOR = "langextract";
+    await kv.set(KV.sessions, "ses_1", session());
+    await kv.set(KV.observations("ses_1"), "obs_1", obs());
+    await kv.set<ScanCheckpoint>(KV.scanCheckpoints, "todo-extract:all", {
+      sourceId: "todo-extract:all",
+      cursor: JSON.stringify({ ses_1: "2026-06-17T09:00:00.000Z:1" }),
+    });
+
+    const result = await generateTodosFromSessions(kv as never, {
+      scanSources: false,
+      runLangExtractSidecar: async () => [],
+    });
+    delete process.env.AGENTMEMORY_TODO_EXTRACTOR;
+
+    expect(result.scannedObservations).toBe(1);
   });
 
   it("discards medium-confidence rule todos instead of sending them to review", async () => {

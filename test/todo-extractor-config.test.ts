@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -69,6 +70,40 @@ describe("todo extractor user config", () => {
     const cfg = getTodoExtractorUserConfig();
     expect(cfg.LANGEXTRACT_PROVIDER).toBe("openai");
     expect(cfg.LANGEXTRACT_BASE_URL).toBe("https://api.novita.ai/openai/v1");
+  });
+
+  it("exposes whether the LangExtract runtime has the Python dependency", async () => {
+    const { getTodoExtractorUserConfig } = await freshConfig();
+
+    const cfg = getTodoExtractorUserConfig();
+
+    expect(cfg.LANGEXTRACT_RUNTIME_READY).toBeTypeOf("boolean");
+    expect(cfg.LANGEXTRACT_RUNTIME_ERROR).toBeTypeOf("string");
+  });
+
+  it("checks LangExtract runtime readiness without importing the heavy package", async () => {
+    const { detectLangExtractRuntimeProbe } = await freshConfig();
+    expect(detectLangExtractRuntimeProbe()).toContain("find_spec('langextract')");
+    expect(detectLangExtractRuntimeProbe()).not.toContain("import langextract");
+    expect(spawnSync("python3", ["-c", detectLangExtractRuntimeProbe()], { encoding: "utf8" }).status).toBeTypeOf("number");
+  });
+
+  it("defaults LangExtract Python to the project-managed venv when it exists", async () => {
+    const originalCwd = process.cwd();
+    const projectRoot = mkdtempSync(join(tmpdir(), "agentmemory-langextract-project-"));
+    const venvPython = join(projectRoot, ".agentmemory-python", "bin", "python");
+    mkdirSync(join(projectRoot, ".agentmemory-python", "bin"), { recursive: true });
+    writeFileSync(venvPython, "#!/bin/sh\n");
+    const expectedPython = join(realpathSync(projectRoot), ".agentmemory-python", "bin", "python");
+    process.chdir(projectRoot);
+    try {
+      const { resolveLangExtractPython } = await freshConfig();
+      expect(resolveLangExtractPython({})).toBe(expectedPython);
+      expect(resolveLangExtractPython({ LANGEXTRACT_PYTHON: "__custom_python__" })).toBe("__custom_python__");
+    } finally {
+      process.chdir(originalCwd);
+      rmSync(projectRoot, { recursive: true, force: true });
+    }
   });
 
   it("round-trips the LLM extract timeout: defaults when unset, persists + reads back when set", async () => {

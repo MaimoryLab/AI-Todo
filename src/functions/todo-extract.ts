@@ -15,6 +15,7 @@ import {
   getEnvVar,
   normalizeTodoExtractorModel,
   normalizeTodoExtractorProvider,
+  resolveLangExtractPython,
 } from "../config.js";
 import { scanCodexSource } from "./source-scan-codex.js";
 import {
@@ -821,7 +822,7 @@ export async function runLangExtractSidecar(
 ): Promise<ExtractedTodo[]> {
   const script = sidecarPath();
   if (!script) throw new Error("langextract sidecar not found");
-  const python = getEnvVar("LANGEXTRACT_PYTHON") || "python3";
+  const python = resolveLangExtractPython();
   const env = { ...process.env };
   for (const key of SIDE_CAR_ENV_KEYS) {
     const value = getEnvVar(key);
@@ -947,7 +948,14 @@ function parseCheckpoint(cursor: string | undefined): Record<string, string> {
   if (!cursor) return {};
   try {
     const parsed = JSON.parse(cursor) as unknown;
-    return parsed && typeof parsed === "object" ? parsed as Record<string, string> : {};
+    if (!parsed || typeof parsed !== "object") return {};
+    const raw = parsed as Record<string, unknown>;
+    if (raw.__engine !== "langextract") return {};
+    const out: Record<string, string> = {};
+    for (const [key, value] of Object.entries(raw)) {
+      if (key !== "__engine" && typeof value === "string") out[key] = value;
+    }
+    return out;
   } catch {
     return {};
   }
@@ -1261,7 +1269,7 @@ async function runCleanupSidecar(
 ): Promise<LlmCleanupItem[]> {
   const script = sidecarPath(CLEANUP_SIDE_CAR);
   if (!script) throw new Error("cleanup sidecar not found");
-  const python = getEnvVar("LANGEXTRACT_PYTHON") || "python3";
+  const python = resolveLangExtractPython();
   const env = { ...process.env };
   for (const key of SIDE_CAR_ENV_KEYS) {
     const value = getEnvVar(key);
@@ -2001,14 +2009,16 @@ export async function generateTodosFromSessions(
       existing.add(titleKey);
       seenTitles.push(titleKey);
     }
-    processed[session.id] = key;
+    if (engine === "langextract" && !fallbackReason) processed[session.id] = key;
   }
 
-  await kv.set(KV.scanCheckpoints, checkpointId, {
-    sourceId: checkpointId,
-    cursor: JSON.stringify(processed),
-    lastSuccessAt: now,
-  });
+  if (Object.keys(processed).length) {
+    await kv.set(KV.scanCheckpoints, checkpointId, {
+      sourceId: checkpointId,
+      cursor: JSON.stringify({ __engine: "langextract", ...processed }),
+      lastSuccessAt: now,
+    });
+  }
 
   return {
     success: true,

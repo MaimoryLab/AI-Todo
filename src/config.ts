@@ -1,6 +1,8 @@
+import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { homedir } from "node:os";
+import { fileURLToPath } from "node:url";
 import type {
   AgentMemoryConfig,
   ProviderConfig,
@@ -91,9 +93,10 @@ function maskSecret(value: string | undefined): string {
 
 export function getTodoExtractorUserConfig(): Record<string, string | boolean> {
   const env = getMergedEnv();
+  const runtime = detectLangExtractRuntime(env);
   return {
     AGENTMEMORY_TODO_EXTRACTOR: env["AGENTMEMORY_TODO_EXTRACTOR"] || "auto",
-    LANGEXTRACT_PYTHON: env["LANGEXTRACT_PYTHON"] || "python3",
+    LANGEXTRACT_PYTHON: resolveLangExtractPython(env),
     LANGEXTRACT_MODEL: normalizeTodoExtractorModel(env["LANGEXTRACT_MODEL"]),
     LANGEXTRACT_PROVIDER: normalizeTodoExtractorProvider(env["LANGEXTRACT_PROVIDER"]),
     LANGEXTRACT_BASE_URL: env["LANGEXTRACT_BASE_URL"] || DEFAULT_LANGEXTRACT_BASE_URL,
@@ -106,7 +109,41 @@ export function getTodoExtractorUserConfig(): Record<string, string | boolean> {
       env["AGENTMEMORY_TODO_EXTRACT_MAX_INTERACTIONS_PER_SESSION"] || String(DEFAULT_TODO_EXTRACT_MAX_INTERACTIONS),
     LANGEXTRACT_API_KEY_CONFIGURED: hasRealValue(env["LANGEXTRACT_API_KEY"]),
     LANGEXTRACT_API_KEY_MASKED: maskSecret(env["LANGEXTRACT_API_KEY"]),
+    LANGEXTRACT_RUNTIME_READY: runtime.ready,
+    LANGEXTRACT_RUNTIME_ERROR: runtime.error,
   };
+}
+
+function detectLangExtractRuntime(env: Record<string, string>): { ready: boolean; error: string } {
+  const python = resolveLangExtractPython(env);
+  const result = spawnSync(python, ["-c", detectLangExtractRuntimeProbe()], {
+    encoding: "utf8",
+    timeout: 3000,
+  });
+  if (result.status === 0) return { ready: true, error: "" };
+  return {
+    ready: false,
+    error: String(result.stderr || result.error?.message || "langextract unavailable").replace(/\s+/g, " ").trim(),
+  };
+}
+
+export function detectLangExtractRuntimeProbe(): string {
+  return "import importlib.util; raise SystemExit(0 if importlib.util.find_spec('langextract') else 1)";
+}
+
+export function resolveLangExtractPython(env?: Record<string, string>): string {
+  const source = env ?? getMergedEnv();
+  const configured = source["LANGEXTRACT_PYTHON"]?.trim();
+  if (configured && configured !== "python3") return configured;
+  const moduleRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+  const candidates = [process.cwd(), moduleRoot].map((root) =>
+    process.platform === "win32"
+      ? join(root, ".agentmemory-python", "Scripts", "python.exe")
+      : join(root, ".agentmemory-python", "bin", "python"),
+  );
+  const local = candidates.find((candidate) => existsSync(candidate));
+  if (local) return local;
+  return configured || "python3";
 }
 
 export function normalizeTodoExtractorModel(value: string | undefined): string {
