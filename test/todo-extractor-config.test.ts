@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -78,6 +79,13 @@ describe("todo extractor user config", () => {
 
     expect(cfg.LANGEXTRACT_RUNTIME_READY).toBeTypeOf("boolean");
     expect(cfg.LANGEXTRACT_RUNTIME_ERROR).toBeTypeOf("string");
+  });
+
+  it("checks LangExtract runtime readiness without importing the heavy package", async () => {
+    const { detectLangExtractRuntimeProbe } = await freshConfig();
+    expect(detectLangExtractRuntimeProbe()).toContain("find_spec('langextract')");
+    expect(detectLangExtractRuntimeProbe()).not.toContain("import langextract");
+    expect(spawnSync("python3", ["-c", detectLangExtractRuntimeProbe()], { encoding: "utf8" }).status).toBeTypeOf("number");
   });
 
   it("defaults LangExtract Python to the project-managed venv when it exists", async () => {

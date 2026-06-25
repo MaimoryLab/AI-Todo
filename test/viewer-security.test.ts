@@ -340,6 +340,33 @@ describe("viewer request handler DNS rebinding defence (e2e)", () => {
     }
   });
 
+  it("keeps todo extraction running across one proxy timeout while the backend may still be processing more sessions", async () => {
+    const previousTimeout = process.env.AGENTMEMORY_TODO_EXTRACT_TIMEOUT_MS;
+    process.env.AGENTMEMORY_TODO_EXTRACT_TIMEOUT_MS = "1000";
+    try {
+      const startedAt = new Date(Date.now() - 30 * 1000).toISOString();
+      const { port } = await spinUpViewer({
+        [KV.scanCheckpoints]: {
+          "todo-extract:status": {
+            sourceId: "todo-extract:status",
+            cursor: JSON.stringify({ status: "running", startedAt }),
+          },
+        },
+      });
+      const actions = await request(port, `localhost:${port}`, "/agentmemory/actions");
+      const actionsBody = JSON.parse(actions.body);
+
+      expect(actions.status).toBe(200);
+      expect(actionsBody.todoExtract).toMatchObject({ status: "running", startedAt });
+    } finally {
+      if (previousTimeout === undefined) {
+        delete process.env.AGENTMEMORY_TODO_EXTRACT_TIMEOUT_MS;
+      } else {
+        process.env.AGENTMEMORY_TODO_EXTRACT_TIMEOUT_MS = previousTimeout;
+      }
+    }
+  });
+
   it("generates todos through the viewer fallback endpoint when REST proxy misses", async () => {
     const previousExtractor = process.env.AGENTMEMORY_TODO_EXTRACTOR;
     const previousDirectConfidence = process.env.AGENTMEMORY_TODO_DIRECT_CONFIDENCE;

@@ -116,7 +116,7 @@ export function getTodoExtractorUserConfig(): Record<string, string | boolean> {
 
 function detectLangExtractRuntime(env: Record<string, string>): { ready: boolean; error: string } {
   const python = resolveLangExtractPython(env);
-  const result = spawnSync(python, ["-c", "import langextract"], {
+  const result = spawnSync(python, ["-c", detectLangExtractRuntimeProbe()], {
     encoding: "utf8",
     timeout: 3000,
   });
@@ -125,6 +125,10 @@ function detectLangExtractRuntime(env: Record<string, string>): { ready: boolean
     ready: false,
     error: String(result.stderr || result.error?.message || "langextract unavailable").replace(/\s+/g, " ").trim(),
   };
+}
+
+export function detectLangExtractRuntimeProbe(): string {
+  return "import importlib.util; raise SystemExit(0 if importlib.util.find_spec('langextract') else 1)";
 }
 
 export function resolveLangExtractPython(env?: Record<string, string>): string {
