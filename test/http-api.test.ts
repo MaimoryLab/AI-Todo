@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -154,13 +154,32 @@ test("HTTP settings persist source paths and scan uses config path", async () =>
   try {
     const initial = await getJson(server.url("/settings"));
     assert.equal(initial.status, 200);
-    assert.deepEqual(await initial.json(), { sources: { codex: {}, "claude-code": {} } });
+    const initialBody = await initial.json();
+    assert.equal(initialBody.llm.model, "deepseek/deepseek-v4-flash");
+    assert.equal(initialBody.llm.apiKeyConfigured, false);
+    assert.equal(initialBody.llm.apiKeyMasked, "");
 
     const saved = await putJson(server.url("/settings"), {
-      sources: { codex: { path: fixture.codex }, "claude-code": {} }
+      sources: { codex: { path: fixture.codex }, "claude-code": {} },
+      llm: {
+        enabled: true,
+        provider: "openai",
+        model: "custom/model",
+        endpoint: "https://llm.example.test/v1",
+        thinkingDepth: "high",
+        pythonPath: "python3",
+        timeoutMs: 30000,
+        apiKey: "dummy-llm-key-value"
+      }
     });
     assert.equal(saved.status, 200);
-    assert.equal((await saved.json()).sources.codex.path, fixture.codex);
+    const savedBody = await saved.json();
+    assert.equal(savedBody.sources.codex.path, fixture.codex);
+    assert.equal(savedBody.llm.model, "custom/model");
+    assert.equal(savedBody.llm.apiKeyConfigured, true);
+    assert.equal(savedBody.llm.apiKeyMasked, "dum****alue");
+    assert.equal(savedBody.llm.apiKey, undefined);
+    assert.match(readFileSync(paths.secretsPath, "utf8"), /dummy-llm-key-value/);
 
     const scan = await postJson(server.url("/sources/scan"), { source: "codex" });
     assert.equal(scan.status, 200);
@@ -182,8 +201,65 @@ test("HTTP settings rejects invalid config", async () => {
     assert.equal((await putJson(server.url("/settings"), { sources: { codex: {}, browser: {} } })).status, 400);
     assert.equal((await putJson(server.url("/settings"), { sources: { codex: { path: "" }, "claude-code": {} } })).status, 400);
     assert.equal((await putJson(server.url("/settings"), { sources: { codex: { path: 1 }, "claude-code": {} } })).status, 400);
+    assert.equal((await putJson(server.url("/settings"), {
+      sources: { codex: {}, "claude-code": {} },
+      llm: {
+        enabled: true,
+        provider: "openai",
+        model: "",
+        endpoint: "https://example.test/v1",
+        thinkingDepth: "medium",
+        timeoutMs: 120000
+      }
+    })).status, 400);
     const badJson = await fetch(server.url("/settings"), { method: "PUT", body: "{" });
     assert.equal(badJson.status, 400);
+  } finally {
+    await server.close();
+    db.close();
+    rmSync(fixture.root, { recursive: true, force: true });
+  }
+});
+
+test("HTTP settings clears llm api key when requested", async () => {
+  const fixture = createFixture();
+  const paths = getAppPaths(join(fixture.root, "home"));
+  const db = openDatabase(paths);
+  const server = await startServer(db, paths);
+
+  try {
+    const withKey = await putJson(server.url("/settings"), {
+      sources: { codex: {}, "claude-code": {} },
+      llm: {
+        enabled: true,
+        provider: "openai",
+        model: "deepseek/deepseek-v4-flash",
+        endpoint: "https://api.novita.ai/openai/v1",
+        thinkingDepth: "medium",
+        pythonPath: "python3",
+        timeoutMs: 120000,
+        apiKey: "dummy-llm-key-value"
+      }
+    });
+    assert.equal(withKey.status, 200);
+    assert.ok(existsSync(paths.secretsPath));
+
+    const cleared = await putJson(server.url("/settings"), {
+      sources: { codex: {}, "claude-code": {} },
+      llm: {
+        enabled: true,
+        provider: "openai",
+        model: "deepseek/deepseek-v4-flash",
+        endpoint: "https://api.novita.ai/openai/v1",
+        thinkingDepth: "medium",
+        pythonPath: "python3",
+        timeoutMs: 120000,
+        apiKey: ""
+      }
+    });
+    assert.equal(cleared.status, 200);
+    assert.equal((await cleared.json()).llm.apiKeyConfigured, false);
+    assert.doesNotMatch(readFileSync(paths.secretsPath, "utf8"), /dummy-llm-key-value/);
   } finally {
     await server.close();
     db.close();

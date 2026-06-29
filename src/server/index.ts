@@ -2,7 +2,7 @@ import { createReadStream, existsSync } from "node:fs";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { extname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { loadConfig, parseConfig, saveConfig } from "../config.js";
+import { loadConfig, loadSecrets, parseSettingsUpdate, publicConfig, saveConfig, saveSecrets } from "../config.js";
 import type { Database } from "../db/index.js";
 import { getAppPaths, type AppPaths } from "../paths.js";
 import { ingestBrowserSession, validateBrowserSessionInput } from "../sources/browser.js";
@@ -28,7 +28,7 @@ export function createAppServer(options: { db?: Database; paths?: AppPaths } = {
 
     if (req.method === "GET" && path === "/settings") {
       try {
-        writeJson(res, 200, loadConfig(paths));
+        writeJson(res, 200, publicConfig(loadConfig(paths), loadSecrets(paths)));
       } catch {
         writeJson(res, 500, { error: "config_invalid" });
       }
@@ -39,9 +39,10 @@ export function createAppServer(options: { db?: Database; paths?: AppPaths } = {
       const body = await readJson(req, res);
       if (!body) return;
       try {
-        const config = parseConfig(body);
+        const { config, apiKey } = parseSettingsUpdate(body);
         saveConfig(paths, config);
-        writeJson(res, 200, config);
+        if (apiKey !== undefined) saveSecrets(paths, apiKey.trim() ? { llmApiKey: apiKey.trim() } : {});
+        writeJson(res, 200, publicConfig(config, loadSecrets(paths)));
       } catch {
         writeJson(res, 400, { error: "config_invalid" });
       }

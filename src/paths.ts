@@ -4,6 +4,7 @@ import { join } from "node:path";
 export interface AppPaths {
   configDir: string;
   configPath: string;
+  secretsPath: string;
   dataDir: string;
   dbPath: string;
 }
@@ -13,6 +14,7 @@ export function getAppPaths(baseDir = process.env.AI_TODO_HOME ?? join(homedir()
   return {
     configDir: baseDir,
     configPath: join(baseDir, "config.json"),
+    secretsPath: join(baseDir, "secrets.json"),
     dataDir,
     dbPath: join(dataDir, "ai-todo.sqlite")
   };
