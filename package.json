@@ -6,7 +6,7 @@
   "bin": {
     "ai-todo": "dist/cli.js"
   },
-  "main": "dist/index.mjs",
+  "main": "dist/src/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
     "build": "tsc",
