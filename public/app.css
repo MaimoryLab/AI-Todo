@@ -82,6 +82,28 @@ button.primary {
   border-color: var(--ink);
 }
 
+button.primary.is-busy {
+  cursor: wait;
+  opacity: 0.82;
+}
+
+button.primary.is-busy::before {
+  content: "";
+  display: inline-block;
+  width: 0.85em;
+  height: 0.85em;
+  margin-right: 7px;
+  border: 2px solid rgb(255 255 255 / 0.45);
+  border-top-color: var(--surface);
+  border-radius: 50%;
+  vertical-align: -0.1em;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
 button.ghost {
   border-color: transparent;
   background: transparent;

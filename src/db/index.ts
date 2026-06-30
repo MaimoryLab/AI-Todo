@@ -76,7 +76,6 @@ function migrateCleanTranscript(db: Database): void {
   if (row?.value === CLEAN_TRANSCRIPT_VERSION) return;
   db.exec(`
     DELETE FROM evidence;
-    DELETE FROM todos;
     DELETE FROM organize_runs;
     DELETE FROM observations;
     DELETE FROM sessions;

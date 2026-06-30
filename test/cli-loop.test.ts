@@ -152,9 +152,8 @@ test("CLI open reports the fixed default port when it is occupied", async () => 
   const dir = mkdtempSync(join(tmpdir(), "ai-todo-cli-open-"));
   const previousHome = process.env.AI_TODO_HOME;
   process.env.AI_TODO_HOME = join(dir, "home");
-  const blocker = createServer();
+  const blocker = await tryListenOnDefaultPort();
 
-  await new Promise<void>((resolve) => blocker.listen(DEFAULT_UI_PORT, "127.0.0.1", resolve));
   try {
     const opened = await capture(() => main(["open"]));
     assert.equal(opened.code, 1);
@@ -162,10 +161,29 @@ test("CLI open reports the fixed default port when it is occupied", async () => 
     assert.match(opened.stderr, /ai-todo open --port <port>/);
   } finally {
     process.env.AI_TODO_HOME = previousHome;
-    await new Promise<void>((resolve, reject) => blocker.close((error) => error ? reject(error) : resolve()));
+    if (blocker) {
+      await new Promise<void>((resolve, reject) => blocker.close((error) => error ? reject(error) : resolve()));
+    }
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+async function tryListenOnDefaultPort() {
+  const blocker = createServer();
+  try {
+    await new Promise<void>((resolve, reject) => {
+      blocker.once("error", reject);
+      blocker.listen(DEFAULT_UI_PORT, "127.0.0.1", () => {
+        blocker.off("error", reject);
+        resolve();
+      });
+    });
+    return blocker;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "EADDRINUSE") return undefined;
+    throw error;
+  }
+}
 
 async function capture(fn: () => Promise<number>) {
   let stdout = "";

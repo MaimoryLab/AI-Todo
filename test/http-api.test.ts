@@ -213,6 +213,7 @@ test("HTTP settings persist source paths and scan uses config path", async () =>
     assert.equal(initialBody.llm.apiKeyConfigured, false);
     assert.equal(initialBody.llm.apiKeyMasked, "");
     assert.equal(initialBody.organize.sinceDays, 7);
+    assert.equal(initialBody.organize.maxSessions, 16);
 
     const saved = await putJson(server.url("/settings"), {
       sources: { codex: { path: fixture.codex }, "claude-code": {} },

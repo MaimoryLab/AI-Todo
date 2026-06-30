@@ -65,6 +65,7 @@ export interface OrganizeLimits {
   maxTotalTextChars: number;
   maxBlockTextChars: number;
   llmBatchSize: number;
+  llmConcurrency: number;
   maxObservationTextChars: number;
   maxSessionPayloadChars: number;
   maxBatchPayloadChars: number;
@@ -75,6 +76,7 @@ export const DEFAULT_ORGANIZE_LIMITS: OrganizeLimits = {
   maxTotalTextChars: 80000,
   maxBlockTextChars: 4000,
   llmBatchSize: 20,
+  llmConcurrency: 2,
   maxObservationTextChars: 3000,
   maxSessionPayloadChars: 24000,
   maxBatchPayloadChars: 32000
@@ -254,7 +256,7 @@ function applyPayloadBudget(
       addTruncationDetail(details, observation, observation.text.length, text.length);
       warnings.add("llm_input_truncated");
     }
-    if (totalText + text.length > limits.maxTotalTextChars || totalText + text.length > limits.maxBatchPayloadChars) {
+    if (totalText + text.length > limits.maxTotalTextChars) {
       warnings.add("organize_scope_truncated");
       continue;
     }
@@ -286,14 +288,13 @@ function hasOrganizeDetails(details: OrganizeDetails): boolean {
   return !!details.scope || !!details.truncations?.length || !!details.batchFailures?.length;
 }
 
-async function writeLlmTodos(
+function writeExtractedLlmTodos(
   db: Database,
   observations: ObservationForOrganize[],
-  extractor: NonNullable<OrganizeOptions["llmExtractor"]>,
+  extracted: LlmExtractResult,
   warnings: Set<string>,
   details: OrganizeDetails
-): Promise<WriteResult> {
-  const extracted = await extractor(observations);
+): WriteResult {
   if (!extracted.ok) {
     warnings.add(extracted.warning);
     addBatchFailureDetail(details, observations, extracted);
@@ -345,22 +346,27 @@ async function writeBatchedLlmTodos(
 ): Promise<WriteResult> {
   const extractor = options.llmExtractor;
   if (!extractor) return noLlmResult(warnings, "llm_config_missing");
-  const batches = chunkObservationsBySession(observations, limits.llmBatchSize);
+  const batches = chunkObservationsBySession(observations, limits.llmBatchSize, limits.maxBatchPayloadChars)
+    .filter((batch) => batch.some((observation) => observation.role === "user"));
   let totalCreated = 0;
   let totalUpdated = 0;
-  let attempted = false;
+  const concurrency = Math.max(1, Math.floor(limits.llmConcurrency));
 
-  for (const batch of batches) {
-    if (!batch.some((observation) => observation.role === "user")) continue;
-    const warningsBefore = new Set(warnings);
-    attempted = true;
-    const result = await writeLlmTodos(db, batch, extractor, warnings, details);
-    if (hasBatchFailureWarning(warnings, warningsBefore)) warnings.add("llm_batch_failed");
-    totalCreated += result.created;
-    totalUpdated += result.updated;
+  for (let index = 0; index < batches.length; index += concurrency) {
+    const extracted = await Promise.all(batches.slice(index, index + concurrency).map(async (batch) => ({
+      batch,
+      result: await extractor(batch)
+    })));
+    for (const item of extracted) {
+      const warningsBefore = new Set(warnings);
+      const result = writeExtractedLlmTodos(db, item.batch, item.result, warnings, details);
+      if (hasBatchFailureWarning(warnings, warningsBefore)) warnings.add("llm_batch_failed");
+      totalCreated += result.created;
+      totalUpdated += result.updated;
+    }
   }
 
-  if (!attempted) warnings.add("llm_no_valid_candidates");
+  if (batches.length === 0) warnings.add("llm_no_valid_candidates");
   return { created: totalCreated, updated: totalUpdated, engine: "llm" };
 }
 
@@ -404,7 +410,11 @@ function noLlmResult(warnings: Set<string>, warning?: LlmOrganizeWarning): Write
   return { created: 0, updated: 0, engine: "llm" };
 }
 
-function chunkObservationsBySession(observations: ObservationForOrganize[], batchSize: number): ObservationForOrganize[][] {
+function chunkObservationsBySession(
+  observations: ObservationForOrganize[],
+  batchSize: number,
+  maxBatchPayloadChars: number
+): ObservationForOrganize[][] {
   const sessions = new Map<string, ObservationForOrganize[]>();
   for (const observation of observations) {
     const group = sessions.get(observation.sessionId) ?? [];
@@ -413,23 +423,35 @@ function chunkObservationsBySession(observations: ObservationForOrganize[], batc
   }
   const chunks: ObservationForOrganize[][] = [];
   for (const group of sessions.values()) {
-    chunks.push(...chunkObservations(group, batchSize));
+    chunks.push(...chunkObservations(group, batchSize, maxBatchPayloadChars));
   }
   return chunks;
 }
 
-function chunkObservations(observations: ObservationForOrganize[], batchSize: number): ObservationForOrganize[][] {
+function chunkObservations(
+  observations: ObservationForOrganize[],
+  batchSize: number,
+  maxBatchPayloadChars: number
+): ObservationForOrganize[][] {
   const chunks: ObservationForOrganize[][] = [];
   let chunk: ObservationForOrganize[] = [];
   let users = 0;
+  let chars = 0;
   for (const observation of observations) {
-    if (observation.role === "user" && users >= batchSize && chunk.length > 0) {
+    const isUser = observation.role === "user";
+    const wouldExceedUserLimit = isUser && users >= batchSize && chunk.length > 0;
+    const wouldExceedPayloadLimit = chars > 0 &&
+      chars + observation.text.length > maxBatchPayloadChars &&
+      chunk.some((item) => item.role === "user");
+    if (wouldExceedUserLimit || wouldExceedPayloadLimit) {
       chunks.push(chunk);
       chunk = [];
       users = 0;
+      chars = 0;
     }
     chunk.push(observation);
-    if (observation.role === "user") users++;
+    chars += observation.text.length;
+    if (isUser) users++;
   }
   if (chunk.length > 0) chunks.push(chunk);
   return chunks;

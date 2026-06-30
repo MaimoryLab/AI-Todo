@@ -38,7 +38,7 @@ test("config reads defaults and persists source paths", () => {
       organize: {
         sinceDays: 7,
         maxInteractionsPerSession: 10,
-        maxSessions: 8,
+        maxSessions: 16,
         maxObservationsPerSession: 40
       }
     });
@@ -227,7 +227,7 @@ test("default env generation writes necessary values without empty api key", () 
     assert.doesNotMatch(text, /AI_TODO_CODEX_HOME=.*\.codex\/sessions/);
     assert.match(text, /AI_TODO_LLM_MODEL=deepseek\/deepseek-v4-flash/);
     assert.match(text, /AI_TODO_ORGANIZE_SINCE_DAYS=7/);
-    assert.match(text, /AI_TODO_ORGANIZE_MAX_SESSIONS=8/);
+    assert.match(text, /AI_TODO_ORGANIZE_MAX_SESSIONS=16/);
     assert.match(text, /AI_TODO_ORGANIZE_MAX_OBSERVATIONS_PER_SESSION=40/);
     assert.doesNotMatch(text, /AI_TODO_LLM_API_KEY/);
     assert.equal((readFileSync(paths.envPath).byteLength > 0), true);

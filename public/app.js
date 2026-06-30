@@ -288,7 +288,7 @@ function renderSettingsPanel() {
           </label>
           <label>
             Max sessions
-            <input id="organize-max-sessions" type="number" min="1" max="200" step="1" value="${escapeAttr(organize.maxSessions ?? 8)}">
+            <input id="organize-max-sessions" type="number" min="1" max="200" step="1" value="${escapeAttr(organize.maxSessions ?? 16)}">
           </label>
           <label>
             Max observations per session
@@ -304,8 +304,13 @@ function renderSettingsPanel() {
 
 async function organize() {
   const button = $("#organize");
+  const originalLabel = button.textContent;
   button.disabled = true;
-  setStatus("Organizing todos...");
+  button.classList.add("is-busy");
+  button.setAttribute("aria-busy", "true");
+  button.textContent = "Organizing...";
+  const estimate = organizeEstimateText();
+  setStatus(`Organizing recent sessions. ${estimate}`);
   try {
     const result = await api("/todos/organize", { method: "POST", body: {} });
     showOrganizeResult(result);
@@ -314,7 +319,21 @@ async function organize() {
     setStatus(error.message);
   } finally {
     button.disabled = false;
+    button.classList.remove("is-busy");
+    button.removeAttribute("aria-busy");
+    button.textContent = originalLabel || "Organize";
   }
+}
+
+function organizeEstimateText() {
+  const organize = state.settings?.organize ?? {};
+  const maxSessions = Number(organize.maxSessions ?? 16);
+  const maxInteractions = Number(organize.maxInteractionsPerSession ?? 10);
+  const estimatedSeconds = Math.max(20, Math.min(180, Math.ceil(maxSessions * Math.max(2, maxInteractions / 5))));
+  const range = estimatedSeconds < 60
+    ? `${estimatedSeconds}-${estimatedSeconds + 20} seconds`
+    : `${Math.ceil(estimatedSeconds / 60)}-${Math.ceil((estimatedSeconds + 60) / 60)} minutes`;
+  return `This may take about ${range}; only the newest ${maxSessions} sessions are processed in this run.`;
 }
 
 async function updateTodo(id, status) {

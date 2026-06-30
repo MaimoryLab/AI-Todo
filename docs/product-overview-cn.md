@@ -5,7 +5,7 @@ AI-Todo 是一个本地优先的 AI 待办收件箱。它把分散在 Codex、Cl
 ## 用户旅程
 
 1. 捕获会话：从本地 agent 会话或浏览器入口导入记录。
-2. 组织待办：通过 LLM-only 提取近期未完成事项，不使用 rules fallback 生成默认卡片。
+2. 组织待办：通过 LLM-only 提取近期未完成事项，每次优先处理最近的会话窗口，不使用 rules fallback 生成默认卡片。
 3. 审查证据：每张 todo 都能回到相关 observation 和 session。
 4. 处理事项：用户确认、完成、忽略、归档或回到来源继续工作。
 5. 日常复盘：围绕 pending、blocked、needs review 和 done today 管理 open loops。
@@ -15,6 +15,7 @@ AI-Todo 是一个本地优先的 AI 待办收件箱。它把分散在 Codex、Cl
 - 本地 SQLite 存储 session、observation、todo、evidence 和 organize run。
 - CLI、HTTP UI 和 MCP 三个入口共享同一套数据。
 - `ai-todo open` 默认使用 `127.0.0.1:3111`，可通过 `--port <n>` 覆盖。
+- Organize 默认处理最近 16 个 session，点击后会显示预计等待时间。
 - Codex 和 Claude Code 支持默认路径，也支持显式路径扫描。
 - 浏览器会话通过本地 HTTP API 进入同一 evidence 链路。
 

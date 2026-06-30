@@ -242,6 +242,93 @@ test("llm organize batches by session instead of mixing sessions", async () => {
   }
 });
 
+test("organize applies batch payload budget per LLM request instead of globally", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "ai-todo-organize-batch-budget-"));
+  try {
+    const db = openDatabase(getAppPaths(dir));
+    for (const sessionId of ["budget-1", "budget-2", "budget-3"]) {
+      ingestBrowserSession(db, {
+        id: sessionId,
+        messages: [{ role: "user", text: `Please add ${sessionId} card` }]
+      });
+    }
+
+    const sessionsSeen: string[] = [];
+    const result = await organizeTodos(db, {
+      limits: {
+        maxTotalTextChars: 1000,
+        maxBatchPayloadChars: 40,
+        llmBatchSize: 20
+      },
+      llmExtractor: async (observations) => {
+        const observation = observations.find((item) => item.role === "user")!;
+        sessionsSeen.push(observation.sessionId);
+        return {
+          ok: true,
+          todos: [{
+            title: `Add ${observation.sessionId} card`,
+            description: "Create the card from a separate LLM request.",
+            confidence: 0.9,
+            sourceObservationId: observation.id,
+            quote: observation.text,
+            dedupeKey: observation.sessionId
+          }]
+        };
+      }
+    });
+    db.close();
+
+    assert.equal(result.created, 3);
+    assert.deepEqual(sessionsSeen.sort(), ["budget-1", "budget-2", "budget-3"]);
+    assert.ok(!result.warnings.includes("organize_scope_truncated"));
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("llm organize extracts batches with bounded concurrency", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "ai-todo-organize-concurrency-"));
+  try {
+    const db = openDatabase(getAppPaths(dir));
+    for (const sessionId of ["concurrent-1", "concurrent-2", "concurrent-3", "concurrent-4"]) {
+      ingestBrowserSession(db, {
+        id: sessionId,
+        messages: [{ role: "user", text: `Please add ${sessionId} card` }]
+      });
+    }
+
+    let active = 0;
+    let maxActive = 0;
+    const result = await organizeTodos(db, {
+      limits: { llmBatchSize: 20, llmConcurrency: 2 },
+      llmExtractor: async (observations) => {
+        active++;
+        maxActive = Math.max(maxActive, active);
+        await new Promise((resolve) => setTimeout(resolve, 20));
+        active--;
+        const observation = observations.find((item) => item.role === "user")!;
+        return {
+          ok: true,
+          todos: [{
+            title: `Add ${observation.sessionId} card`,
+            description: "Create the card from a concurrent LLM request.",
+            confidence: 0.9,
+            sourceObservationId: observation.id,
+            quote: observation.text,
+            dedupeKey: observation.sessionId
+          }]
+        };
+      }
+    });
+    db.close();
+
+    assert.equal(result.created, 4);
+    assert.equal(maxActive, 2);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test("organize limits scoped observations before LLM extraction", async () => {
   const dir = mkdtempSync(join(tmpdir(), "ai-todo-organize-limits-"));
   try {

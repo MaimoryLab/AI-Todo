@@ -9,7 +9,7 @@ export const DEFAULT_LLM_ENDPOINT = "https://api.novita.ai/openai/v1";
 export const DEFAULT_LLM_TIMEOUT_MS = 120000;
 export const DEFAULT_ORGANIZE_SINCE_DAYS = 7;
 export const DEFAULT_ORGANIZE_MAX_INTERACTIONS_PER_SESSION = 10;
-export const DEFAULT_ORGANIZE_MAX_SESSIONS = 8;
+export const DEFAULT_ORGANIZE_MAX_SESSIONS = 16;
 export const DEFAULT_ORGANIZE_MAX_OBSERVATIONS_PER_SESSION = 40;
 
 const DEFAULT_CODEX_HOME = join(homedir(), ".codex");
