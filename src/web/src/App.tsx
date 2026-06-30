@@ -101,8 +101,7 @@ export function App() {
     try {
       const result = await api<OrganizeResult>("/todos/organize", { method: "POST", body: {} });
       await refresh();
-      const warningText = result.warnings.length ? ` ${result.warnings.map(userFacingError).join(" ")}` : "";
-      setStatus(`Organized ${result.created} new and ${result.updated} updated cards.${warningText}`);
+      setStatus(organizeStatus(result));
     } catch (error) {
       setStatus((error as Error).message);
     } finally {
@@ -166,7 +165,7 @@ export function App() {
             <IconButton label="Refresh" onClick={() => void refresh()}>
               <RefreshCw className="h-4 w-4" aria-hidden="true" />
             </IconButton>
-            <Button onClick={() => void organize()} disabled={busy}>
+            <Button aria-label="Organize all recent sessions" title="Organize all recent sessions" onClick={() => void organize()} disabled={busy}>
               {busy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Sparkles className="h-4 w-4" aria-hidden="true" />}
               Organize
             </Button>
@@ -241,13 +240,16 @@ export function App() {
 }
 
 function NavButton({ active, onClick, icon, children }: { active: boolean; onClick: () => void; icon: React.ReactNode; children: React.ReactNode }) {
+  const label = typeof children === "string" ? `Open ${children}` : undefined;
   return (
     <button
+      aria-label={label}
       className={cn(
         "inline-flex min-h-10 shrink-0 items-center gap-2 rounded-md px-3 text-sm font-medium text-neutral-600",
         active ? "bg-white text-neutral-950 shadow-sm ring-1 ring-neutral-200" : "hover:bg-white/70"
       )}
       onClick={onClick}
+      title={label}
       type="button"
     >
       {icon}
@@ -273,7 +275,7 @@ function TodoWorkspace(props: {
         <Sparkles className="h-10 w-10 text-neutral-400" aria-hidden="true" />
         <h2 className="mt-3 text-lg font-semibold">No cards yet</h2>
         <p className="mt-1 max-w-md text-sm text-neutral-600">Organize recent sessions into a focused action inbox.</p>
-        <Button className="mt-4" onClick={props.onOrganize} disabled={props.busy}>
+        <Button aria-label="Organize empty inbox" title="Organize empty inbox" className="mt-4" onClick={props.onOrganize} disabled={props.busy}>
           <Sparkles className="h-4 w-4" aria-hidden="true" />
           Organize
         </Button>
@@ -382,7 +384,7 @@ function TodoItem({ todo, muted, compactStatus, onComplete, onIgnore, onSources 
               <span className="font-medium text-neutral-600">Agent:</span> {todo.metadata.completionSummary}
             </p>
           )}
-          <button className="flex max-w-full items-start gap-2 text-left text-sm text-neutral-500 hover:text-neutral-950 disabled:cursor-not-allowed disabled:opacity-70" type="button" title={originLabel(todo)} disabled={!todo.origin} onClick={() => onSources(todo)}>
+          <button aria-label={`Open source session for ${todo.title}`} className="flex max-w-full items-start gap-2 text-left text-sm text-neutral-500 hover:text-neutral-950 disabled:cursor-not-allowed disabled:opacity-70" type="button" title={originLabel(todo)} disabled={!todo.origin} onClick={() => onSources(todo)}>
             <SourceIcon source={todo.origin?.source} />
             <span className="min-w-0">
               <span className="block truncate font-medium text-neutral-600">{originProjectLabel(todo)}</span>
@@ -391,15 +393,15 @@ function TodoItem({ todo, muted, compactStatus, onComplete, onIgnore, onSources 
           </button>
         </div>
         <div className="flex shrink-0 flex-wrap gap-2 sm:justify-end">
-          <Button variant="secondary" onClick={() => onComplete(todo.id)}>
+          <Button aria-label={`Complete ${todo.title}`} variant="secondary" onClick={() => onComplete(todo.id)}>
             <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
             Complete
           </Button>
-          <Button variant="secondary" onClick={() => onSources(todo)}>
+          <Button aria-label={`Open sources for ${todo.title}`} variant="secondary" onClick={() => onSources(todo)}>
             <Eye className="h-4 w-4" aria-hidden="true" />
             Sources
           </Button>
-          <IconButton label="Ignore" onClick={() => onIgnore(todo.id)}>
+          <IconButton label={`Ignore ${todo.title}`} onClick={() => onIgnore(todo.id)}>
             <Archive className="h-4 w-4" aria-hidden="true" />
           </IconButton>
         </div>
@@ -628,6 +630,14 @@ function SourceIcon({ source }: { source?: SourceKind }) {
   if (source === "claude-code") return <Bot className={className} aria-hidden="true" />;
   if (source === "browser") return <Globe2 className={className} aria-hidden="true" />;
   return <Code2 className={className} aria-hidden="true" />;
+}
+
+function organizeStatus(result: OrganizeResult): string {
+  const summary = `Organized ${result.created} new and ${result.updated} updated cards.`;
+  if (result.warnings.length === 0) return summary;
+  const warnings = result.warnings.map(userFacingError).join(" ");
+  if (result.created + result.updated > 0) return `${summary} Some sessions need review: ${warnings}`;
+  return `${summary} ${warnings}`;
 }
 
 function originLabel(todo: TodoCard): string {

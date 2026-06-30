@@ -189,6 +189,40 @@ test("llm organize keeps provenance anchored to the validated source observation
 
     assert.equal(todo.metadata.sourceObservationId, observationId);
     assert.equal(todo.origin?.observationId, observationId);
+    assert.equal(todo.origin?.projectTitle, "browser");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("todo origin trims browser project titles derived from slash paths", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "ai-todo-browser-origin-title-"));
+  try {
+    const db = openDatabase(getAppPaths(dir));
+    ingestBrowserSession(db, {
+      id: "browser-e2e",
+      path: "Browser / E2E Check",
+      messages: [{ role: "user", text: "Please keep a clean browser project title" }]
+    });
+    const observationId = String((db.prepare("SELECT id FROM observations WHERE role = 'user' LIMIT 1").get() as any).id);
+    await organizeTodos(db, {
+      llmExtractor: async () => ({
+        ok: true,
+        todos: [{
+          title: "Keep clean browser project title",
+          description: "Source labels should not keep separator whitespace.",
+          confidence: 0.9,
+          sourceObservationId: observationId,
+          quote: "Please keep a clean browser project title",
+          dedupeKey: "clean-browser-project-title"
+        }]
+      })
+    });
+
+    const [todo] = listTodos(db);
+    db.close();
+
+    assert.equal(todo.origin?.projectTitle, "E2E Check");
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

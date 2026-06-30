@@ -13,6 +13,10 @@ test("React UI keeps task-first Sources wording and accessible icon controls", (
   assert.match(app, />Sources</);
   assert.doesNotMatch(app, />Evidence</);
   assert.match(app, /label="Refresh"/);
+  assert.match(app, /aria-label="Organize all recent sessions"/);
+  assert.match(app, /aria-label="Organize empty inbox"/);
+  assert.match(app, /`Open \$\{children\}`/);
+  assert.match(app, /aria-label=\{`Open sources for \$\{todo.title\}`\}/);
   assert.match(ui, /aria-label=\{label\}/);
   assert.match(app, /Agent:<\/span>/);
   assert.match(app, /originLabel\(todo\)/);
@@ -33,7 +37,10 @@ test("React UI keeps task-first Sources wording and accessible icon controls", (
   assert.match(app, /originSessionLabel\(todo\)/);
   assert.match(app, /Completed \/ ignored/);
   assert.match(app, /max=\{200\}/);
+  assert.match(app, /organizeStatus\(result\)/);
   assert.match(client, /Extraction needs setup/);
+  assert.match(client, /No actionable cards found in some sessions/);
+  assert.match(client, /Some sessions could not be processed/);
   assert.doesNotMatch(app, />LLM unavailable</);
   assert.match(css, /overflow-x: hidden/);
 });

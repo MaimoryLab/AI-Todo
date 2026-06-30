@@ -660,7 +660,7 @@ function todoOrigin(db: Database, observationId: string | undefined): TodoOrigin
 
 function projectTitleFromPath(path: string): string | undefined {
   const fileParent = path.endsWith(".jsonl") ? dirname(path) : path;
-  const title = basename(fileParent);
+  const title = basename(fileParent).trim();
   return title && title !== "." ? title : undefined;
 }
 
