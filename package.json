@@ -1,109 +1,24 @@
 {
-  "name": "@maimorylab/agentmemory-lab",
-  "version": "0.9.24",
-  "description": "Persistent memory for AI coding agents, powered by iii-engine's three primitives",
+  "name": "@maimorylab/ai-todo",
+  "version": "0.1.0",
+  "description": "Local-first todo extraction for AI agent sessions.",
   "type": "module",
-  "main": "dist/index.mjs",
-  "types": "dist/index.d.mts",
-  "exports": {
-    ".": {
-      "types": "./dist/index.d.mts",
-      "import": "./dist/index.mjs"
-    },
-    "./dist/standalone.mjs": "./dist/standalone.mjs",
-    "./package.json": "./package.json"
-  },
   "bin": {
-    "agentmemory-lab": "dist/cli.mjs"
+    "ai-todo": "dist/cli.js"
   },
+  "main": "dist/src/index.js",
+  "types": "dist/src/index.d.ts",
   "scripts": {
-    "build": "tsdown && node scripts/build-viewer-html.mjs --check && (cp iii-config.yaml dist/ 2>/dev/null || true) && (cp iii-config.docker.yaml dist/ 2>/dev/null || true) && (cp docker-compose.yml dist/ 2>/dev/null || true) && (cp .env.example dist/ 2>/dev/null || true) && mkdir -p dist/viewer/agent-avatars dist/viewer/demo dist/functions && cp src/viewer/index.html dist/viewer/ && cp src/viewer/favicon.svg dist/viewer/ && cp src/viewer/agent-avatars/* dist/viewer/agent-avatars/ && cp src/viewer/demo/* dist/viewer/demo/ && cp src/functions/todo-extract-langextract.py dist/functions/ && cp src/functions/todo-update-llm.py dist/functions/",
-    "dev": "tsx src/index.ts",
-    "postinstall": "node scripts/install-langextract.mjs",
-    "viewer:build": "node scripts/build-viewer-html.mjs",
-    "viewer:watch": "node scripts/build-viewer-html.mjs --watch",
-    "start": "node dist/cli.mjs",
-    "start:local-memory": "AGENTMEMORY_III_CONFIG=./iii-config.local-memory.yaml node dist/cli.mjs",
-    "migrate": "node dist/functions/migrate.js",
-    "test": "vitest run --exclude test/integration.test.ts",
-    "check:browser-extension": "node scripts/check-browser-extension.mjs && node scripts/check-browser-extension-site-config-sync.mjs && node scripts/check-browser-extension-review-draft.mjs && node scripts/check-browser-extension-memory-drafts.mjs && node scripts/check-browser-extension-diagnostics-privacy.mjs && node scripts/check-browser-extension-fixtures.mjs && node scripts/check-browser-extension-demo-interaction.mjs",
-    "package:browser-extension": "npm run check:browser-extension && node scripts/package-browser-extension.mjs && npm run check:browser-extension-package && npm run check:ai-validation-evidence && node scripts/write-delivery-summary.mjs && npm run make:ai-validation-tester-pack",
-    "check:delivery": "npm run build && npm run check:maimorylab-branding && node scripts/check-delivery.mjs",
-    "test:watch": "vitest --exclude test/integration.test.ts",
-    "test:integration": "vitest run test/integration.test.ts",
-    "test:all": "vitest run",
-    "preview:browser-extension": "npm run build && node scripts/preview-browser-extension.mjs",
-    "check:browser-extension-package": "node scripts/check-browser-extension-package.mjs",
-    "check:workbench": "node scripts/check-workbench-status.mjs",
-    "check:release-gates": "node scripts/check-release-gates.mjs",
-    "check:release-public": "node scripts/check-release-gates.mjs --public",
-    "record:ai-validation-evidence": "node scripts/record-ai-validation-evidence.mjs",
-    "wizard:ai-validation-evidence": "node scripts/wizard-ai-validation-evidence.mjs",
-    "prepare:ai-validation": "node scripts/prepare-ai-validation-run.mjs",
-    "make:ai-validation-tester-pack": "node scripts/make-ai-validation-tester-pack.mjs",
-    "check:ai-validation-evidence": "node scripts/check-ai-validation-evidence.mjs",
-    "check:ai-validation-evidence-guards": "node scripts/check-ai-validation-evidence-guards.mjs",
-    "sync:ai-validation-table": "node scripts/sync-ai-validation-table.mjs --write",
-    "check:ai-validation-table": "node scripts/sync-ai-validation-table.mjs --check",
-    "status:delivery": "node scripts/delivery-status.mjs",
-    "check:remote-delivery": "node scripts/check-remote-delivery.mjs",
-    "check:maimorylab-branding": "node scripts/check-maimorylab-branding.mjs",
-    "check:consistency-local": "node scripts/check-consistency-local.mjs",
-    "pre-pr": "npm run check:consistency-local && npm run build && npm test"
-  },
-  "keywords": [
-    "ai",
-    "agent",
-    "memory",
-    "persistent",
-    "iii-engine",
-    "claude-code",
-    "coding-agent",
-    "context",
-    "observation"
-  ],
-  "files": [
-    "dist/",
-    "plugin/",
-    "scripts/install-langextract.mjs",
-    "iii-config.yaml",
-    "iii-config.docker.yaml",
-    "docker-compose.yml",
-    ".env.example",
-    "requirements-langextract.txt",
-    "LICENSE",
-    "README.md",
-    "AGENTS.md"
-  ],
-  "author": "MaimoryLab",
-  "license": "Apache-2.0",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/MaimoryLab/agentmemory-lab"
-  },
-  "dependencies": {
-    "@anthropic-ai/claude-agent-sdk": "^0.3.142",
-    "@anthropic-ai/sdk": "^0.105.0",
-    "@clack/prompts": "^1.2.0",
-    "dotenv": "^17.4.2",
-    "iii-sdk": "0.19.4",
-    "zod": "^4.0.0"
-  },
-  "optionalDependencies": {
-    "@node-rs/jieba": "^2.0.1",
-    "@xenova/transformers": "^2.17.2",
-    "onnxruntime-node": "^1.14.0",
-    "onnxruntime-web": "^1.14.0",
-    "tiny-segmenter": "^0.2.0"
-  },
-  "devDependencies": {
-    "@types/node": "^26.0.0",
-    "tsdown": "^0.20.3",
-    "tsx": "^4.19.0",
-    "typescript": "^6.0.3",
-    "vitest": "^4.1.6"
+    "build": "rm -rf dist && tsc",
+    "test": "npm run build && node --test dist/test/*.test.js",
+    "start": "node dist/cli.js"
   },
   "engines": {
-    "node": ">=20.0.0"
-  }
+    "node": ">=24.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^26.0.1",
+    "typescript": "^5.9.3"
+  },
+  "license": "Apache-2.0"
 }

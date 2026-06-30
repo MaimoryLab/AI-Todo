@@ -1,34 +1,24 @@
 node_modules/
-.agentmemory-python/
 dist/
+.codegraph/
+.local/
 artifacts/
+data/
+data-*/
 *.tsbuildinfo
+*.log
+.DS_Store
 
 .env
 .env.*
 !.env.example
 
-*.log
-.DS_Store
-.claude/
-# lark-cli local credentials — never commit
 .lark-auth/
-
-plugin/scripts/*.map
-plugin/scripts/*.d.mts
-data/
-!eval/data/
-!eval/data/**
-data-*/
-agentmemory-debug/
+.claude/
+.agentmemory-python/
 .gstack/
 
-# Lock files — never commit (see feedback_no_lockfiles memory)
-package-lock.json
-pnpm-lock.yaml
-yarn.lock
-
-# Eval reports (transient; published scorecards live in docs/benchmarks/)
-eval/reports/
-# LongMemEval download is 278MB; fetched on demand
-eval/data/longmemeval/
+docs/hybrid-rebuild/
+docs/rebuild/
+docs/product-overview-cn.md
+docs/task-chain-perspective-cn.md

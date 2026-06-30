@@ -1,90 +1,108 @@
-# AI Todo
+# AI-Todo
 
-**AI Todo** is a local-first todo extraction tool for AI workflows.
+AI-Todo is a local-first action inbox for AI agent sessions. It scans local
+Codex and Claude Code session logs, accepts browser sessions through the local
+HTTP API, uses an OpenAI-compatible LLM to organize unfinished work into todo
+cards, and keeps source evidence available for review.
 
-It scans local agent sessions and captures browser AI conversations, extracts the unfinished work, stores everything locally, and shows it in a simple local web UI — answering one practical question:
+## Requirements
 
-> What did my AI agents leave unfinished, and what should I review next?
+- Node.js 24 or newer
+- An OpenAI-compatible chat completions endpoint and API key
 
-People work across coding agents, browser AI assistants, and project tools, and useful follow-ups stay buried in conversations: an agent waiting for confirmation, a failed command that blocked a task, a draft never reviewed, a plan never turned into an issue. AI Todo turns these open loops into local, reviewable todo candidates **with evidence**.
+AI-Todo does not fall back to rule-based todo generation. Without a configured
+LLM key, the app can start and scan sessions, but organize runs cannot create
+todo cards.
 
-> **Status: internal trial / prototype.** It runs end to end locally. Some package names, CLI commands, and API paths still use the earlier implementation name while the project is being renamed to AI Todo. The UI defaults to English for open-source use, with Chinese available from Settings or `?lang=zh`.
-
-## Quick start
-
-Requirements: **Node.js 20+**.
+## Quick Start
 
 ```bash
 npm install
 npm run build
-npm run start:local-memory
+AI_TODO_HOME=.local/ai-todo node dist/cli.js init --api-key <your-key>
+AI_TODO_HOME=.local/ai-todo node dist/cli.js doctor
+AI_TODO_HOME=.local/ai-todo node dist/cli.js open
 ```
 
-The daemon prints a local viewer URL (default REST API on port **3111**). Open it in your browser.
+The UI listens on [http://127.0.0.1:3111/](http://127.0.0.1:3111/) by default.
+Use `node dist/cli.js open --port <port>` to choose another port. If `3111` is
+already occupied, AI-Todo reports the conflict instead of silently switching
+ports.
 
-**Try it with sample data** — in another terminal:
+`npm start` runs the default CLI command, which is `doctor`. Use
+`node dist/cli.js open` to start the UI.
+
+## First Use
+
+After the UI is running:
+
+1. Scan Codex or Claude Code sessions from the UI, or run `scan` from the CLI.
+2. Run `organize` to ask the configured LLM to create todo cards.
+3. Review each todo card and open its evidence before marking it done or ignored.
+
+CLI example:
 
 ```bash
-node dist/cli.mjs demo
+AI_TODO_HOME=.local/ai-todo node dist/cli.js scan codex
+AI_TODO_HOME=.local/ai-todo node dist/cli.js scan claude-code
+AI_TODO_HOME=.local/ai-todo node dist/cli.js organize
+AI_TODO_HOME=.local/ai-todo node dist/cli.js list
 ```
 
-Then refresh the viewer: the dashboard fills with browsable sessions, memory, and extracted todos. The **To-Do** tab shows the extracted todos (each with evidence); the **Evidence** tab shows the sessions they came from.
+## Commands
 
-> Prefer running from source while developing? `npm run dev` (via `tsx`) instead of build + start.
+| Command | Description |
+| --- | --- |
+| `ai-todo init` | Create the local `.env` config and database directory. |
+| `ai-todo doctor` | Show config paths and LLM setup without printing secrets. |
+| `ai-todo scan <codex\|claude-code> [path]` | Import sessions from a configured or explicit source path. |
+| `ai-todo organize` | Run LLM-only todo extraction over recent observations. |
+| `ai-todo list` | Print current todo cards. |
+| `ai-todo done <id>` / `ai-todo ignore <id>` | Mark a todo complete or ignored. |
+| `ai-todo open [--port <n>]` | Start the local HTTP UI. |
+| `ai-todo mcp` | Run the stdio MCP server. |
 
-## Use your own data
+## Configuration
 
-- **Codex sessions (local):** the daemon scans your Codex session directories (`~/.codex/sessions` and `~/.codex/archived_sessions`) on startup and on an interval. Toggle with `AGENTMEMORY_CODEX_AUTOSCAN=false`; tune the cadence with `AGENTMEMORY_CODEX_SCAN_INTERVAL_MS` (default 5 min). You can also import a transcript on demand from a source checkout with `node dist/cli.mjs import-jsonl <path>` (installed package binary: `agentmemory-lab import-jsonl <path>`).
-- **Browser AI conversations:** load the browser extension under [`browser-extension/`](browser-extension/); it captures supported AI sites and posts them to the local daemon, which extracts todos into the same queue.
-- **LangExtract extraction (optional):** `npm install` creates a project-local `.agentmemory-python` environment and installs the Python deps from `requirements-langextract.txt` (includes SOCKS proxy support). Configure it during first-run setup (`node dist/cli.mjs --reset` from source, or `agentmemory-lab --reset` when installed), from the viewer Settings panel, or in `~/.agentmemory/.env`: `AGENTMEMORY_TODO_EXTRACTOR=langextract`, `LANGEXTRACT_PROVIDER=openai`, `LANGEXTRACT_MODEL=deepseek/deepseek-v4-flash`, `LANGEXTRACT_BASE_URL=https://api.novita.ai/openai/v1`, `LANGEXTRACT_API_KEY=<runtime secret>`, and optionally `AGENTMEMORY_TODO_EXTRACT_TIMEOUT_MS=120000`. Set `LANGEXTRACT_PYTHON=/path/to/python` only when you want to override the managed environment. Trigger it from the To-Do tab or with `POST /agentmemory/todo-extract/generate`.
-- **Isolated data roots:** set `AGENTMEMORY_HOME=/path/to/data` to keep AI Todo runtime files (`.env`, preferences, pidfiles, snapshots) separate from your normal `~/.agentmemory`. This does not change the Codex session source; local Codex history is still read from `~/.codex/sessions` and `~/.codex/archived_sessions`.
-- **First-run setup:** the first-run CLI model choice configures To-Do extraction — it seeds the `LANGEXTRACT_*` settings above for the model you pick (or keeps the rules extractor if you skip). The legacy memory compression/consolidation/embeddings provider is an advanced `.env`-only setting.
+Config lives in `$AI_TODO_HOME/.env`, or `~/.ai-todo/.env` when
+`AI_TODO_HOME` is not set.
 
-Everything stays on your machine — see [Privacy](#privacy).
+Common keys:
 
-## How it works
-
+```bash
+AI_TODO_CODEX_HOME=~/.codex
+AI_TODO_CLAUDE_HOME=~/.claude/projects
+AI_TODO_LLM_ENABLED=true
+AI_TODO_LLM_PROVIDER=openai
+AI_TODO_LLM_MODEL=deepseek/deepseek-v4-flash
+AI_TODO_LLM_ENDPOINT=https://api.novita.ai/openai/v1
+AI_TODO_LLM_API_KEY=...
 ```
-local agent sessions ─┐
-                       ├─▶ normalize ─▶ extractor ─▶ local DB ─▶ local API ─▶ web UI
-browser AI capture ───┘                         (rules or LangExtract)
-```
 
-Built on iii-engine (file-based SQLite state), with a local REST API + MCP server + web UI. The default extractor is deterministic rules. LangExtract is opt-in: the To-Do tab reads stored cards, and the **Organize with LLM** button runs extraction for recent sessions. The **Update** button dry-runs LLM maintenance for generated cards whose source sessions changed, asks before dropping/closing/rewriting/merging cards, then applies the reviewed decisions. See [ARCHITECTURE.md](ARCHITECTURE.md) for detail.
+`ai-todo doctor` reports whether the key, model, and endpoint are configured.
 
-## Core todo state
+## Sources
 
-Persisted todo cards use the existing `Action.status` values:
+- Codex sessions default to `~/.codex`.
+- Claude Code sessions default to `~/.claude/projects`.
+- Browser sessions can be posted to `POST /browser/sessions` while the local UI
+  server is running.
 
-| Status | Meaning |
-|---|---|
-| `pending` | Open work that has not started or needs user review |
-| `active` | Work that appears in progress |
-| `done` | Completed work |
-| `blocked` | Work blocked by a tool, dependency, permission, network, or runtime issue |
-| `cancelled` | Work the user or system dismissed |
-
-LLM extraction also writes classification tags such as `type:waiting_for_user`, `type:agent_blocked`, `type:partial_done`, `type:needs_review`, and `type:stale_thread` so the UI can explain why a card was created without adding new stored status values.
+Raw evidence keeps its original language. Product controls are English-only.
 
 ## Privacy
 
-- Local-first by default; captured browser content and local sessions stay on your machine.
-- No cloud sync in v1; no automatic writes into external todo tools in v1.
-- Secrets, API keys, and tokens are redacted before display when detected.
-- Every extracted todo includes evidence; you can mark todos done, ignored, or deleted.
+AI-Todo stores data locally under `$AI_TODO_HOME` or `~/.ai-todo`.
+Do not commit real `.env` files, API keys, local data, `dist/`, or
+`node_modules/`.
 
-## Under the hood
+## Development
 
-Under the hood, the current prototype still exposes the full implementation surface: **55 MCP tools** (8 visible by default — 55 tools, 6 resources, 3 prompts over MCP) and a local REST API serving **142 endpoints on port** 3111. These counts track the implementation that is mid-rename to AI Todo.
+```bash
+npm test
+npm run build
+git diff --check
+```
 
-## Documentation
-
-- [Architecture](ARCHITECTURE.md)
-- [Rules](RULES.md)
-- [Roadmap](ROADMAP.md)
-- [Development](docs/development.md)
-- [Features](docs/features/index.md)
-
-## License
-
-Apache-2.0. See [LICENSE](LICENSE).
+The package bin is `ai-todo` and points at `dist/cli.js`; run `npm run build`
+before testing installed CLI behavior.

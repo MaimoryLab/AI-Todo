@@ -1,602 +1,457 @@
-import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
+import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
-import { fileURLToPath } from "node:url";
-import type {
-  AgentMemoryConfig,
-  ProviderConfig,
-  EmbeddingConfig,
-  FallbackConfig,
-  ClaudeBridgeConfig,
-  TeamConfig,
-} from "./types.js";
+import { join } from "node:path";
+import type { AppPaths } from "./paths.js";
 
-function safeParseInt(value: string | undefined, fallback: number): number {
-  if (!value) return fallback;
-  const parsed = parseInt(value, 10);
-  return Number.isNaN(parsed) ? fallback : parsed;
+export const DEFAULT_LLM_MODEL = "deepseek/deepseek-v4-flash";
+export const DEFAULT_LLM_PROVIDER = "openai";
+export const DEFAULT_LLM_ENDPOINT = "https://api.novita.ai/openai/v1";
+export const DEFAULT_LLM_TIMEOUT_MS = 120000;
+export const DEFAULT_ORGANIZE_SINCE_DAYS = 7;
+export const DEFAULT_ORGANIZE_MAX_INTERACTIONS_PER_SESSION = 10;
+export const DEFAULT_ORGANIZE_MAX_SESSIONS = 16;
+export const DEFAULT_ORGANIZE_MAX_OBSERVATIONS_PER_SESSION = 40;
+
+const DEFAULT_CODEX_HOME = join(homedir(), ".codex");
+const DEFAULT_CLAUDE_HOME = join(homedir(), ".claude", "projects");
+const IGNORED_ENV_KEYS = new Set(["AI_TODO_LLM_" + "PYTHON"]);
+
+export interface AppConfig {
+  sources: {
+    codex: { path?: string };
+    "claude-code": { path?: string };
+  };
+  llm: {
+    enabled: boolean;
+    provider: "openai";
+    model: string;
+    endpoint: string;
+    thinkingDepth: "low" | "medium" | "high";
+    timeoutMs: number;
+  };
+  organize: {
+    sinceDays: number;
+    maxInteractionsPerSession: number;
+    maxSessions: number;
+    maxObservationsPerSession: number;
+  };
 }
 
-export function getAgentMemoryDataDir(): string {
-  return process.env["AGENTMEMORY_HOME"] || join(homedir(), ".agentmemory");
+export interface AppSecrets {
+  llmApiKey?: string;
 }
 
-const DATA_DIR = getAgentMemoryDataDir();
-const ENV_FILE = join(DATA_DIR, ".env");
-export const DEFAULT_LANGEXTRACT_MODEL = "deepseek/deepseek-v4-flash";
-export const DEFAULT_LANGEXTRACT_PROVIDER = "openai";
-export const DEFAULT_LANGEXTRACT_BASE_URL = "https://api.novita.ai/openai/v1";
-export const DEFAULT_TODO_EXTRACT_TIMEOUT_MS = 120_000;
-// STEP-11: extraction scope. sinceDays = only sessions whose endedAt/startedAt
-// falls within the last N days are eligible (the primary scope control). Max
-// interactions = per session, keep at most M most-recent interaction records
-// (a "turn": one user message through everything before the next). maxSessions
-// stays a backend safety cap (not surfaced as a setting).
-export const DEFAULT_TODO_EXTRACT_SINCE_DAYS = 7;
-export const DEFAULT_TODO_EXTRACT_MAX_INTERACTIONS = 10;
-// Interactive safety cap on how many sessions one extraction pass touches. The
-// day window is the primary control, but with the LLM extractor each session is
-// a serial sidecar call (up to the per-call timeout), so a single "organize"
-// click must stay bounded. REST callers can still pass a larger maxSessions.
-export const DEFAULT_TODO_EXTRACT_MAX_SESSIONS = 8;
-const LEGACY_LANGEXTRACT_MODELS = new Set(["pa/gpt-5.5"]);
-export const WRITABLE_TODO_EXTRACT_KEYS = new Set([
-  "AGENTMEMORY_TODO_EXTRACTOR",
-  "LANGEXTRACT_PYTHON",
-  "LANGEXTRACT_MODEL",
-  "LANGEXTRACT_PROVIDER",
-  "LANGEXTRACT_API_KEY",
-  "LANGEXTRACT_BASE_URL",
-  "LANGEXTRACT_THINKING_DEPTH",
-  "AGENTMEMORY_TODO_EXTRACT_TIMEOUT_MS",
-  "AGENTMEMORY_TODO_EXTRACT_SINCE_DAYS",
-  "AGENTMEMORY_TODO_EXTRACT_MAX_INTERACTIONS_PER_SESSION",
-]);
+export type PublicAppConfig = AppConfig & {
+  llm: AppConfig["llm"] & {
+    apiKeyConfigured: boolean;
+    apiKeyMasked: string;
+  };
+};
 
-let warnPremiumModelShown = false;
+export const WRITABLE_ENV_KEYS = [
+  "AI_TODO_CODEX_HOME",
+  "AI_TODO_CLAUDE_HOME",
+  "AI_TODO_LLM_ENABLED",
+  "AI_TODO_LLM_PROVIDER",
+  "AI_TODO_LLM_MODEL",
+  "AI_TODO_LLM_ENDPOINT",
+  "AI_TODO_LLM_THINKING_DEPTH",
+  "AI_TODO_LLM_TIMEOUT_MS",
+  "AI_TODO_LLM_API_KEY",
+  "AI_TODO_ORGANIZE_SINCE_DAYS",
+  "AI_TODO_ORGANIZE_MAX_INTERACTIONS_PER_SESSION",
+  "AI_TODO_ORGANIZE_MAX_SESSIONS",
+  "AI_TODO_ORGANIZE_MAX_OBSERVATIONS_PER_SESSION"
+] as const;
 
-function loadEnvFile(): Record<string, string> {
-  if (!existsSync(ENV_FILE)) return {};
-  const content = readFileSync(ENV_FILE, "utf-8");
-  const vars: Record<string, string> = {};
-  for (const line of content.split("\n")) {
-    const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith("#")) continue;
-    const eqIdx = trimmed.indexOf("=");
-    if (eqIdx === -1) continue;
-    const key = trimmed.slice(0, eqIdx).trim();
-    let val = trimmed.slice(eqIdx + 1).trim();
-    const quoteChar = val[0] === '"' || val[0] === "'" ? val[0] : "";
-    if (quoteChar) {
-      const closeIdx = val.indexOf(quoteChar, 1);
-      if (closeIdx !== -1) val = val.slice(1, closeIdx);
-    } else {
-      const hashIdx = val.indexOf(" #");
-      if (hashIdx !== -1) val = val.slice(0, hashIdx).trim();
+export type WritableEnvKey = typeof WRITABLE_ENV_KEYS[number];
+export type EnvConfig = Partial<Record<WritableEnvKey, string>>;
+
+export function defaultConfig(): AppConfig {
+  return {
+    sources: {
+      codex: {},
+      "claude-code": {}
+    },
+    llm: {
+      enabled: true,
+      provider: DEFAULT_LLM_PROVIDER,
+      model: DEFAULT_LLM_MODEL,
+      endpoint: DEFAULT_LLM_ENDPOINT,
+      thinkingDepth: "medium",
+      timeoutMs: DEFAULT_LLM_TIMEOUT_MS
+    },
+    organize: {
+      sinceDays: DEFAULT_ORGANIZE_SINCE_DAYS,
+      maxInteractionsPerSession: DEFAULT_ORGANIZE_MAX_INTERACTIONS_PER_SESSION,
+      maxSessions: DEFAULT_ORGANIZE_MAX_SESSIONS,
+      maxObservationsPerSession: DEFAULT_ORGANIZE_MAX_OBSERVATIONS_PER_SESSION
     }
-    vars[key] = val;
+  };
+}
+
+export function defaultEnvConfig(includeApiKey?: string): EnvConfig {
+  return sanitizeEnvConfig({
+    AI_TODO_CODEX_HOME: DEFAULT_CODEX_HOME,
+    AI_TODO_CLAUDE_HOME: DEFAULT_CLAUDE_HOME,
+    AI_TODO_LLM_ENABLED: "true",
+    AI_TODO_LLM_PROVIDER: DEFAULT_LLM_PROVIDER,
+    AI_TODO_LLM_MODEL: DEFAULT_LLM_MODEL,
+    AI_TODO_LLM_ENDPOINT: DEFAULT_LLM_ENDPOINT,
+    AI_TODO_LLM_THINKING_DEPTH: "medium",
+    AI_TODO_LLM_TIMEOUT_MS: String(DEFAULT_LLM_TIMEOUT_MS),
+    AI_TODO_LLM_API_KEY: includeApiKey,
+    AI_TODO_ORGANIZE_SINCE_DAYS: String(DEFAULT_ORGANIZE_SINCE_DAYS),
+    AI_TODO_ORGANIZE_MAX_INTERACTIONS_PER_SESSION: String(DEFAULT_ORGANIZE_MAX_INTERACTIONS_PER_SESSION),
+    AI_TODO_ORGANIZE_MAX_SESSIONS: String(DEFAULT_ORGANIZE_MAX_SESSIONS),
+    AI_TODO_ORGANIZE_MAX_OBSERVATIONS_PER_SESSION: String(DEFAULT_ORGANIZE_MAX_OBSERVATIONS_PER_SESSION)
+  });
+}
+
+export function loadConfig(paths: AppPaths): AppConfig {
+  const jsonConfig = loadJsonConfig(paths);
+  return parseConfig(applyEnvConfig(jsonConfig, loadEnvConfig(paths)));
+}
+
+export function saveConfig(paths: AppPaths, config: AppConfig): void {
+  mkdirSync(paths.configDir, { recursive: true });
+  writeFileSync(paths.configPath, `${JSON.stringify(parseConfig(config), null, 2)}\n`);
+}
+
+export function loadSecrets(paths: AppPaths): AppSecrets {
+  const env = loadEnvConfig(paths);
+  if (env.AI_TODO_LLM_API_KEY) return { llmApiKey: env.AI_TODO_LLM_API_KEY };
+  if (!existsSync(paths.secretsPath)) return {};
+  try {
+    return parseSecrets(JSON.parse(readFileSync(paths.secretsPath, "utf8")));
+  } catch {
+    throw new Error("secrets_invalid");
   }
-  return vars;
 }
 
-export function getUserEnvPath(): string {
-  return ENV_FILE;
+export function saveSecrets(paths: AppPaths, secrets: AppSecrets): void {
+  if (existsSync(paths.envPath)) {
+    const env = loadEnvConfig(paths);
+    if (secrets.llmApiKey) env.AI_TODO_LLM_API_KEY = secrets.llmApiKey;
+    else delete env.AI_TODO_LLM_API_KEY;
+    saveEnvConfig(paths, env);
+    return;
+  }
+  mkdirSync(paths.configDir, { recursive: true });
+  const parsed = parseSecrets(secrets);
+  writeFileSync(paths.secretsPath, `${JSON.stringify(parsed, null, 2)}\n`, { mode: 0o600 });
 }
 
-function maskSecret(value: string | undefined): string {
-  if (!hasRealValue(value)) return "";
+export function loadEnvConfig(paths: AppPaths): EnvConfig {
+  if (!existsSync(paths.envPath)) return {};
+  return parseEnvFile(readFileSync(paths.envPath, "utf8"));
+}
+
+export function saveEnvConfig(paths: AppPaths, env: EnvConfig): void {
+  mkdirSync(paths.configDir, { recursive: true });
+  const sanitized = sanitizeEnvConfig(env);
+  writeFileSync(paths.envPath, `${formatEnvFile(sanitized)}\n`, { mode: 0o600 });
+  chmodSync(paths.envPath, 0o600);
+}
+
+export function ensureDefaultEnv(paths: AppPaths, overrides: EnvConfig = {}): EnvConfig {
+  const env = existsSync(paths.envPath)
+    ? { ...defaultEnvConfig(), ...loadEnvConfig(paths), ...sanitizeEnvConfig(overrides) }
+    : { ...defaultEnvConfig(), ...sanitizeEnvConfig(overrides) };
+  saveEnvConfig(paths, env);
+  return env;
+}
+
+export function publicConfig(config: AppConfig, secrets: AppSecrets): PublicAppConfig {
+  return {
+    ...config,
+    llm: {
+      ...config.llm,
+      apiKeyConfigured: !!secrets.llmApiKey,
+      apiKeyMasked: maskSecret(secrets.llmApiKey)
+    }
+  };
+}
+
+export function parseSettingsUpdate(input: unknown): { config: AppConfig; apiKey?: string } {
+  const record = objectValue(input);
+  if (!record) throw new Error("config_invalid");
+  const llm = objectValue(record.llm);
+  const apiKey = llm && "apiKey" in llm ? llm.apiKey : undefined;
+  if (apiKey !== undefined && typeof apiKey !== "string") throw new Error("config_invalid");
+  if (llm && "apiKey" in llm) {
+    const { apiKey: _apiKey, ...rest } = llm;
+    return { config: parseConfig({ ...record, llm: rest }), apiKey };
+  }
+  return { config: parseConfig(record) };
+}
+
+export function settingsToEnv(config: AppConfig, currentSecrets: AppSecrets, apiKey?: string): EnvConfig {
+  const env = configToEnv(config);
+  if (apiKey !== undefined) {
+    if (apiKey.trim()) env.AI_TODO_LLM_API_KEY = apiKey.trim();
+    else delete env.AI_TODO_LLM_API_KEY;
+  } else if (currentSecrets.llmApiKey) {
+    env.AI_TODO_LLM_API_KEY = currentSecrets.llmApiKey;
+  }
+  return env;
+}
+
+export function configToEnv(config: AppConfig): EnvConfig {
+  const parsed = parseConfig(config);
+  return sanitizeEnvConfig({
+    AI_TODO_CODEX_HOME: parsed.sources.codex.path,
+    AI_TODO_CLAUDE_HOME: parsed.sources["claude-code"].path,
+    AI_TODO_LLM_ENABLED: String(parsed.llm.enabled),
+    AI_TODO_LLM_PROVIDER: parsed.llm.provider,
+    AI_TODO_LLM_MODEL: parsed.llm.model,
+    AI_TODO_LLM_ENDPOINT: parsed.llm.endpoint,
+    AI_TODO_LLM_THINKING_DEPTH: parsed.llm.thinkingDepth,
+    AI_TODO_LLM_TIMEOUT_MS: String(parsed.llm.timeoutMs),
+    AI_TODO_ORGANIZE_SINCE_DAYS: String(parsed.organize.sinceDays),
+    AI_TODO_ORGANIZE_MAX_INTERACTIONS_PER_SESSION: String(parsed.organize.maxInteractionsPerSession),
+    AI_TODO_ORGANIZE_MAX_SESSIONS: String(parsed.organize.maxSessions),
+    AI_TODO_ORGANIZE_MAX_OBSERVATIONS_PER_SESSION: String(parsed.organize.maxObservationsPerSession)
+  });
+}
+
+export function parseConfig(input: unknown): AppConfig {
+  const record = objectValue(input);
+  if (!record) throw new Error("config_invalid");
+  const sources = objectValue(record.sources);
+  if (!sources) throw new Error("config_invalid");
+  const keys = Object.keys(record);
+  if (keys.some((key) => key !== "sources" && key !== "llm" && key !== "organize")) throw new Error("config_invalid");
+  const sourceKeys = Object.keys(sources);
+  if (sourceKeys.some((key) => key !== "codex" && key !== "claude-code")) throw new Error("config_invalid");
+  return {
+    sources: {
+      codex: sourceConfig(sources.codex),
+      "claude-code": sourceConfig(sources["claude-code"])
+    },
+    llm: llmConfig(record.llm),
+    organize: organizeConfig(record.organize)
+  };
+}
+
+export function normalizeConfig(input: unknown): AppConfig {
+  try {
+    return parseConfig(input);
+  } catch {
+    return defaultConfig();
+  }
+}
+
+export function parseEnvFile(text: string): EnvConfig {
+  const env: EnvConfig = {};
+  for (const rawLine of text.split(/\r?\n/)) {
+    const line = rawLine.trim();
+    if (!line || line.startsWith("#")) continue;
+    const separator = line.indexOf("=");
+    if (separator <= 0) throw new Error("env_invalid");
+    const key = line.slice(0, separator).trim();
+    if (!isWritableEnvKey(key)) {
+      if (IGNORED_ENV_KEYS.has(key)) continue;
+      throw new Error("env_invalid");
+    }
+    env[key] = parseEnvValue(line.slice(separator + 1));
+  }
+  return sanitizeEnvConfig(env);
+}
+
+export function formatEnvFile(env: EnvConfig): string {
+  const sanitized = sanitizeEnvConfig(env);
+  return WRITABLE_ENV_KEYS
+    .filter((key) => sanitized[key] !== undefined)
+    .map((key) => `${key}=${quoteEnvValue(sanitized[key] ?? "")}`)
+    .join("\n");
+}
+
+export function maskSecret(value: string | undefined): string {
+  if (!value?.trim()) return "";
   const secret = value.trim();
   if (secret.length <= 8) return `${secret.slice(0, 2)}****${secret.slice(-2)}`;
   return `${secret.slice(0, 3)}****${secret.slice(-4)}`;
 }
 
-export function getTodoExtractorUserConfig(): Record<string, string | boolean> {
-  const env = getMergedEnv();
-  const runtime = detectLangExtractRuntime(env);
+function loadJsonConfig(paths: AppPaths): AppConfig {
+  if (!existsSync(paths.configPath)) return defaultConfig();
+  try {
+    return parseConfig(JSON.parse(readFileSync(paths.configPath, "utf8")));
+  } catch (error) {
+    if ((error as Error).message === "config_invalid") throw error;
+    throw new Error("config_invalid");
+  }
+}
+
+function applyEnvConfig(config: AppConfig, env: EnvConfig): AppConfig {
+  const next: AppConfig = {
+    sources: {
+      codex: { ...config.sources.codex },
+      "claude-code": { ...config.sources["claude-code"] }
+    },
+    llm: { ...config.llm },
+    organize: { ...config.organize }
+  };
+  if (env.AI_TODO_CODEX_HOME) next.sources.codex = { path: cleanSourcePath(env.AI_TODO_CODEX_HOME) };
+  if (env.AI_TODO_CLAUDE_HOME) next.sources["claude-code"] = { path: cleanSourcePath(env.AI_TODO_CLAUDE_HOME) };
+  if (env.AI_TODO_LLM_ENABLED !== undefined) next.llm.enabled = parseBoolean(env.AI_TODO_LLM_ENABLED);
+  if (env.AI_TODO_LLM_PROVIDER !== undefined) {
+    if (env.AI_TODO_LLM_PROVIDER !== "openai") throw new Error("config_invalid");
+    next.llm.provider = "openai";
+  }
+  if (env.AI_TODO_LLM_MODEL) next.llm.model = env.AI_TODO_LLM_MODEL;
+  if (env.AI_TODO_LLM_ENDPOINT) next.llm.endpoint = env.AI_TODO_LLM_ENDPOINT;
+  if (env.AI_TODO_LLM_THINKING_DEPTH !== undefined) next.llm.thinkingDepth = parseThinkingDepth(env.AI_TODO_LLM_THINKING_DEPTH);
+  if (env.AI_TODO_LLM_TIMEOUT_MS !== undefined) next.llm.timeoutMs = parseIntRange(env.AI_TODO_LLM_TIMEOUT_MS, 1000, 600000);
+  if (env.AI_TODO_ORGANIZE_SINCE_DAYS !== undefined) {
+    next.organize.sinceDays = parseIntRange(env.AI_TODO_ORGANIZE_SINCE_DAYS, 1, 3650);
+  }
+  if (env.AI_TODO_ORGANIZE_MAX_INTERACTIONS_PER_SESSION !== undefined) {
+    next.organize.maxInteractionsPerSession = parseIntRange(env.AI_TODO_ORGANIZE_MAX_INTERACTIONS_PER_SESSION, 1, 500);
+  }
+  if (env.AI_TODO_ORGANIZE_MAX_SESSIONS !== undefined) {
+    next.organize.maxSessions = parseIntRange(env.AI_TODO_ORGANIZE_MAX_SESSIONS, 1, 200);
+  }
+  if (env.AI_TODO_ORGANIZE_MAX_OBSERVATIONS_PER_SESSION !== undefined) {
+    next.organize.maxObservationsPerSession = parseIntRange(env.AI_TODO_ORGANIZE_MAX_OBSERVATIONS_PER_SESSION, 1, 1000);
+  }
+  return parseConfig(next);
+}
+
+function sourceConfig(value: unknown): { path?: string } {
+  const input = objectValue(value);
+  if (!input) throw new Error("config_invalid");
+  const keys = Object.keys(input);
+  if (keys.some((key) => key !== "path")) throw new Error("config_invalid");
+  const path = input.path;
+  if (path === undefined) return {};
+  if (typeof path !== "string" || !path.trim()) throw new Error("config_invalid");
+  const cleaned = cleanSourcePath(path);
+  return cleaned ? { path: cleaned } : {};
+}
+
+function cleanSourcePath(path: string): string | undefined {
+  const trimmed = path.trim();
+  if (!trimmed) return undefined;
+  if (isStaleTempSourcePath(trimmed) && !existsSync(trimmed)) return undefined;
+  return trimmed;
+}
+
+function isStaleTempSourcePath(path: string): boolean {
+  return /\/ai-todo-http-[A-Za-z0-9_-]+(?:\/|$)/.test(path);
+}
+
+function llmConfig(value: unknown): AppConfig["llm"] {
+  if (value === undefined) return defaultConfig().llm;
+  const input = objectValue(value);
+  if (!input) throw new Error("config_invalid");
+  const keys = Object.keys(input);
+  if (keys.some((key) => !["enabled", "provider", "model", "endpoint", "thinkingDepth", "timeoutMs"].includes(key))) {
+    throw new Error("config_invalid");
+  }
+  if (typeof input.enabled !== "boolean") throw new Error("config_invalid");
+  if (input.provider !== "openai") throw new Error("config_invalid");
+  const model = nonEmptyString(input.model);
+  const endpoint = nonEmptyString(input.endpoint);
+  const thinkingDepth = parseThinkingDepth(input.thinkingDepth);
+  const timeoutMs = input.timeoutMs;
+  if (typeof timeoutMs !== "number" || !Number.isInteger(timeoutMs) || timeoutMs < 1000 || timeoutMs > 600000) {
+    throw new Error("config_invalid");
+  }
+  return { enabled: input.enabled, provider: "openai", model, endpoint, thinkingDepth, timeoutMs };
+}
+
+function organizeConfig(value: unknown): AppConfig["organize"] {
+  if (value === undefined) return defaultConfig().organize;
+  const input = objectValue(value);
+  if (!input) throw new Error("config_invalid");
+  const keys = Object.keys(input);
+  if (keys.some((key) =>
+    key !== "sinceDays" &&
+    key !== "maxInteractionsPerSession" &&
+    key !== "maxSessions" &&
+    key !== "maxObservationsPerSession"
+  )) throw new Error("config_invalid");
+  const defaults = defaultConfig().organize;
   return {
-    AGENTMEMORY_TODO_EXTRACTOR: env["AGENTMEMORY_TODO_EXTRACTOR"] || "auto",
-    LANGEXTRACT_PYTHON: resolveLangExtractPython(env),
-    LANGEXTRACT_MODEL: normalizeTodoExtractorModel(env["LANGEXTRACT_MODEL"]),
-    LANGEXTRACT_PROVIDER: normalizeTodoExtractorProvider(env["LANGEXTRACT_PROVIDER"]),
-    LANGEXTRACT_BASE_URL: env["LANGEXTRACT_BASE_URL"] || DEFAULT_LANGEXTRACT_BASE_URL,
-    LANGEXTRACT_THINKING_DEPTH: env["LANGEXTRACT_THINKING_DEPTH"] || "medium",
-    AGENTMEMORY_TODO_EXTRACT_TIMEOUT_MS:
-      env["AGENTMEMORY_TODO_EXTRACT_TIMEOUT_MS"] || String(DEFAULT_TODO_EXTRACT_TIMEOUT_MS),
-    AGENTMEMORY_TODO_EXTRACT_SINCE_DAYS:
-      env["AGENTMEMORY_TODO_EXTRACT_SINCE_DAYS"] || String(DEFAULT_TODO_EXTRACT_SINCE_DAYS),
-    AGENTMEMORY_TODO_EXTRACT_MAX_INTERACTIONS_PER_SESSION:
-      env["AGENTMEMORY_TODO_EXTRACT_MAX_INTERACTIONS_PER_SESSION"] || String(DEFAULT_TODO_EXTRACT_MAX_INTERACTIONS),
-    LANGEXTRACT_API_KEY_CONFIGURED: hasRealValue(env["LANGEXTRACT_API_KEY"]),
-    LANGEXTRACT_API_KEY_MASKED: maskSecret(env["LANGEXTRACT_API_KEY"]),
-    LANGEXTRACT_RUNTIME_READY: runtime.ready,
-    LANGEXTRACT_RUNTIME_ERROR: runtime.error,
+    sinceDays: numberRange(input.sinceDays, 1, 3650),
+    maxInteractionsPerSession: numberRange(input.maxInteractionsPerSession, 1, 500),
+    maxSessions: input.maxSessions === undefined ? defaults.maxSessions : numberRange(input.maxSessions, 1, 200),
+    maxObservationsPerSession: input.maxObservationsPerSession === undefined
+      ? defaults.maxObservationsPerSession
+      : numberRange(input.maxObservationsPerSession, 1, 1000)
   };
 }
 
-function detectLangExtractRuntime(env: Record<string, string>): { ready: boolean; error: string } {
-  const python = resolveLangExtractPython(env);
-  const result = spawnSync(python, ["-c", detectLangExtractRuntimeProbe()], {
-    encoding: "utf8",
-    timeout: 3000,
-  });
-  if (result.status === 0) return { ready: true, error: "" };
-  return {
-    ready: false,
-    error: String(result.stderr || result.error?.message || "langextract unavailable").replace(/\s+/g, " ").trim(),
-  };
+function parseSecrets(input: unknown): AppSecrets {
+  const record = objectValue(input);
+  if (!record) throw new Error("secrets_invalid");
+  const keys = Object.keys(record);
+  if (keys.some((key) => key !== "llmApiKey")) throw new Error("secrets_invalid");
+  if (record.llmApiKey === undefined) return {};
+  return { llmApiKey: nonEmptyString(record.llmApiKey) };
 }
 
-export function detectLangExtractRuntimeProbe(): string {
-  return "import importlib.util; raise SystemExit(0 if importlib.util.find_spec('langextract') else 1)";
-}
-
-export function resolveLangExtractPython(env?: Record<string, string>): string {
-  const source = env ?? getMergedEnv();
-  const configured = source["LANGEXTRACT_PYTHON"]?.trim();
-  if (configured && configured !== "python3") return configured;
-  const moduleRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-  const candidates = [process.cwd(), moduleRoot].map((root) =>
-    process.platform === "win32"
-      ? join(root, ".agentmemory-python", "Scripts", "python.exe")
-      : join(root, ".agentmemory-python", "bin", "python"),
-  );
-  const local = candidates.find((candidate) => existsSync(candidate));
-  if (local) return local;
-  return configured || "python3";
-}
-
-export function normalizeTodoExtractorModel(value: string | undefined): string {
-  const model = value?.trim();
-  return model && !LEGACY_LANGEXTRACT_MODELS.has(model) ? model : DEFAULT_LANGEXTRACT_MODEL;
-}
-
-export function normalizeTodoExtractorProvider(value: string | undefined): string {
-  const provider = value?.trim().toLowerCase();
-  if (!provider || provider === "novita" || provider === "deepseek") return DEFAULT_LANGEXTRACT_PROVIDER;
-  return provider;
-}
-
-export function writeUserEnv(updates: Record<string, string>): string[] {
-  const cleanEntries = Object.entries(updates).filter(
-    ([key, value]) => WRITABLE_TODO_EXTRACT_KEYS.has(key) && value.trim().length > 0 && !/[\r\n]/.test(value),
-  );
-  if (!cleanEntries.length) return [];
-  mkdirSync(DATA_DIR, { recursive: true });
-  const current = existsSync(ENV_FILE) ? readFileSync(ENV_FILE, "utf-8") : "";
-  const lines = current ? current.split("\n") : [];
-  const seen = new Set<string>();
-  const next = lines.map((line) => {
-    const match = line.match(/^\s*([A-Z0-9_]+)\s*=/);
-    if (!match) return line;
-    const key = match[1];
-    const update = cleanEntries.find(([k]) => k === key);
-    if (!update) return line;
-    seen.add(key);
-    return `${key}=${update[1]}`;
-  });
-  cleanEntries.forEach(([key, value]) => {
-    if (!seen.has(key)) next.push(`${key}=${value}`);
-  });
-  writeFileSync(ENV_FILE, next.join("\n").replace(/\n*$/, "\n"), { mode: 0o600 });
-  return cleanEntries.map(([key]) => key);
-}
-
-function hasRealValue(v: string | undefined): v is string {
-  return typeof v === "string" && v.trim().length > 0;
-}
-
-function detectProvider(env: Record<string, string>): ProviderConfig {
-  const maxTokens = parseInt(env["MAX_TOKENS"] || "4096", 10);
-
-  // OpenAI-compatible: supports OpenAI, DeepSeek, SiliconFlow, Azure, vLLM, LM Studio
-  if (hasRealValue(env["OPENAI_API_KEY"]) && env["OPENAI_API_KEY_FOR_LLM"] !== "false") {
-    return {
-      provider: "openai",
-      model: env["OPENAI_MODEL"] || "gpt-4o-mini",
-      maxTokens,
-      baseURL: env["OPENAI_BASE_URL"],
-    };
+function sanitizeEnvConfig(input: EnvConfig): EnvConfig {
+  const env: EnvConfig = {};
+  for (const [key, value] of Object.entries(input)) {
+    if (!isWritableEnvKey(key)) throw new Error("env_invalid");
+    if (value === undefined) continue;
+    const text = String(value).trim();
+    if (!text) continue;
+    if (/[\r\n]/.test(text)) throw new Error("env_invalid");
+    env[key] = text;
   }
+  return env;
+}
 
-  // MiniMax: Anthropic-compatible API, requires raw fetch to avoid SDK stainless headers
-  if (hasRealValue(env["MINIMAX_API_KEY"])) {
-    return {
-      provider: "minimax",
-      model: env["MINIMAX_MODEL"] || "MiniMax-M2.7",
-      maxTokens,
-    };
+function parseEnvValue(rawValue: string): string {
+  const trimmed = rawValue.trim();
+  if (!trimmed) return "";
+  if ((trimmed.startsWith("\"") && trimmed.endsWith("\"")) || (trimmed.startsWith("'") && trimmed.endsWith("'"))) {
+    return trimmed.slice(1, -1).trim();
   }
+  return trimmed.replace(/\s+#.*$/, "").trim();
+}
 
-  if (hasRealValue(env["ANTHROPIC_API_KEY"])) {
-    return {
-      provider: "anthropic",
-      model: env["ANTHROPIC_MODEL"] || "claude-sonnet-4-20250514",
-      maxTokens,
-      baseURL: env["ANTHROPIC_BASE_URL"],
-    };
+function quoteEnvValue(value: string): string {
+  if (/[\s#'"]/.test(value)) return JSON.stringify(value);
+  return value;
+}
+
+function isWritableEnvKey(key: string): key is WritableEnvKey {
+  return (WRITABLE_ENV_KEYS as readonly string[]).includes(key);
+}
+
+function nonEmptyString(value: unknown): string {
+  if (typeof value !== "string" || !value.trim()) throw new Error("config_invalid");
+  return value.trim();
+}
+
+function parseThinkingDepth(value: unknown): "low" | "medium" | "high" {
+  if (value !== "low" && value !== "medium" && value !== "high") throw new Error("config_invalid");
+  return value;
+}
+
+function parseBoolean(value: string): boolean {
+  if (value === "true") return true;
+  if (value === "false") return false;
+  throw new Error("config_invalid");
+}
+
+function parseIntRange(value: string, min: number, max: number): number {
+  if (!/^\d+$/.test(value)) throw new Error("config_invalid");
+  return numberRange(Number(value), min, max);
+}
+
+function numberRange(value: unknown, min: number, max: number): number {
+  if (typeof value !== "number" || !Number.isInteger(value) || value < min || value > max) {
+    throw new Error("config_invalid");
   }
-  if (hasRealValue(env["GEMINI_API_KEY"]) || hasRealValue(env["GOOGLE_API_KEY"])) {
-    if (!hasRealValue(env["GEMINI_API_KEY"]) && hasRealValue(env["GOOGLE_API_KEY"])) {
-      process.stderr.write(
-        "[agentmemory] GOOGLE_API_KEY detected — treating as GEMINI_API_KEY. " +
-          "Set GEMINI_API_KEY in ~/.agentmemory/.env to silence this warning.\n",
-      );
-    }
-    return {
-      provider: "gemini",
-      model: env["GEMINI_MODEL"] || "gemini-2.5-flash",
-      maxTokens,
-    };
-  }
-  if (hasRealValue(env["OPENROUTER_API_KEY"])) {
-    const model =
-      env["OPENROUTER_MODEL"] || "anthropic/claude-sonnet-4-20250514";
-    // warn when the configured OpenRouter model is in the
-    // premium tier and likely to burn money on background compression.
-    // Captured workload data shows ~$5/35h on claude-sonnet-4 vs
-    // ~$0.46/35h on deepseek-v4-flash for the same compression mix.
-    // Heuristic match avoids hard-coding a pricing table.
-    if (
-      !warnPremiumModelShown &&
-      /sonnet|opus|gpt-4o(?!.*mini)|gpt-4-turbo/i.test(model) &&
-      env["AGENTMEMORY_SUPPRESS_COST_WARNING"] !== "1" &&
-      env["AGENTMEMORY_SUPPRESS_COST_WARNING"] !== "true"
-    ) {
-      warnPremiumModelShown = true;
-      process.stderr.write(
-        `[agentmemory] OPENROUTER_MODEL=${model} is in the premium tier. ` +
-          `Background compression on this model can cost $5+/day under active use. ` +
-          `Cheaper alternatives with comparable quality for memory compression: ` +
-          `deepseek/deepseek-v4-flash, deepseek/deepseek-chat, qwen/qwen3-coder. ` +
-          `See README "Cost-aware model selection" for the full table. ` +
-          `Set AGENTMEMORY_SUPPRESS_COST_WARNING=1 to silence.\n`,
-      );
-    }
-    return {
-      provider: "openrouter",
-      model,
-      maxTokens,
-    };
-  }
-
-  const allowAgentSdk = env["AGENTMEMORY_ALLOW_AGENT_SDK"] === "true";
-  if (!allowAgentSdk) {
-    process.stderr.write(
-      "[agentmemory] No LLM provider key found " +
-        "(ANTHROPIC_API_KEY, GEMINI_API_KEY, OPENROUTER_API_KEY, MINIMAX_API_KEY, OPENAI_API_KEY). " +
-        "LLM-backed compression and summarization are DISABLED — using no-op provider. " +
-        "This is the safe default: the agent-sdk fallback used to spawn Claude Agent SDK " +
-        "child sessions which inherit Claude Code's plugin hooks and cause infinite Stop-hook " +
-        "recursion (#149 follow-up). To opt in to the agent-sdk fallback anyway, set both " +
-        "AGENTMEMORY_AUTO_COMPRESS=true AND AGENTMEMORY_ALLOW_AGENT_SDK=true — but be aware " +
-        "it will burn your Claude Pro allocation and may still recurse if you use it from " +
-        "inside Claude Code itself.\n",
-    );
-    return {
-      provider: "noop",
-      model: "noop",
-      maxTokens,
-    };
-  }
-
-  process.stderr.write(
-    "[agentmemory] WARNING: agent-sdk fallback enabled via AGENTMEMORY_ALLOW_AGENT_SDK=true. " +
-      "This spawns @anthropic-ai/claude-agent-sdk child sessions that can trigger the Stop-hook " +
-      "recursion loop (#149 follow-up). A SDK-child env marker is set to block re-entry, " +
-      "but prefer setting a real API key in ~/.agentmemory/.env instead.\n",
-  );
-  return {
-    provider: "agent-sdk",
-    model: "claude-sonnet-4-20250514",
-    maxTokens,
-  };
+  return value;
 }
 
-export function loadConfig(): AgentMemoryConfig {
-  const env = getMergedEnv();
-
-  const provider = detectProvider(env);
-
-  return {
-    engineUrl: env["III_ENGINE_URL"] || "ws://localhost:49134",
-    restPort: parseInt(env["III_REST_PORT"] || "3111", 10) || 3111,
-    streamsPort: parseInt(env["III_STREAMS_PORT"] || "3112", 10) || 3112,
-    provider,
-    tokenBudget: safeParseInt(env["TOKEN_BUDGET"], 2000),
-    maxObservationsPerSession: safeParseInt(env["MAX_OBS_PER_SESSION"], 500),
-    compressionModel: provider.model,
-    dataDir: DATA_DIR,
-  };
-}
-
-function getMergedEnv(
-  overrides?: Record<string, string>,
-): Record<string, string> {
-  const fileEnv = loadEnvFile();
-  return { ...fileEnv, ...process.env, ...overrides } as Record<string, string>;
-}
-
-export function getEnvVar(key: string): string | undefined {
-  return getMergedEnv()[key];
-}
-
-export function isDropStaleIndexEnabled(): boolean {
-  return getMergedEnv()["AGENTMEMORY_DROP_STALE_INDEX"] === "true";
-}
-
-// Line D: Feishu/Lark cross-device delivery of inbox items.
-// Default OFF — when disabled (or user-id missing), inbox behaves exactly as
-// Line C with zero side effects. Only an explicit "true" opts in.
-export function isLarkDeliveryEnabled(): boolean {
-  const env = getMergedEnv();
-  return (
-    env["AGENTMEMORY_LARK_DELIVERY"] === "true" &&
-    hasRealValue(env["AGENTMEMORY_LARK_USER_ID"])
-  );
-}
-
-// Reply loop (D5): bot subscribes to incoming P2P messages and maps a reply
-// back to the pending question. Independent switch from the push side.
-export function isLarkReplyLoopEnabled(): boolean {
-  const env = getMergedEnv();
-  return (
-    env["AGENTMEMORY_LARK_REPLY_LOOP"] === "true" &&
-    hasRealValue(env["AGENTMEMORY_LARK_USER_ID"])
-  );
-}
-
-export interface LarkConfig {
-  userId: string; // target open_id (ou_xxx)
-  urgentQuestion: boolean; // send urgent_app on question delivery
-}
-
-export function getLarkConfig(): LarkConfig | null {
-  const env = getMergedEnv();
-  const userId = env["AGENTMEMORY_LARK_USER_ID"];
-  if (!hasRealValue(userId)) return null;
-  return {
-    userId: userId!,
-    urgentQuestion: env["AGENTMEMORY_LARK_URGENT_QUESTION"] !== "false",
-  };
-}
-
-export function detectLlmProviderKind(): "llm" | "noop" {
-  const env = getMergedEnv();
-  if (
-    hasRealValue(env["ANTHROPIC_API_KEY"]) ||
-    hasRealValue(env["GEMINI_API_KEY"]) ||
-    hasRealValue(env["GOOGLE_API_KEY"]) ||
-    hasRealValue(env["OPENROUTER_API_KEY"]) ||
-    hasRealValue(env["MINIMAX_API_KEY"]) ||
-    (hasRealValue(env["OPENAI_API_KEY"]) &&
-      env["OPENAI_API_KEY_FOR_LLM"] !== "false")
-  ) {
-    return "llm";
-  }
-  return "noop";
-}
-
-export function loadEmbeddingConfig(): EmbeddingConfig {
-  const env = getMergedEnv();
-  let bm25Weight = parseFloat(env["BM25_WEIGHT"] || "0.4");
-  let vectorWeight = parseFloat(env["VECTOR_WEIGHT"] || "0.6");
-  bm25Weight =
-    isNaN(bm25Weight) || bm25Weight < 0 ? 0.4 : Math.min(bm25Weight, 1);
-  vectorWeight =
-    isNaN(vectorWeight) || vectorWeight < 0 ? 0.6 : Math.min(vectorWeight, 1);
-  return {
-    provider: env["EMBEDDING_PROVIDER"] || undefined,
-    bm25Weight,
-    vectorWeight,
-  };
-}
-
-export function detectEmbeddingProvider(
-  env?: Record<string, string>,
-): string | null {
-  const source = env ?? getMergedEnv();
-  const forced = source["EMBEDDING_PROVIDER"];
-  if (forced) return forced;
-
-  if (source["GEMINI_API_KEY"]) return "gemini";
-  if (source["OPENAI_API_KEY"]) return "openai";
-  if (source["VOYAGE_API_KEY"]) return "voyage";
-  if (source["COHERE_API_KEY"]) return "cohere";
-  if (source["OPENROUTER_API_KEY"]) return "openrouter";
-  return null;
-}
-
-export function loadClaudeBridgeConfig(): ClaudeBridgeConfig {
-  const env = getMergedEnv();
-  const enabled = env["CLAUDE_MEMORY_BRIDGE"] === "true";
-  const projectPath = env["CLAUDE_PROJECT_PATH"] || "";
-  const lineBudget = safeParseInt(env["CLAUDE_MEMORY_LINE_BUDGET"], 200);
-  let memoryFilePath = "";
-  if (enabled && projectPath) {
-    // Claude Code stores MEMORY.md at
-    //   ~/.claude/projects/<slug>/MEMORY.md
-    // where <slug> is the project path with `/` and `\` swapped for `-`.
-    // The leading `-` from an absolute POSIX path is preserved (Claude
-    // Code keeps it; stripping it produced a slug Claude never reads).
-    // There's also no `memory/` subdirectory — the file sits directly
-    // under the slug dir.
-    const safePath = projectPath.replace(/[/\\]/g, "-");
-    memoryFilePath = join(
-      homedir(),
-      ".claude",
-      "projects",
-      safePath,
-      "MEMORY.md",
-    );
-  }
-  return { enabled, projectPath, memoryFilePath, lineBudget };
-}
-
-export function loadTeamConfig(): TeamConfig | null {
-  const env = getMergedEnv();
-  const teamId = env["TEAM_ID"];
-  const userId = env["USER_ID"];
-  if (!teamId || !userId) return null;
-  const mode = env["TEAM_MODE"] === "shared" ? "shared" : "private";
-  return { teamId, userId, mode };
-}
-
-// optional AGENT_ID env for multi-agent memory isolation.
-// Returns null when unset so memory stays unscoped (legacy behavior).
-// Trimmed + length-capped to keep KV writes well-formed.
-//
-// Filtering is gated by AGENTMEMORY_AGENT_SCOPE:
-//   "shared"   (default) — tag everything, do not filter recall paths
-//   "isolated"           — tag everything AND filter recall paths
-export function loadAgentScope(): {
-  agentId: string;
-  mode: "shared" | "isolated";
-} | null {
-  const env = getMergedEnv();
-  const raw = env["AGENT_ID"];
-  if (!raw) return null;
-  const agentId = raw.trim().slice(0, 128);
-  if (!agentId) return null;
-  const mode = env["AGENTMEMORY_AGENT_SCOPE"] === "isolated"
-    ? "isolated"
-    : "shared";
-  return { agentId, mode };
-}
-
-export function getAgentId(): string | undefined {
-  return loadAgentScope()?.agentId;
-}
-
-// True only when AGENT_ID is set AND scope=isolated. Recall paths
-// consult this to decide whether to filter.
-export function isAgentScopeIsolated(): boolean {
-  return loadAgentScope()?.mode === "isolated";
-}
-
-export function loadSnapshotConfig(): {
-  enabled: boolean;
-  interval: number;
-  dir: string;
-} {
-  const env = getMergedEnv();
-  return {
-    enabled: env["SNAPSHOT_ENABLED"] === "true",
-    interval: safeParseInt(env["SNAPSHOT_INTERVAL"], 3600),
-    dir: env["SNAPSHOT_DIR"] || join(getAgentMemoryDataDir(), "snapshots"),
-  };
-}
-
-export function isGraphExtractionEnabled(): boolean {
-  return getMergedEnv()["GRAPH_EXTRACTION_ENABLED"] === "true";
-}
-
-export function getGraphBatchSize(): number {
-  return safeParseInt(getMergedEnv()["GRAPH_EXTRACTION_BATCH_SIZE"], 10);
-}
-
-export function isConsolidationEnabled(): boolean {
-  const env = getMergedEnv();
-  const explicit = env["CONSOLIDATION_ENABLED"];
-  if (explicit === "false" || explicit === "0") return false;
-  if (explicit === "true" || explicit === "1") return true;
-  return hasLLMProviderConfigured(env);
-}
-
-function hasLLMProviderConfigured(env: Record<string, string | undefined>): boolean {
-  const provider = (env["AGENTMEMORY_PROVIDER"] || "").toLowerCase();
-  if (provider === "noop") return false;
-  const openaiKeyForLlm =
-    env["OPENAI_API_KEY"] &&
-    (env["OPENAI_API_KEY_FOR_LLM"] || "").toLowerCase() !== "false";
-  return Boolean(
-    env["ANTHROPIC_API_KEY"] ||
-      openaiKeyForLlm ||
-      env["OPENROUTER_API_KEY"] ||
-      env["GEMINI_API_KEY"] ||
-      env["GOOGLE_API_KEY"] ||
-      env["MINIMAX_API_KEY"] ||
-      env["OPENAI_BASE_URL"] ||
-      provider === "agent-sdk",
-  );
-}
-
-// Per-observation LLM compression is OFF by default as of 0.8.8 (see #138).
-// When disabled, observations are captured and indexed via a synthetic
-// (zero-LLM) compression path so recall/search still works. Users who want
-// richer LLM-generated summaries can set AGENTMEMORY_AUTO_COMPRESS=true in
-// ~/.agentmemory/.env — but should expect their Claude API token usage to
-// climb proportionally with session tool-use frequency.
-export function isAutoCompressEnabled(): boolean {
-  return getMergedEnv()["AGENTMEMORY_AUTO_COMPRESS"] === "true";
-}
-
-// Hook-level context injection into Claude Code's conversation is OFF by
-// default as of 0.8.10 (see #143). When disabled, pre-tool-use and
-// session-start hooks still POST observations for background capture, but
-// never write context to stdout — so Claude Code doesn't inject an extra
-// ~4000-char blob into every tool turn. 0.8.8 stopped the agentmemory-side
-// Claude calls (via ANTHROPIC_API_KEY); this stops the Claude Code-side
-// token burn where every tool call silently grew the model input window.
-// Users who want the in-conversation context injection explicitly opt in
-// with AGENTMEMORY_INJECT_CONTEXT=true and get a loud startup warning.
-export function isContextInjectionEnabled(): boolean {
-  return getMergedEnv()["AGENTMEMORY_INJECT_CONTEXT"] === "true";
-}
-
-export function getConsolidationDecayDays(): number {
-  return safeParseInt(getMergedEnv()["CONSOLIDATION_DECAY_DAYS"], 30);
-}
-
-export function isStandaloneMcp(): boolean {
-  return getMergedEnv()["STANDALONE_MCP"] === "true";
-}
-
-export function getStandalonePersistPath(): string {
-  const env = getMergedEnv();
-  return (
-    env["STANDALONE_PERSIST_PATH"] ||
-    join(getAgentMemoryDataDir(), "standalone.json")
-  );
-}
-
-const VALID_PROVIDERS = new Set([
-  "anthropic",
-  "gemini",
-  "openrouter",
-  "agent-sdk",
-  "minimax",
-  "openai",
-]);
-
-export function loadFallbackConfig(): FallbackConfig {
-  const env = getMergedEnv();
-  const raw = env["FALLBACK_PROVIDERS"] || "";
-  const allowAgentSdk = env["AGENTMEMORY_ALLOW_AGENT_SDK"] === "true";
-  const providers = raw
-    .split(",")
-    .map((p) => p.trim())
-    .filter(
-      (p): p is FallbackConfig["providers"][number] =>
-        Boolean(p) && VALID_PROVIDERS.has(p),
-    )
-    .filter((p) => {
-      // Honor the same safety gate as detectProvider: agent-sdk is only
-      // permitted as a fallback target when the user has explicitly opted
-      // in. Without this filter, a user could set FALLBACK_PROVIDERS=agent-sdk
-      // and re-introduce the Stop-hook recursion loop even though
-      // detectProvider() returned the noop provider.
-      if (p === "agent-sdk" && !allowAgentSdk) {
-        process.stderr.write(
-          "[agentmemory] Ignoring FALLBACK_PROVIDERS entry 'agent-sdk' " +
-            "(AGENTMEMORY_ALLOW_AGENT_SDK is not 'true'). The agent-sdk " +
-            "fallback can spawn Claude Agent SDK child sessions that trigger " +
-            "the Stop-hook recursion loop (#149 follow-up). Opt in explicitly " +
-            "with AGENTMEMORY_ALLOW_AGENT_SDK=true if this is intentional.\n",
-        );
-        return false;
-      }
-      return true;
-    });
-  return { providers };
+function objectValue(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : null;
 }

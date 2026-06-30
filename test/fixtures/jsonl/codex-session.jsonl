@@ -1,5 +1,0 @@
-{"type":"session_meta","payload":{"id":"codex-real-session","cwd":"/Users/alice/codex-project","timestamp":"2026-06-11T08:00:00.000Z","originator":"codex"}}
-{"type":"event_msg","payload":{"type":"user_message","timestamp":"2026-06-11T08:00:01.000Z","message":"生成摘要按钮点击必定失败，请修复"}}
-{"type":"response_item","payload":{"type":"message","role":"assistant","timestamp":"2026-06-11T08:00:02.000Z","content":[{"type":"text","text":"我会先复现并定位摘要链路。"}]}}
-{"type":"response_item","payload":{"type":"function_call","name":"exec_command","timestamp":"2026-06-11T08:00:03.000Z","arguments":"{\"cmd\":\"rg summarize src/viewer/index.html\"}"}}
-{"type":"response_item","payload":{"type":"function_call_output","timestamp":"2026-06-11T08:00:04.000Z","output":"src/viewer/index.html:6866 summarizeSession"}}

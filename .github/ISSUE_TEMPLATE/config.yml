@@ -1,5 +1,0 @@
-blank_issues_enabled: false
-contact_links:
-  - name: Report a security vulnerability
-    url: https://github.com/MaimoryLab/AI-Todo/blob/main/SECURITY.md
-    about: Do not open a public issue for security problems. Report them privately by following SECURITY.md.
