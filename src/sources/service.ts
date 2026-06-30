@@ -2,6 +2,12 @@ import type { ObservationRecord, SessionRecord, SourceKind } from "../contracts.
 import type { Database } from "../db/index.js";
 
 const SOURCES: SourceKind[] = ["codex", "claude-code", "browser"];
+export interface ListSessionsOptions {
+  source?: SourceKind;
+  sessionId?: string;
+  limit?: number;
+  offset?: number;
+}
 
 export function listSources(db: Database) {
   return SOURCES.map((source) => ({
@@ -11,7 +17,21 @@ export function listSources(db: Database) {
   }));
 }
 
-export function listSessions(db: Database): SessionRecord[] {
+export function listSessions(db: Database, options: ListSessionsOptions = {}): SessionRecord[] {
+  const conditions = [];
+  const params: Array<string | number> = [];
+  if (options.source) {
+    conditions.push("sessions.source = ?");
+    params.push(options.source);
+  }
+  if (options.sessionId) {
+    conditions.push("sessions.id = ?");
+    params.push(options.sessionId);
+  }
+  const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
+  const limit = options.limit ?? -1;
+  const offset = options.offset ?? 0;
+  params.push(limit, offset);
   return db.prepare(
     `SELECT
       sessions.id,
@@ -29,10 +49,12 @@ export function listSessions(db: Database): SessionRecord[] {
       ), '') as preview
     FROM sessions
     JOIN observations ON observations.session_id = sessions.id
+    ${where}
     GROUP BY sessions.id
     HAVING observationCount > 0
-    ORDER BY sessions.updated_at DESC`
-  ).all().map((row) => {
+    ORDER BY sessions.updated_at DESC
+    LIMIT ? OFFSET ?`
+  ).all(...params).map((row) => {
     const record = row as Record<string, unknown>;
     return {
       id: String(record.id),

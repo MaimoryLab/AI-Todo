@@ -126,6 +126,11 @@ test("llm organize creates grounded cards and dedupes by model key", async () =>
       todos: [{
         title: "Add LLM settings UI",
         description: "Add settings controls for the LLM provider.",
+        metadata: {
+          completionState: "in_progress",
+          completionSummary: "The settings UI controls are drafted; save wiring remains.",
+          nextStep: "Wire the save action."
+        },
         confidence: 0.91,
         sourceObservationId: observationId,
         quote: "Please add LLM settings UI",
@@ -144,7 +149,46 @@ test("llm organize creates grounded cards and dedupes by model key", async () =>
     assert.equal(second.updated, 1);
     assert.equal(todos.length, 1);
     assert.equal(todos[0].title, "Add LLM settings UI");
+    assert.equal(todos[0].metadata.completionSummary, "The settings UI controls are drafted; save wiring remains.");
+    assert.equal(todos[0].metadata.nextStep, "Wire the save action.");
+    assert.equal(todos[0].metadata.sourceObservationId, observationId);
     assert.equal(todos[0].evidenceIds.length, 1);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("llm organize keeps provenance anchored to the validated source observation", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "ai-todo-organize-provenance-"));
+  try {
+    const db = openDatabase(getAppPaths(dir));
+    ingestBrowserSession(db, {
+      id: "browser-1",
+      messages: [{ role: "user", text: "Please keep the trusted source id" }]
+    });
+    const observationId = String((db.prepare("SELECT id FROM observations WHERE role = 'user' LIMIT 1").get() as any).id);
+
+    await organizeTodos(db, {
+      llmExtractor: async () => ({
+        ok: true,
+        todos: [{
+          title: "Keep trusted source id",
+          description: "Use the validated top-level source observation for provenance.",
+          metadata: {
+            sourceObservationId: "llm-supplied-wrong-id"
+          },
+          confidence: 0.9,
+          sourceObservationId: observationId,
+          quote: "Please keep the trusted source id",
+          dedupeKey: "trusted-source-id"
+        }]
+      })
+    });
+    const [todo] = listTodos(db);
+    db.close();
+
+    assert.equal(todo.metadata.sourceObservationId, observationId);
+    assert.equal(todo.origin?.observationId, observationId);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

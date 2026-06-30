@@ -21,6 +21,10 @@ test("HTTP API scans sources, lists sessions, observations, runs, and updates to
         todos: [{
           title: "Add HTTP API routes",
           description: "Add HTTP API routes for the local todo service.",
+          metadata: {
+            completionState: "blocked",
+            completionSummary: "The route list is drafted; error responses still need review."
+          },
           confidence: 0.9,
           sourceObservationId: observation.id,
           quote: observation.text,
@@ -67,7 +71,20 @@ test("HTTP API scans sources, lists sessions, observations, runs, and updates to
     assert.equal((await run.json()).runId, organizeBody.runId);
 
     const todos = await getJson(server.url("/todos"));
+    const observationBody = await getJson(server.url(`/sessions/${sessionBody[0].id}/observations`));
+    const sourceObservationId = (await observationBody.json())[0].id;
     const todo = (await todos.json())[0];
+    assert.equal(todo.metadata.completionSummary, "The route list is drafted; error responses still need review.");
+    assert.equal(todo.metadata.sourceObservationId, sourceObservationId);
+    assert.deepEqual(todo.origin, {
+      source: "codex",
+      projectTitle: "codex",
+      projectPath: fixture.codexFile,
+      sessionId: sessionBody[0].id,
+      sessionTitle: "Please add HTTP API routes",
+      sessionTemporary: true,
+      observationId: sourceObservationId
+    });
     const patch = await patchJson(server.url(`/todos/${todo.id}`), { status: "done" });
     assert.equal(patch.status, 200);
     assert.equal((await patch.json()).status, "done");
@@ -228,7 +245,9 @@ test("HTTP settings persist source paths and scan uses config path", async () =>
       },
       organize: {
         sinceDays: 30,
-        maxInteractionsPerSession: 15
+        maxInteractionsPerSession: 15,
+        maxSessions: 200,
+        maxObservationsPerSession: 40
       }
     });
     assert.equal(saved.status, 200);
@@ -239,7 +258,9 @@ test("HTTP settings persist source paths and scan uses config path", async () =>
     assert.equal(savedBody.llm.apiKeyMasked, "dum****alue");
     assert.equal(savedBody.llm.apiKey, undefined);
     assert.equal(savedBody.organize.sinceDays, 30);
+    assert.equal(savedBody.organize.maxSessions, 200);
     assert.match(readFileSync(paths.envPath, "utf8"), /AI_TODO_LLM_API_KEY=dummy-llm-key-value/);
+    assert.match(readFileSync(paths.envPath, "utf8"), /AI_TODO_ORGANIZE_MAX_SESSIONS=200/);
 
     const scan = await postJson(server.url("/sources/scan"), { source: "codex" });
     assert.equal(scan.status, 200);
@@ -385,7 +406,88 @@ test("HTTP organize returns structured failure", async () => {
   }
 });
 
-test("HTTP server serves the minimal UI assets", async () => {
+test("GET /todos tolerates missing origin records", async () => {
+  const fixture = createFixture();
+  const paths = getAppPaths(join(fixture.root, "home"));
+  const db = openDatabase(paths);
+  const server = await startServer(db, paths);
+  db.prepare(
+    "INSERT INTO todos (id, title, description, status, metadata_json, updated_at) VALUES (?, ?, ?, ?, ?, ?)"
+  ).run(
+    "todo-missing-origin",
+    "Keep old todo",
+    "Old cards should still list when their source observation is gone.",
+    "todo",
+    JSON.stringify({ sourceObservationId: "missing-observation" }),
+    "2026-06-30T00:00:00.000Z"
+  );
+
+  try {
+    const response = await getJson(server.url("/todos"));
+    assert.equal(response.status, 200);
+    const todo = (await response.json())[0];
+    assert.equal(todo.title, "Keep old todo");
+    assert.equal(todo.origin, undefined);
+  } finally {
+    await server.close();
+    db.close();
+    rmSync(fixture.root, { recursive: true, force: true });
+  }
+});
+
+test("GET /todos falls back to evidence when todo metadata has no source observation", async () => {
+  const fixture = createFixture();
+  const paths = getAppPaths(join(fixture.root, "home"));
+  const db = openDatabase(paths);
+  const server = await startServer(db, paths);
+  db.prepare("INSERT INTO sessions (id, source, path, updated_at) VALUES (?, ?, ?, ?)").run(
+    "legacy-session",
+    "codex",
+    fixture.codexFile,
+    "2026-06-30T00:00:00.000Z"
+  );
+  db.prepare("INSERT INTO observations (id, session_id, source, role, text, created_at) VALUES (?, ?, ?, ?, ?, ?)").run(
+    "legacy-observation",
+    "legacy-session",
+    "codex",
+    "user",
+    "Please restore linked sources",
+    "2026-06-30T00:00:00.000Z"
+  );
+  db.prepare(
+    "INSERT INTO todos (id, title, description, status, metadata_json, updated_at) VALUES (?, ?, ?, ?, ?, ?)"
+  ).run(
+    "legacy-todo",
+    "Restore linked sources",
+    "Old cards should still resolve their origin through evidence.",
+    "todo",
+    "{}",
+    "2026-06-30T00:00:01.000Z"
+  );
+  db.prepare("INSERT INTO evidence (id, todo_id, observation_id, text) VALUES (?, ?, ?, ?)").run(
+    "legacy-evidence",
+    "legacy-todo",
+    "legacy-observation",
+    "Please restore linked sources"
+  );
+
+  try {
+    const response = await getJson(server.url("/todos"));
+    assert.equal(response.status, 200);
+    const todo = (await response.json())[0];
+    assert.equal(todo.id, "legacy-todo");
+    assert.equal(todo.origin.sessionId, "legacy-session");
+    assert.equal(todo.origin.observationId, "legacy-observation");
+    assert.equal(todo.origin.projectTitle, "codex");
+    assert.equal(todo.origin.sessionTitle, "Please restore linked sources");
+  } finally {
+    await server.close();
+    db.close();
+    rmSync(fixture.root, { recursive: true, force: true });
+  }
+});
+
+test("HTTP server serves the React UI assets", async () => {
   const fixture = createFixture();
   const db = openDatabase(getAppPaths(join(fixture.root, "home")));
   const server = await startServer(db);
@@ -393,15 +495,14 @@ test("HTTP server serves the minimal UI assets", async () => {
   try {
     const index = await getJson(server.url("/"));
     assert.equal(index.status, 200);
-    assert.match(await index.text(), /Source Dashboard/);
+    const html = await index.text();
+    assert.match(html, /AI Todo/);
+    const asset = html.match(/src="([^"]+\.js)"/)?.[1];
+    assert.ok(asset);
 
-    const css = await getJson(server.url("/app.css"));
-    assert.equal(css.status, 200);
-    assert.match(css.headers.get("content-type") ?? "", /text\/css/);
-
-    const js = await getJson(server.url("/app.js"));
+    const js = await getJson(server.url(asset));
     assert.equal(js.status, 200);
-    assert.match(await js.text(), /organize/);
+    assert.match(js.headers.get("content-type") ?? "", /text\/javascript/);
   } finally {
     await server.close();
     db.close();
@@ -413,10 +514,11 @@ function createFixture() {
   const root = mkdtempSync(join(tmpdir(), "ai-todo-http-"));
   const codex = join(root, "codex");
   mkdirSync(codex);
-  writeFileSync(join(codex, "session.jsonl"), [
+  const codexFile = join(codex, "session.jsonl");
+  writeFileSync(codexFile, [
     JSON.stringify({ role: "user", text: "Please add HTTP API routes", timestamp: new Date().toISOString() })
   ].join("\n"));
-  return { root, codex };
+  return { root, codex, codexFile };
 }
 
 async function startServer(db: Database, paths = getAppPaths(), organizeOptions = {}) {

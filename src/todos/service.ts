@@ -1,4 +1,5 @@
-import type { OrganizeResult, SourceKind, TodoCard } from "../contracts.js";
+import { basename, dirname } from "node:path";
+import type { OrganizeResult, SourceKind, TodoCard, TodoMetadata, TodoOrigin } from "../contracts.js";
 import type { Database } from "../db/index.js";
 import { stableId } from "../extract/rules.js";
 
@@ -26,6 +27,7 @@ export type LlmOrganizeWarning =
 export interface LlmTodoCandidate {
   title: string;
   description: string;
+  metadata?: TodoMetadata;
   confidence: number;
   sourceObservationId: string;
   quote: string;
@@ -317,16 +319,18 @@ function writeExtractedLlmTodos(
     if (!observation) continue;
     const todoId = stableId(candidate.dedupeKey);
     const now = new Date().toISOString();
+    const metadata = normalizeTodoMetadata(candidate.metadata, candidate.sourceObservationId);
+    const metadataJson = JSON.stringify(metadata);
     const existing = db.prepare("SELECT id FROM todos WHERE id = ?").get(todoId);
     if (existing) {
       db.prepare(
-        "UPDATE todos SET title = ?, description = ?, updated_at = ? WHERE id = ?"
-      ).run(candidate.title.trim(), candidate.description.trim(), now, todoId);
+        "UPDATE todos SET title = ?, description = ?, metadata_json = ?, updated_at = ? WHERE id = ?"
+      ).run(candidate.title.trim(), candidate.description.trim(), metadataJson, now, todoId);
       updated++;
     } else {
       db.prepare(
-        "INSERT INTO todos (id, title, description, status, updated_at) VALUES (?, ?, ?, 'todo', ?)"
-      ).run(todoId, candidate.title.trim(), candidate.description.trim(), now);
+        "INSERT INTO todos (id, title, description, status, metadata_json, updated_at) VALUES (?, ?, ?, 'todo', ?, ?)"
+      ).run(todoId, candidate.title.trim(), candidate.description.trim(), metadataJson, now);
       created++;
     }
     db.prepare(
@@ -594,7 +598,9 @@ export function listTodos(db: Database): TodoCard[] {
       todos.title,
       todos.description,
       todos.status,
+      todos.metadata_json as metadataJson,
       todos.updated_at as updatedAt,
+      MIN(evidence.observation_id) as evidenceObservationId,
       COALESCE(json_group_array(evidence.id) FILTER (WHERE evidence.id IS NOT NULL), '[]') as evidenceIds
     FROM todos
     LEFT JOIN evidence ON evidence.todo_id = todos.id
@@ -602,15 +608,101 @@ export function listTodos(db: Database): TodoCard[] {
     ORDER BY todos.updated_at DESC`
   ).all().map((row) => {
     const record = row as Record<string, unknown>;
+    const metadata = parseTodoMetadata(record.metadataJson);
+    const sourceObservationId = metadata.sourceObservationId || String(record.evidenceObservationId || "");
     return {
       id: String(record.id),
       title: String(record.title),
       description: String(record.description),
       status: record.status as TodoCard["status"],
+      metadata,
+      origin: todoOrigin(db, sourceObservationId),
       updatedAt: String(record.updatedAt),
       evidenceIds: JSON.parse(String(record.evidenceIds))
     };
   });
+}
+
+function todoOrigin(db: Database, observationId: string | undefined): TodoOrigin | undefined {
+  if (!observationId) return undefined;
+  const row = db.prepare(
+    `SELECT
+      observations.id as observationId,
+      observations.session_id as sessionId,
+      observations.source as source,
+      observations.text as observationText,
+      sessions.path as projectPath,
+      COALESCE((
+        SELECT preview.text
+        FROM observations preview
+        WHERE preview.session_id = observations.session_id
+          AND preview.role IN ('user', 'assistant')
+        ORDER BY preview.created_at, preview.id
+        LIMIT 1
+      ), '') as sessionPreview
+    FROM observations
+    JOIN sessions ON sessions.id = observations.session_id
+    WHERE observations.id = ?`
+  ).get(observationId) as Record<string, unknown> | undefined;
+  if (!row) return undefined;
+  const projectPath = String(row.projectPath);
+  const sessionTitle = truncateOriginText(String(row.sessionPreview) || String(row.observationText));
+  return {
+    source: row.source as SourceKind,
+    projectTitle: projectTitleFromPath(projectPath),
+    projectPath,
+    sessionId: String(row.sessionId),
+    sessionTitle: sessionTitle || "Temporary session",
+    sessionTemporary: true,
+    observationId: String(row.observationId)
+  };
+}
+
+function projectTitleFromPath(path: string): string | undefined {
+  const fileParent = path.endsWith(".jsonl") ? dirname(path) : path;
+  const title = basename(fileParent);
+  return title && title !== "." ? title : undefined;
+}
+
+function truncateOriginText(value: string): string {
+  return Array.from(normalizeTodoText(value)).slice(0, 84).join("");
+}
+
+function normalizeTodoMetadata(metadata: TodoMetadata | undefined, sourceObservationId: string): TodoMetadata {
+  return {
+    ...cleanTodoMetadata(metadata),
+    sourceObservationId
+  };
+}
+
+function parseTodoMetadata(value: unknown): TodoMetadata {
+  try {
+    const parsed = JSON.parse(String(value ?? "{}")) as unknown;
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
+    return cleanTodoMetadata(parsed as TodoMetadata);
+  } catch {
+    return {};
+  }
+}
+
+function cleanTodoMetadata(metadata: TodoMetadata | undefined): TodoMetadata {
+  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) return {};
+  const cleaned: TodoMetadata = {};
+  const completionState = cleanMetadataText(metadata.completionState);
+  const completionSummary = cleanMetadataText(metadata.completionSummary, 240);
+  const nextStep = cleanMetadataText(metadata.nextStep, 240);
+  const sourceObservationId = cleanMetadataText(metadata.sourceObservationId);
+  if (completionState) cleaned.completionState = completionState;
+  if (completionSummary) cleaned.completionSummary = completionSummary;
+  if (nextStep) cleaned.nextStep = nextStep;
+  if (sourceObservationId) cleaned.sourceObservationId = sourceObservationId;
+  return cleaned;
+}
+
+function cleanMetadataText(value: unknown, maxLength = 120): string {
+  if (typeof value !== "string") return "";
+  const text = normalizeTodoText(value);
+  return Array.from(text).slice(0, maxLength).join("");
 }
 
 export function updateTodoStatus(db: Database, id: string, status: "done" | "ignored"): boolean {

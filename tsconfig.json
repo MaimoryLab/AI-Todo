@@ -6,8 +6,9 @@
     "outDir": "dist",
     "rootDir": ".",
     "strict": true,
+    "jsx": "react-jsx",
     "declaration": true,
     "skipLibCheck": true
   },
-  "include": ["cli.ts", "src/**/*.ts", "test/**/*.ts"]
+  "include": ["cli.ts", "src/**/*.ts", "src/**/*.tsx", "test/**/*.ts"]
 }

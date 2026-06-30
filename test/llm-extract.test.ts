@@ -48,6 +48,12 @@ test("LLM runner sends OpenAI-compatible request and parses grounded todos", asy
             todos: [{
               title: "Add LLM settings UI",
               description: "Wire the save action after the LLM settings UI is added.",
+              metadata: {
+                completionState: "in_progress",
+                completionSummary: "The settings UI is added; save action wiring remains.",
+                nextStep: "Wire the save action.",
+                sourceObservationId: "obs-2"
+              },
               confidence: 0.91,
               sourceObservationId: "obs-1",
               quote: "Please add LLM settings UI",
@@ -67,6 +73,51 @@ test("LLM runner sends OpenAI-compatible request and parses grounded todos", asy
     const result = await runner([observation, assistantObservation]);
     assert.equal(result.ok, true);
     assert.equal(result.ok && result.todos[0].title, "Add LLM settings UI");
+    assert.equal(result.ok && result.todos[0].metadata?.completionSummary, "The settings UI is added; save action wiring remains.");
+    assert.equal(result.ok && result.todos[0].metadata?.nextStep, "Wire the save action.");
+  } finally {
+    await server.close();
+  }
+});
+
+test("LLM runner keeps title anchored to user intent and metadata to agent progress", async () => {
+  const server = await startMockProvider(async (request) => {
+    const payload = await readJson(request);
+    const systemMessage = payload.messages.find((message: any) => message.role === "system");
+    assert.match(systemMessage.content, /title is a concise summary of the user's requested outcome/);
+    assert.match(systemMessage.content, /metadata\.completionSummary/);
+    return jsonResponse({
+      choices: [{
+        message: {
+          content: JSON.stringify({
+            todos: [{
+              title: "Add LLM settings UI",
+              description: "Finish wiring the saved LLM settings path.",
+              metadata: {
+                completionState: "in_progress",
+                completionSummary: "The settings UI is added; the save action is still remaining."
+              },
+              confidence: 0.9,
+              sourceObservationId: "obs-1",
+              quote: "Please add LLM settings UI",
+              dedupeKey: "add-llm-settings-ui"
+            }]
+          })
+        }
+      }]
+    });
+  });
+
+  try {
+    const runner = createLlmRunner(
+      { ...defaultConfig().llm, model: "test/model", endpoint: server.url("/v1") },
+      { llmApiKey: "dummy-llm-key-value" }
+    );
+    const result = await runner([observation, assistantObservation]);
+    assert.equal(result.ok, true);
+    assert.equal(result.ok && result.todos[0].title, "Add LLM settings UI");
+    assert.notEqual(result.ok && result.todos[0].title, assistantObservation.text);
+    assert.equal(result.ok && result.todos[0].metadata?.completionSummary, "The settings UI is added; the save action is still remaining.");
   } finally {
     await server.close();
   }

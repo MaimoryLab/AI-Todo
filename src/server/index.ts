@@ -1,4 +1,4 @@
-import { createReadStream, existsSync } from "node:fs";
+import { createReadStream, existsSync, statSync } from "node:fs";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { extname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -7,11 +7,11 @@ import type { Database } from "../db/index.js";
 import { getAppPaths, type AppPaths } from "../paths.js";
 import { ingestBrowserSession, validateBrowserSessionInput } from "../sources/browser.js";
 import { scanConfiguredSources, scanSource as scanSourceSessions, type ConfiguredScanSummary } from "../sources/scan.js";
-import { listSessionObservations, listSessions, listSources } from "../sources/service.js";
+import { listSessionObservations, listSessions, listSources, type ListSessionsOptions } from "../sources/service.js";
 import { organizeConfiguredTodos } from "../todos/configured.js";
 import { getOrganizeRun, listTodoEvidence, listTodos, type OrganizeOptions, updateTodoStatus } from "../todos/service.js";
 
-const PUBLIC_DIR = fileURLToPath(new URL("../../../public/", import.meta.url));
+const PUBLIC_DIR = fileURLToPath(new URL("../../public/", import.meta.url));
 
 export type StartupScanStatus = {
   status: "idle" | "indexing" | "ready" | "failed";
@@ -57,9 +57,10 @@ export function createAppServer(options: {
 } = {}) {
   const paths = options.paths ?? getAppPaths();
   return createServer(async (req, res) => {
-    const path = new URL(req.url ?? "/", "http://localhost").pathname;
+    const url = new URL(req.url ?? "/", "http://localhost");
+    const path = url.pathname;
 
-    if (req.method === "GET" && (path === "/" || path.startsWith("/app."))) {
+    if (req.method === "GET" && isStaticRequest(path)) {
       if (serveStatic(res, path)) return;
     }
 
@@ -122,7 +123,12 @@ export function createAppServer(options: {
     if (req.method === "GET" && path === "/sessions") {
       const db = requireDb(res, options.db);
       if (!db) return;
-      writeJson(res, 200, listSessions(db));
+      const sessionOptions = parseSessionOptions(url.searchParams);
+      if (!sessionOptions.ok) {
+        writeJson(res, 400, { error: "invalid_sessions_query" });
+        return;
+      }
+      writeJson(res, 200, listSessions(db, sessionOptions.options));
       return;
     }
 
@@ -225,19 +231,56 @@ export function createAppServer(options: {
 }
 
 function serveStatic(res: ServerResponse<IncomingMessage>, path: string): boolean {
-  const filename = path === "/" ? "index.html" : path.slice(1);
-  if (!/^(index\.html|app\.css|app\.js)$/.test(filename)) return false;
+  const filename = path === "/" ? "index.html" : path.replace(/^\/+/, "");
+  if (filename.includes("..")) return false;
   const file = join(PUBLIC_DIR, filename);
   if (!existsSync(file)) return false;
-  res.writeHead(200, { "content-type": contentType(file) });
+  res.writeHead(200, { "content-type": contentType(file), "content-length": statSync(file).size });
   createReadStream(file).pipe(res);
   return true;
+}
+
+function isStaticRequest(path: string): boolean {
+  if (path === "/") return true;
+  if (path.startsWith("/assets/")) return true;
+  return [".js", ".css", ".svg", ".png", ".ico", ".webmanifest"].some((suffix) => path.endsWith(suffix));
 }
 
 function contentType(file: string): string {
   if (extname(file) === ".css") return "text/css; charset=utf-8";
   if (extname(file) === ".js") return "text/javascript; charset=utf-8";
   return "text/html; charset=utf-8";
+}
+
+function parseSessionOptions(params: URLSearchParams): { ok: true; options: ListSessionsOptions } | { ok: false } {
+  const source = params.get("source") || undefined;
+  if (source !== undefined && source !== "codex" && source !== "claude-code" && source !== "browser") return { ok: false };
+  const sessionId = optionalText(params.get("sessionId"), 512);
+  if (sessionId === null) return { ok: false };
+  const limit = optionalInt(params.get("limit"), 1, 200);
+  const offset = optionalInt(params.get("offset"), 0, 100000);
+  if (limit === null || offset === null) return { ok: false };
+  return {
+    ok: true,
+    options: {
+      source,
+      sessionId,
+      limit: limit ?? undefined,
+      offset: offset ?? undefined
+    }
+  };
+}
+
+function optionalText(value: string | null, maxLength: number): string | undefined | null {
+  if (value === null || value === "") return undefined;
+  return value.length <= maxLength ? value : null;
+}
+
+function optionalInt(value: string | null, min: number, max: number): number | undefined | null {
+  if (value === null || value === "") return undefined;
+  if (!/^\d+$/.test(value)) return null;
+  const parsed = Number(value);
+  return parsed >= min && parsed <= max ? parsed : null;
 }
 
 function writeJson(res: ServerResponse<IncomingMessage>, status: number, body: unknown): void {

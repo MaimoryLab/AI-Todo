@@ -64,8 +64,27 @@ export interface TodoCard {
   title: string;
   description: string;
   status: TodoStatus;
+  metadata: TodoMetadata;
+  origin?: TodoOrigin;
   evidenceIds: string[];
   updatedAt: string;
+}
+
+export interface TodoOrigin {
+  source: SourceKind;
+  projectTitle?: string;
+  projectPath?: string;
+  sessionId: string;
+  sessionTitle?: string;
+  sessionTemporary?: boolean;
+  observationId: string;
+}
+
+export interface TodoMetadata {
+  completionState?: string;
+  completionSummary?: string;
+  nextStep?: string;
+  sourceObservationId?: string;
 }
 
 export interface OrganizeResult {

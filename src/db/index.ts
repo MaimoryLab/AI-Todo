@@ -52,6 +52,7 @@ export function migrate(db: Database): void {
       title TEXT NOT NULL UNIQUE,
       description TEXT NOT NULL,
       status TEXT NOT NULL,
+      metadata_json TEXT NOT NULL DEFAULT '{}',
       updated_at TEXT NOT NULL
     );
 
@@ -68,7 +69,14 @@ export function migrate(db: Database): void {
       created_at TEXT NOT NULL
     );
   `);
+  migrateTodoMetadata(db);
   migrateCleanTranscript(db);
+}
+
+function migrateTodoMetadata(db: Database): void {
+  const columns = db.prepare("PRAGMA table_info(todos)").all() as Array<{ name: string }>;
+  if (columns.some((column) => column.name === "metadata_json")) return;
+  db.exec("ALTER TABLE todos ADD COLUMN metadata_json TEXT NOT NULL DEFAULT '{}'");
 }
 
 function migrateCleanTranscript(db: Database): void {

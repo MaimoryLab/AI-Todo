@@ -5,10 +5,13 @@ const TODO_EXTRACTION_PROMPT = `
 You extract actionable AI-Todo cards from cleaned user/assistant transcripts.
 
 Return only JSON:
-{"todos":[{"title":"...","description":"...","confidence":0.9,"sourceObservationId":"...","quote":"...","dedupeKey":"..."}]}
+{"todos":[{"title":"...","description":"...","metadata":{"completionState":"...","completionSummary":"...","nextStep":"...","sourceObservationId":"..."},"confidence":0.9,"sourceObservationId":"...","quote":"...","dedupeKey":"..."}]}
 
 Rules:
 - Use taskChains as the primary unit. Anchor title to the original user intent and description to the latest assistant state, blocker, or next step.
+- title is a concise summary of the user's requested outcome, not the agent's status report.
+- metadata.completionSummary is a concise summary of what the agent already completed, attempted, blocked on, or left pending.
+- metadata.nextStep is only for an obvious remaining user-relevant next action.
 - Create todos only for unresolved, actionable work: next actions, follow-ups, failed validation, blockers, or work still in progress.
 - Reject completed results, status reports, confirmations, health checks, shell/tool logs, command payloads, and process chores.
 - Titles must read like mature todo app cards: short verb + object + outcome. Do not use transcript fragments.
@@ -217,6 +220,7 @@ function parseTodoEnvelope(envelope: Record<string, unknown>): LlmTodoCandidate[
     todos.push({
       title: record.title,
       description: record.description,
+      metadata: parseTodoMetadata(record.metadata),
       confidence: record.confidence,
       sourceObservationId: record.sourceObservationId,
       quote: record.quote,
@@ -224,6 +228,21 @@ function parseTodoEnvelope(envelope: Record<string, unknown>): LlmTodoCandidate[
     });
   }
   return todos;
+}
+
+function parseTodoMetadata(value: unknown): LlmTodoCandidate["metadata"] {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  const record = value as Record<string, unknown>;
+  return {
+    completionState: stringValue(record.completionState),
+    completionSummary: stringValue(record.completionSummary),
+    nextStep: stringValue(record.nextStep),
+    sourceObservationId: stringValue(record.sourceObservationId)
+  };
+}
+
+function stringValue(value: unknown): string | undefined {
+  return typeof value === "string" && value.trim() ? value : undefined;
 }
 
 function providerFailureReason(reason: string): string {

@@ -7,6 +7,7 @@ import { main } from "../src/cli.js";
 import { openDatabase } from "../src/db/index.js";
 import { getAppPaths } from "../src/paths.js";
 import { createAppServer } from "../src/server/index.js";
+import { listTodos } from "../src/todos/service.js";
 
 test("doctor creates config, data, and database paths", async () => {
   const dir = mkdtempSync(join(tmpdir(), "ai-todo-"));
@@ -78,6 +79,47 @@ test("sessions endpoint omits zero-observation sessions and returns preview meta
   }
 });
 
+test("sessions endpoint supports source filtering and pagination", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "ai-todo-session-query-"));
+  const db = openDatabase(getAppPaths(dir));
+  const server = createAppServer({ db });
+
+  for (const [id, source, updatedAt] of [
+    ["codex-new", "codex", "2026-01-03T00:00:00.000Z"],
+    ["claude", "claude-code", "2026-01-02T00:00:00.000Z"],
+    ["codex-old", "codex", "2026-01-01T00:00:00.000Z"]
+  ]) {
+    db.prepare("INSERT INTO sessions (id, source, path, updated_at) VALUES (?, ?, ?, ?)").run(id, source, `${id}.jsonl`, updatedAt);
+    db.prepare("INSERT INTO observations (id, session_id, source, role, text, created_at) VALUES (?, ?, ?, 'user', ?, ?)")
+      .run(`${id}-obs`, id, source, `Preview ${id}`, updatedAt);
+  }
+
+  await new Promise<void>((resolve) => server.listen(0, resolve));
+  try {
+    const address = server.address();
+    assert.ok(address && typeof address !== "string");
+    const base = `http://127.0.0.1:${address.port}`;
+    const codexPage = await fetch(`${base}/sessions?source=codex&limit=1&offset=1`);
+    assert.equal(codexPage.status, 200);
+    const sessions = await codexPage.json();
+    assert.deepEqual(sessions.map((session: any) => session.id), ["codex-old"]);
+    const target = await fetch(`${base}/sessions?sessionId=codex-new`);
+    assert.equal(target.status, 200);
+    assert.deepEqual((await target.json()).map((session: any) => session.id), ["codex-new"]);
+    const sourceMismatch = await fetch(`${base}/sessions?source=claude-code&sessionId=codex-new`);
+    assert.equal(sourceMismatch.status, 200);
+    assert.deepEqual(await sourceMismatch.json(), []);
+    assert.equal((await fetch(`${base}/sessions?source=bad`)).status, 400);
+    assert.equal((await fetch(`${base}/sessions?limit=0`)).status, 400);
+  } finally {
+    await new Promise<void>((resolve, reject) => {
+      server.close((error) => error ? reject(error) : resolve());
+    });
+    db.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test("database migration clears noisy pre-clean transcript data once", () => {
   const dir = mkdtempSync(join(tmpdir(), "ai-todo-clean-migration-"));
   const paths = getAppPaths(dir);
@@ -108,8 +150,31 @@ test("database migration clears noisy pre-clean transcript data once", () => {
 
     db = openDatabase(paths);
     const row = db.prepare("SELECT COUNT(*) as count FROM todos").get() as { count: number };
+    const cards = listTodos(db);
     db.close();
     assert.equal(row.count, 3);
+    assert.ok(cards.some((todo) => todo.id === "t1" && todo.origin === undefined));
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("database migration adds todo metadata for existing installs", () => {
+  const dir = mkdtempSync(join(tmpdir(), "ai-todo-metadata-migration-"));
+  const paths = getAppPaths(dir);
+  try {
+    let db = openDatabase(paths);
+    db.exec("ALTER TABLE todos DROP COLUMN metadata_json");
+    db.prepare("INSERT INTO todos (id, title, description, status, updated_at) VALUES ('t1', 'Old card', 'Old card description', 'todo', '2026-01-01T00:00:00.000Z')").run();
+    db.close();
+
+    db = openDatabase(paths);
+    const column = db.prepare("PRAGMA table_info(todos)").all().find((row) => (row as any).name === "metadata_json");
+    const row = db.prepare("SELECT metadata_json as metadataJson FROM todos WHERE id = 't1'").get() as { metadataJson: string };
+    db.close();
+
+    assert.ok(column);
+    assert.equal(row.metadataJson, "{}");
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
