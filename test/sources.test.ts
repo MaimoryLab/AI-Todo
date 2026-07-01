@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -302,6 +303,51 @@ test("codex scanner removes subagent notifications from user observations", () =
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test("codex scanner merges linked subagent sessions into the parent session", () => {
+  const dir = mkdtempSync(join(tmpdir(), "ai-todo-source-subagent-merge-"));
+  try {
+    const root = join(dir, "codex");
+    const agentDir = join(root, "agents", "agent-1");
+    mkdirSync(agentDir, { recursive: true });
+    const subagent = [
+      "<subagent_notification>",
+      JSON.stringify({ agent_path: agentDir, status: { completed: "hidden report" } }),
+      "</subagent_notification>"
+    ].join("\n");
+    writeFileSync(join(root, "parent.jsonl"), [
+      JSON.stringify({ type: "session_meta", payload: { id: "parent-session", cwd: "/tmp/project" } }),
+      JSON.stringify({ type: "event_msg", payload: { type: "user_message", message: `Please audit this.\n${subagent}`, timestamp: "2026-01-01T00:00:01.000Z" } }),
+      JSON.stringify({ type: "event_msg", payload: { type: "agent_message", message: "Starting audit.", timestamp: "2026-01-01T00:00:02.000Z" } })
+    ].join("\n"));
+    writeFileSync(join(agentDir, "child.jsonl"), [
+      JSON.stringify({ type: "session_meta", payload: { id: "child-session", cwd: "/tmp/project" } }),
+      JSON.stringify({ type: "event_msg", payload: { type: "agent_message", message: "Subagent found the issue.", timestamp: "2026-01-01T00:00:03.000Z" } })
+    ].join("\n"));
+
+    const db = openDatabase(getAppPaths(join(dir, "home")));
+    assert.deepEqual(scanCodexSessions(db, root), {
+      source: "codex",
+      scanned: 2,
+      observations: 3,
+      skipped: 0
+    });
+    const sessions = db.prepare("SELECT id FROM sessions ORDER BY id").all() as Array<{ id: string }>;
+    const observations = db.prepare("SELECT session_id as sessionId, text FROM observations ORDER BY created_at").all() as Array<{ sessionId: string; text: string }>;
+    db.close();
+    const parentSessionId = testId("codex", "parent-session");
+    assert.deepEqual(sessions.map((session) => session.id), [parentSessionId]);
+    assert.deepEqual(observations.map((row) => row.sessionId), [parentSessionId, parentSessionId, parentSessionId]);
+    assert.ok(observations.some((row) => row.text === "Subagent found the issue."));
+    assert.ok(!observations.some((row) => /subagent_notification|agent_path|hidden report/.test(row.text)));
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+function testId(...parts: string[]): string {
+  return createHash("sha1").update(parts.join("\0")).digest("hex");
+}
 
 test("scanner checkpoints but does not store sessions with no visible observations", () => {
   const dir = mkdtempSync(join(tmpdir(), "ai-todo-source-empty-session-"));

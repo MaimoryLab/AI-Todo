@@ -115,6 +115,7 @@ test("React UI keeps task-first Sources wording and accessible icon controls", (
   assert.match(observationText, /sourceDisplayText\(observation\.text\)/);
   assert.doesNotMatch(observationText, /dangerouslySetInnerHTML/);
   assert.doesNotMatch(observationText, /rehype-raw/);
+  assert.match(todoBoard, /row\.role === "assistant" \|\| row\.role === "user"/);
   assert.match(css, /\.source-markdown/);
   assert.match(i18n, /completedIgnored: "已完成 \/ 已忽略"/);
   assert.match(i18n, /happenedNow: "刚刚发生"/);

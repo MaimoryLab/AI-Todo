@@ -16,24 +16,35 @@ export function scanJsonlSource(db: Database, source: SourceKind, root: string):
   let scanned = 0;
   let observations = 0;
   let skipped = 0;
+  const paths = listJsonlFiles(root);
+  const subagentParents = subagentParentMap(source, paths);
 
-  for (const path of listJsonlFiles(root)) {
+  for (const path of paths) {
     const stat = statSync(path);
     const checkpoint = db.prepare(
       "SELECT mtime_ms, size FROM scan_checkpoints WHERE source = ? AND path = ?"
     ).get(source, path) as { mtime_ms: number; size: number } | undefined;
 
     if (checkpoint?.mtime_ms === stat.mtimeMs && checkpoint.size === stat.size) {
-      backfillProjectPath(db, source, path);
+      if (subagentParents.has(path)) {
+        const sessionId = sessionIdFromRecords(source, path, readJsonlFile(path));
+        db.prepare("DELETE FROM observations WHERE session_id = ?").run(sessionId);
+        db.prepare("DELETE FROM sessions WHERE id = ?").run(sessionId);
+      } else {
+        backfillProjectPath(db, source, path);
+      }
       skipped++;
       continue;
     }
 
     const records = readJsonlFile(path);
     const sessionId = sessionIdFromRecords(source, path, records);
-    const projectPath = projectPathFromRecords(source, records);
+    const parentSessionId = subagentParents.get(path);
+    const targetSessionId = parentSessionId ?? sessionId;
+    const isSubagent = Boolean(parentSessionId);
+    const projectPath = isSubagent ? null : projectPathFromRecords(source, records);
     const updatedAt = new Date(stat.mtimeMs).toISOString();
-    const cleanObservations = observationsFromRecords(source, sessionId, path, records);
+    const cleanObservations = observationsFromRecords(source, targetSessionId, path, records);
     if (cleanObservations.length === 0) {
       db.prepare("DELETE FROM observations WHERE session_id = ?").run(sessionId);
       db.prepare("DELETE FROM sessions WHERE id = ?").run(sessionId);
@@ -44,15 +55,20 @@ export function scanJsonlSource(db: Database, source: SourceKind, root: string):
       continue;
     }
 
-    db.prepare(
-      "INSERT OR REPLACE INTO sessions (id, source, path, project_path, updated_at) VALUES (?, ?, ?, ?, ?)"
-    ).run(sessionId, source, path, projectPath, updatedAt);
-    db.prepare("DELETE FROM observations WHERE session_id = ?").run(sessionId);
+    if (isSubagent) {
+      db.prepare("DELETE FROM observations WHERE session_id = ?").run(sessionId);
+      db.prepare("DELETE FROM sessions WHERE id = ?").run(sessionId);
+    } else {
+      db.prepare(
+        "INSERT OR REPLACE INTO sessions (id, source, path, project_path, updated_at) VALUES (?, ?, ?, ?, ?)"
+      ).run(sessionId, source, path, projectPath, updatedAt);
+      deleteObservations(db, cleanObservations.map((observation) => observation.id));
+    }
 
     for (const observation of cleanObservations) {
       db.prepare(
         "INSERT OR REPLACE INTO observations (id, session_id, source, role, text, created_at) VALUES (?, ?, ?, ?, ?, ?)"
-      ).run(observation.id, sessionId, source, observation.role, observation.text, observation.createdAt);
+      ).run(observation.id, targetSessionId, source, observation.role, observation.text, observation.createdAt);
       observations++;
     }
 
@@ -73,6 +89,11 @@ function backfillProjectPath(db: Database, source: SourceKind, path: string): vo
   const projectPath = projectPathFromRecords(source, readJsonlFile(path));
   if (!projectPath) return;
   db.prepare("UPDATE sessions SET project_path = ? WHERE id = ?").run(projectPath, session.id);
+}
+
+function deleteObservations(db: Database, ids: string[]): void {
+  const statement = db.prepare("DELETE FROM observations WHERE id = ?");
+  for (const id of ids) statement.run(id);
 }
 
 export function observationsFromRecords(
@@ -129,6 +150,53 @@ function listJsonlFiles(root: string): string[] {
     if (entry.isDirectory()) return listJsonlFiles(path);
     return entry.isFile() && entry.name.endsWith(".jsonl") ? [path] : [];
   });
+}
+
+function subagentParentMap(source: SourceKind, paths: string[]): Map<string, string> {
+  const byAgentPath = new Map<string, string>();
+  for (const path of paths) {
+    const records = readJsonlFile(path);
+    const parentSessionId = sessionIdFromRecords(source, path, records);
+    for (const agentPath of subagentPathsFromRecords(records)) {
+      byAgentPath.set(normalizePathKey(agentPath), parentSessionId);
+    }
+  }
+  const parents = new Map<string, string>();
+  for (const path of paths) {
+    const pathKey = normalizePathKey(path);
+    const parentSessionId = byAgentPath.get(pathKey)
+      ?? [...byAgentPath].find(([agentPath]) => pathKey === agentPath || pathKey.startsWith(`${agentPath}/`))?.[1];
+    if (parentSessionId) parents.set(path, parentSessionId);
+  }
+  return parents;
+}
+
+function subagentPathsFromRecords(records: JsonlRecord[]): string[] {
+  return records.flatMap((record) => stringLeaves(record.value).flatMap(subagentPathsFromText));
+}
+
+function subagentPathsFromText(text: string): string[] {
+  return [...text.matchAll(/<subagent_notification>([\s\S]*?)<\/subagent_notification>/g)].flatMap((match) => {
+    try {
+      const parsed = JSON.parse(match[1].trim()) as unknown;
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return [];
+      const agentPath = stringValue((parsed as Record<string, unknown>).agent_path);
+      return agentPath ? [agentPath] : [];
+    } catch {
+      return [];
+    }
+  });
+}
+
+function normalizePathKey(path: string): string {
+  return path.replace(/\/+$/u, "");
+}
+
+function stringLeaves(value: unknown): string[] {
+  if (typeof value === "string") return [value];
+  if (Array.isArray(value)) return value.flatMap(stringLeaves);
+  if (!value || typeof value !== "object") return [];
+  return Object.values(value as Record<string, unknown>).flatMap(stringLeaves);
 }
 
 function sessionIdFromRecords(source: SourceKind, path: string, records: JsonlRecord[]): string {

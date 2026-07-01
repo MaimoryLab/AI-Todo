@@ -3,10 +3,12 @@ import type { ObservationRecord } from "../types.js";
 
 export function ObservationText({ observation }: { observation: ObservationRecord }) {
   const text = sourceDisplayText(observation.text);
-  const isMarkdown = observation.role === "assistant";
-  if (!isMarkdown) {
-    return <p className="whitespace-pre-wrap break-words text-sm leading-6 text-[var(--app-ink)]">{text}</p>;
-  }
+  return <MarkdownText text={text} markdown={observation.role === "assistant"} />;
+}
+
+export function MarkdownText({ text, markdown }: { text: string; markdown?: boolean }) {
+  const displayText = sourceDisplayText(text);
+  if (!markdown) return <p className="whitespace-pre-wrap break-words text-sm leading-6 text-[var(--app-ink)]">{displayText}</p>;
 
   return (
     <div className="source-markdown break-words text-sm leading-6 text-[var(--app-ink)]">
@@ -17,10 +19,11 @@ export function ObservationText({ observation }: { observation: ObservationRecor
             <a {...props} target="_blank" rel="noreferrer">
               {children}
             </a>
-          )
+          ),
+          img: ({ alt }) => <span className="text-[var(--app-subtle)]">Image: {alt || "attachment"}</span>
         }}
       >
-        {text}
+        {displayText}
       </ReactMarkdown>
     </div>
   );

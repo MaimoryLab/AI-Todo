@@ -13,6 +13,14 @@ export interface TodoEvidence {
   sessionTitle: string;
   projectTitle?: string;
   text: string;
+  context?: TodoEvidenceContext[];
+}
+
+export interface TodoEvidenceContext {
+  observationId: string;
+  role: string;
+  createdAt: string;
+  text: string;
 }
 
 export interface TodoEnhancer {
@@ -58,6 +66,7 @@ export interface LlmTaskChain {
   status?: string;
   completedNodes?: LlmTaskChainNode[];
   currentNode?: LlmTodoCandidate & {
+    nodeTitle?: string;
     owner?: "agent" | "user";
     nextStep?: string;
   };
@@ -486,7 +495,7 @@ function writeTaskChain(
     chainId,
     candidate.sourceObservationId,
     completedNodes.length,
-    candidate.title.trim(),
+    cleanMetadataText(chain.currentNode?.nodeTitle, 160) || candidate.title.trim(),
     candidate.description.trim(),
     chain.currentNode?.owner === "user" ? "user" : "agent",
     cleanMetadataText(chain.currentNode?.nextStep ?? candidate.metadata?.nextStep, 240) || null,
@@ -961,15 +970,33 @@ export function updateTodoStatus(db: Database, id: string, status: "done" | "ign
 export function listTodoEvidence(db: Database, todoId: string): TodoEvidence[] | null {
   const todo = db.prepare("SELECT id FROM todos WHERE id = ?").get(todoId);
   if (!todo) return null;
-	  return db.prepare(
-	    `SELECT
-	      evidence.id,
-	      evidence.observation_id as observationId,
-	      observations.text as text,
-	      observations.session_id as sessionId,
-	      observations.source,
-	      observations.role,
-	      observations.created_at as createdAt,
+  const previousUser = db.prepare(
+    `SELECT id, role, created_at as createdAt, text
+     FROM observations
+     WHERE session_id = ?
+       AND role = 'user'
+       AND (created_at < ? OR (created_at = ? AND id < ?))
+     ORDER BY created_at DESC, id DESC
+     LIMIT 1`
+  );
+  const nextAssistant = db.prepare(
+    `SELECT id, role, created_at as createdAt, text
+     FROM observations
+     WHERE session_id = ?
+       AND role = 'assistant'
+       AND (created_at > ? OR (created_at = ? AND id > ?))
+     ORDER BY created_at, id
+     LIMIT 1`
+  );
+  return db.prepare(
+    `SELECT
+      evidence.id,
+      evidence.observation_id as observationId,
+      observations.text as text,
+      observations.session_id as sessionId,
+      observations.source,
+      observations.role,
+      observations.created_at as createdAt,
       COALESCE(sessions.project_path, sessions.path) as projectPath,
       COALESCE((
         SELECT preview.text
@@ -979,26 +1006,60 @@ export function listTodoEvidence(db: Database, todoId: string): TodoEvidence[] |
         ORDER BY preview.created_at, preview.id
         LIMIT 1
       ), '') as sessionPreview
-	    FROM evidence
-	    JOIN observations ON observations.id = evidence.observation_id
-	    JOIN sessions ON sessions.id = observations.session_id
-	    WHERE evidence.todo_id = ?
-	    ORDER BY evidence.id`
+    FROM evidence
+    JOIN observations ON observations.id = evidence.observation_id
+    JOIN sessions ON sessions.id = observations.session_id
+    WHERE evidence.todo_id = ?
+    ORDER BY evidence.id`
   ).all(todoId).map((row) => {
     const record = row as Record<string, unknown>;
     const projectPath = String(record.projectPath);
-    return {
-      id: String(record.id),
+    const observation = {
       observationId: String(record.observationId),
-      sessionId: String(record.sessionId),
-      source: record.source as SourceKind,
       role: String(record.role),
       createdAt: String(record.createdAt),
-      sessionTitle: truncateOriginText(String(record.sessionPreview) || String(record.text)) || "Temporary session",
-      projectTitle: projectTitleFromPath(projectPath),
       text: String(record.text)
     };
+    const sessionId = String(record.sessionId);
+    return {
+      id: String(record.id),
+      observationId: observation.observationId,
+      sessionId,
+      source: record.source as SourceKind,
+      role: observation.role,
+      createdAt: observation.createdAt,
+      sessionTitle: truncateOriginText(String(record.sessionPreview) || String(record.text)) || "Temporary session",
+      projectTitle: projectTitleFromPath(projectPath),
+      text: observation.text,
+      context: evidenceContext([
+        previousUser.get(sessionId, observation.createdAt, observation.createdAt, observation.observationId),
+        {
+          id: observation.observationId,
+          role: observation.role,
+          createdAt: observation.createdAt,
+          text: observation.text
+        },
+        nextAssistant.get(sessionId, observation.createdAt, observation.createdAt, observation.observationId)
+      ])
+    };
   });
+}
+
+function evidenceContext(rows: unknown[]): TodoEvidenceContext[] {
+  const seen = new Set<string>();
+  return rows.flatMap((row) => {
+    if (!row || typeof row !== "object") return [];
+    const record = row as Record<string, unknown>;
+    const observationId = String(record.id || record.observationId || "");
+    if (!observationId || seen.has(observationId)) return [];
+    seen.add(observationId);
+    return [{
+      observationId,
+      role: String(record.role || "source"),
+      createdAt: String(record.createdAt || ""),
+      text: String(record.text || "")
+    }];
+  }).sort((first, second) => first.createdAt.localeCompare(second.createdAt) || first.observationId.localeCompare(second.observationId));
 }
 
 export function getOrganizeRun(db: Database, id: string): OrganizeResult | null {

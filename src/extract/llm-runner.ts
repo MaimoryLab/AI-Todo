@@ -5,22 +5,24 @@ const TODO_EXTRACTION_PROMPT = `
 You extract actionable AI-Todo cards from cleaned user/assistant transcripts.
 
 Return only JSON:
-{"taskChains":[{"chainId":"...","title":"...","summary":"...","status":"in_progress","completedNodes":[{"title":"...","summary":"...","owner":"agent","status":"completed","observationId":"..."}],"currentNode":{"title":"...","description":"...","owner":"agent","nextStep":"...","metadata":{"completionState":"...","completionSummary":"...","nextStep":"...","sourceObservationId":"..."},"confidence":0.9,"sourceObservationId":"...","quote":"...","dedupeKey":"..."}}]}
+{"taskChains":[{"chainId":"...","title":"...","summary":"...","status":"in_progress","completedNodes":[{"title":"...","summary":"...","owner":"agent","status":"completed","observationId":"..."}],"currentNode":{"title":"...","description":"...","nodeTitle":"...","owner":"agent","nextStep":"...","metadata":{"completionState":"...","completionSummary":"...","nextStep":"...","sourceObservationId":"..."},"confidence":0.9,"sourceObservationId":"...","quote":"...","dedupeKey":"..."}}]}
 
 Rules:
 - Use taskChains as the primary unit. Each chain is single-session only and represents one user task flow.
 - Output one current unresolved node per unfinished chain, not every user intent.
 - Put resolved prior work in completedNodes. Do not create a currentNode for fully completed chains.
-- currentNode.title is a concise summary of the current unresolved node, not the earliest user intent or the agent's status report.
+- currentNode.title is the Todo card title: summarize the nearby user's core ask, requirement, or task focus so the user remembers the real problem.
+- currentNode.nodeTitle is optional but should name the actual current unresolved node/action when it differs from the user's core ask.
 - metadata.completionSummary is a concise summary of what the agent already completed, attempted, blocked on, or left pending.
 - metadata.nextStep is only for an obvious remaining user-relevant next action.
+- Prefer sourceObservationId and quote from the user observation that states the core ask. Use an assistant observation only when the blocker exists only there.
 - Create todos only for unresolved, actionable work: next actions, follow-ups, failed validation, blockers, or work still in progress.
 - Reject completed results, status reports, confirmations, health checks, shell/tool logs, command payloads, and process chores.
 - Titles must read like mature todo app cards: short verb + object + outcome. Do not use transcript fragments.
 - Put long branch names, paths, URLs, commit hashes, package names, and session ids in description, not title.
-- Description is one concise sentence about remaining user-relevant work. Do not start with "I will", "我会", "现在", or "接下来".
+- Description is one concise sentence with the user scenario and unresolved gap or blocker. Do not start with "I will", "我会", "现在", or "接下来".
 - quote must be an exact source text span from sourceObservationId.
-- dedupeKey must be a short stable slug of core action and object. Never use raw JSON, paths, logs, call ids, or trace fragments.
+- dedupeKey must be a short stable slug of the user's core ask and object. Do not use current status, current node names, raw JSON, paths, logs, call ids, or trace fragments.
 
 Good examples:
 - "后续需要修复 CI 失败，并重新跑测试。" -> title "修复 CI 失败并重新跑测试"
@@ -269,6 +271,7 @@ function parseCurrentNode(value: unknown): LlmTaskChain["currentNode"] | undefin
   const record = value as Record<string, unknown>;
   return {
     ...todo,
+    nodeTitle: stringValue(record.nodeTitle),
     owner: ownerValue(record.owner),
     nextStep: stringValue(record.nextStep)
   };

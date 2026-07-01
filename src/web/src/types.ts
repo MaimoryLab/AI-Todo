@@ -41,6 +41,14 @@ export interface TodoEvidence {
   sessionTitle?: string;
   projectTitle?: string;
   text: string;
+  context?: TodoEvidenceContext[];
+}
+
+export interface TodoEvidenceContext {
+  observationId: string;
+  role?: string;
+  createdAt?: string;
+  text: string;
 }
 
 export interface TaskChainView {

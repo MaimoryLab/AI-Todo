@@ -107,7 +107,7 @@ export function App() {
     try {
       const result = await api<OrganizeResult>("/todos/organize", { method: "POST", body: {} });
       await refresh();
-      setStatus(organizeStatusSummary(result, locale));
+      setStatus(organizeStatus(result, locale));
       rememberOrganizeResult(result);
     } catch {
       const result: OrganizeResult = { created: 0, updated: 0, warnings: ["organize_failed"], durationMs: 0 };
@@ -254,7 +254,7 @@ function OrganizeHistoryPanel({ items, locale }: { items: OrganizeHistoryItem[];
           return (
             <section key={item.id} className="rounded-md border border-[var(--app-border)] bg-[var(--app-surface-muted)] p-3">
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <p className="font-medium text-[var(--app-ink)]">{organizeStatusSummary(result, locale)}</p>
+                <p className="font-medium text-[var(--app-ink)]">{organizeStatus(result, locale)}</p>
                 <time className="text-xs text-[var(--app-subtle)]" dateTime={item.createdAt}>{new Date(item.createdAt).toLocaleString(locale)}</time>
               </div>
               <p className="mt-1 text-xs text-[var(--app-subtle)]">{text.organizeDetails(result.created, result.updated, Math.round(result.durationMs))}</p>
@@ -290,7 +290,7 @@ function OrganizeDetailsSummary({ result, locale }: { result: OrganizeResult; lo
   return details.length > 0 ? <p className="mt-2 text-xs text-[var(--app-muted)]">{details.join(" ")}</p> : null;
 }
 
-function organizeStatusSummary(result: OrganizeResult, locale: Locale): string {
+function organizeStatus(result: OrganizeResult, locale: Locale): string {
   if (result.warnings.includes("organize_failed")) return localizedUserFacingError("organize_failed", locale);
   const text = textFor(locale);
   const summary = text.organized(result.created, result.updated);

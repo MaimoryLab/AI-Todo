@@ -370,8 +370,9 @@ test("llm organize persists task chains and returns current node cards with coll
             observationId: assistantObservationId
           }],
           currentNode: {
-            title: "Wire chain containers into Todo",
-            description: "Render the current unresolved node inside a task chain container.",
+            title: "Redesign todo card structure",
+            description: "The user wanted the todo card structure redesigned, but the chain container still needs to be rendered.",
+            nodeTitle: "Wire chain containers into Todo",
             owner: "agent",
             nextStep: "Agent should render the chain container and collapsed summary.",
             metadata: {
@@ -381,7 +382,7 @@ test("llm organize persists task chains and returns current node cards with coll
             confidence: 0.92,
             sourceObservationId: userObservationId,
             quote: "Please redesign the todo card structure",
-            dedupeKey: "todo-card-structure-chain-view"
+            dedupeKey: "redesign-todo-card-structure"
           }
         }]
       })
@@ -393,7 +394,8 @@ test("llm organize persists task chains and returns current node cards with coll
     db.close();
 
     assert.equal(result.created, 1);
-    assert.equal(todo.title, "Wire chain containers into Todo");
+    assert.equal(todo.title, "Redesign todo card structure");
+    assert.equal(todo.description, "The user wanted the todo card structure redesigned, but the chain container still needs to be rendered.");
     assert.equal(todo.chain?.title, "Redesign todo card structure");
     assert.equal(todo.chain?.summary, "The data audit is complete; the UI still needs chain containers.");
     assert.equal(todo.chain?.currentNode.title, "Wire chain containers into Todo");

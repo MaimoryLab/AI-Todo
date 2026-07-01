@@ -2,13 +2,18 @@ import { Archive, CheckCircle2, ChevronDown, Eye, FileText, Inbox, Search, Spark
 import { useEffect, useMemo, useState } from "react";
 import { sourceLabel, textFor, type Locale } from "../i18n.js";
 import { cn } from "../lib/utils.js";
-import type { SourceKind, TodoCard, TodoEvidence } from "../types.js";
+import type { SourceKind, TodoCard, TodoEvidence, TodoEvidenceContext } from "../types.js";
+import { MarkdownText } from "./observation-text.js";
 import { Badge, Button, Card, Input, SectionTitle } from "./ui.js";
 import { originLabel, originProjectLabel, SourceIcon } from "./source-labels.js";
 
 const OPEN_GROUP_PREVIEW_LIMIT = 6;
+const OPEN_GROUP_INITIAL_LIMIT = 3;
+const DEFAULT_EXPANDED_GROUP_LIMIT = 2;
+const PROJECT_CHIP_LIMIT = 4;
 type TodoSourceFilter = "all" | SourceKind;
 type SourceTarget = Pick<TodoEvidence, "sessionId" | "observationId">;
+type GroupMode = "collapsed" | "preview" | "full";
 
 export function TodoBoard(props: {
   openTodos: TodoCard[];
@@ -25,12 +30,15 @@ export function TodoBoard(props: {
 }) {
   const text = textFor(props.locale);
   const [showClosed, setShowClosed] = useState(false);
-  const [expandedOpenGroups, setExpandedOpenGroups] = useState<Record<string, boolean>>({});
+  const [groupModes, setGroupModes] = useState<Record<string, GroupMode>>({});
   const [selectedTodoId, setSelectedTodoId] = useState("");
   const [sourceFilter, setSourceFilter] = useState<TodoSourceFilter>("all");
   const [projectFilter, setProjectFilter] = useState("all");
+  const [projectMenuOpen, setProjectMenuOpen] = useState(false);
   const [query, setQuery] = useState("");
   const projectOptions = useMemo(() => projectTodoGroups(props.openTodos, props.locale), [props.openTodos, props.locale]);
+  const projectChipOptions = useMemo(() => visibleProjectChips(projectOptions, projectFilter), [projectOptions, projectFilter]);
+  const moreProjectOptions = useMemo(() => projectOptions.filter((project) => !projectChipOptions.some((visible) => visible.key === project.key)), [projectOptions, projectChipOptions]);
   const visibleOpenTodos = useMemo(() => props.openTodos.filter((todo) => matchesTodo(todo, sourceFilter, projectFilter, query)), [props.openTodos, sourceFilter, projectFilter, query]);
   const visibleOpenGroups = useMemo(
     () => projectTodoGroups(visibleOpenTodos, props.locale).map((group) => ({ ...group, chains: projectTaskChains(group.todos) })),
@@ -42,6 +50,10 @@ export function TodoBoard(props: {
   useEffect(() => {
     if (projectFilter !== "all" && !projectOptions.some((project) => project.key === projectFilter)) setProjectFilter("all");
   }, [projectFilter, projectOptions]);
+
+  useEffect(() => {
+    if (moreProjectOptions.length === 0 && projectMenuOpen) setProjectMenuOpen(false);
+  }, [moreProjectOptions.length, projectMenuOpen]);
 
   useEffect(() => {
     if (!selectedTodo) return;
@@ -90,8 +102,12 @@ export function TodoBoard(props: {
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(320px,0.46fr)] xl:items-start">
         <div className="min-w-0 space-y-3">
           <Card className="p-3">
-            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-              <div className="flex min-w-0 flex-col gap-2 lg:flex-row lg:items-center">
+            <div className="space-y-3">
+              <label className="relative block min-w-0">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--app-subtle)]" aria-hidden="true" />
+                <Input aria-label={text.searchCards} placeholder={text.searchCards} value={query} onChange={(event) => setQuery(event.target.value)} className="pl-9" />
+              </label>
+              <div className="grid gap-2 xl:grid-cols-[auto_minmax(0,1fr)] xl:items-center">
                 <div className="flex min-w-0 gap-2 overflow-x-auto app-scroll" aria-label={text.sourceFilter}>
                   {(["all", "codex", "claude-code", "browser"] as const).map((filter) => (
                     <button
@@ -109,39 +125,77 @@ export function TodoBoard(props: {
                     </button>
                   ))}
                 </div>
-                <select
-                  aria-label={text.projectFilter}
-                  value={projectFilter}
-                  onChange={(event) => setProjectFilter(event.target.value)}
-                  className="h-10 min-w-0 rounded-md border border-[var(--app-border-strong)] bg-[var(--app-surface)] px-3 text-sm text-[var(--app-ink)] outline-none transition focus:border-[var(--app-accent)] lg:w-52"
-                >
-                  <option value="all">{text.allProjects}</option>
-                  {projectOptions.map((project) => (
-                    <option key={project.key} value={project.key}>
-                      {project.label}
-                    </option>
+                <div className="flex min-w-0 items-center gap-2 overflow-x-auto app-scroll" aria-label={text.projectFilter}>
+                  <ProjectChip active={projectFilter === "all"} label={text.allProjects} count={props.openTodos.length} onClick={() => setProjectFilter("all")} />
+                  {projectChipOptions.map((project) => (
+                    <ProjectChip key={project.key} active={projectFilter === project.key} label={project.label} count={project.todos.length} onClick={() => setProjectFilter(project.key)} />
                   ))}
-                </select>
+                  {moreProjectOptions.length > 0 && (
+                    <div className="relative shrink-0" onBlur={(event) => {
+                      if (!event.currentTarget.contains(event.relatedTarget)) setProjectMenuOpen(false);
+                    }}>
+                      <button
+                        type="button"
+                        className={cn(
+                          "inline-flex min-h-10 items-center gap-2 rounded-md border px-3 text-sm font-medium transition active:translate-y-px",
+                          projectMenuOpen ? "border-[var(--app-accent)] bg-white text-[var(--app-accent)]" : "border-[var(--app-border)] bg-white text-[var(--app-muted)] hover:text-[var(--app-ink)]"
+                        )}
+                        aria-haspopup="menu"
+                        aria-expanded={projectMenuOpen}
+                        onClick={() => setProjectMenuOpen((open) => !open)}
+                        onKeyDown={(event) => {
+                          if (event.key === "Escape") setProjectMenuOpen(false);
+                        }}
+                      >
+                        {text.moreProjects}
+                        <Badge className="bg-white">{moreProjectOptions.length}</Badge>
+                        <ChevronDown className={cn("h-4 w-4 text-[var(--app-subtle)] transition", projectMenuOpen && "rotate-180")} aria-hidden="true" />
+                      </button>
+                      {projectMenuOpen && (
+                        <div className="absolute left-0 z-20 mt-2 max-h-72 w-72 overflow-y-auto rounded-lg border border-[var(--app-border)] bg-white p-1 shadow-lg" role="menu">
+                          {moreProjectOptions.map((project) => (
+                            <button
+                              key={project.key}
+                              type="button"
+                              role="menuitem"
+                              className="flex w-full items-center justify-between gap-3 rounded-md px-3 py-2 text-left text-sm text-[var(--app-ink)] hover:bg-[var(--app-surface-muted)]"
+                              onClick={() => {
+                                setProjectFilter(project.key);
+                                setProjectMenuOpen(false);
+                              }}
+                              onKeyDown={(event) => {
+                                if (event.key === "Escape") setProjectMenuOpen(false);
+                              }}
+                            >
+                              <span className="min-w-0 truncate">{project.label}</span>
+                              <Badge className="bg-white">{project.todos.length}</Badge>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
               </div>
-              <label className="relative block min-w-0 lg:w-[32rem]">
-                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--app-subtle)]" aria-hidden="true" />
-                <Input aria-label={text.searchCards} placeholder={text.searchCards} value={query} onChange={(event) => setQuery(event.target.value)} className="pl-9" />
-              </label>
             </div>
           </Card>
 
           {visibleOpenTodos.length === 0 && <Card className="p-6 text-sm text-[var(--app-muted)]">{text.noCardsMatch}</Card>}
           {visibleOpenGroups.map((group) => {
-            const expanded = expandedOpenGroups[group.key] ?? false;
-            const visibleChains = expanded ? group.chains : group.chains.slice(0, OPEN_GROUP_PREVIEW_LIMIT);
+            const mode = groupModes[group.key] ?? defaultGroupMode(group, visibleOpenGroups, projectFilter, sourceFilter, query);
+            const visibleChains = mode === "full"
+              ? group.chains.slice(0, OPEN_GROUP_PREVIEW_LIMIT)
+              : mode === "preview"
+                ? group.chains.slice(0, OPEN_GROUP_INITIAL_LIMIT)
+                : [];
             const hiddenCount = group.chains.length - visibleChains.length;
             return (
               <section key={group.key} className="space-y-2">
                 <button
                   type="button"
                   className="flex w-full items-center justify-between gap-3 rounded-lg px-1 py-2 text-left transition hover:bg-white/60"
-                  aria-expanded={expanded}
-                  onClick={() => setExpandedOpenGroups((current) => ({ ...current, [group.key]: !expanded }))}
+                  aria-expanded={mode !== "collapsed"}
+                  onClick={() => setGroupModes((current) => ({ ...current, [group.key]: mode === "collapsed" ? "preview" : "collapsed" }))}
                 >
                   <span className="min-w-0">
                     <h2 className="text-sm font-semibold text-[var(--app-muted)]">{group.label}</h2>
@@ -149,7 +203,7 @@ export function TodoBoard(props: {
                   </span>
                   <span className="inline-flex items-center gap-2">
                     <Badge>{group.todos.length}</Badge>
-                    <ChevronDown className={cn("h-4 w-4 text-[var(--app-subtle)] transition", expanded && "rotate-180")} aria-hidden="true" />
+                    <ChevronDown className={cn("h-4 w-4 text-[var(--app-subtle)] transition", mode !== "collapsed" && "rotate-180")} aria-hidden="true" />
                   </span>
                 </button>
                 <div className="space-y-2">
@@ -165,11 +219,11 @@ export function TodoBoard(props: {
                       onSources={props.onSources}
                     />
                   ))}
-                  {hiddenCount > 0 && (
-                    <Button variant="secondary" className="w-full" onClick={() => setExpandedOpenGroups((current) => ({ ...current, [group.key]: true }))}>
+                  {hiddenCount > 0 && mode !== "collapsed" && (
+                    <Button variant="secondary" className="w-full" onClick={() => setGroupModes((current) => ({ ...current, [group.key]: "full" }))}>
                       {text.showMore(hiddenCount)}
                     </Button>
-                  )}
+	                  )}
                 </div>
               </section>
             );
@@ -217,6 +271,47 @@ function projectTodoGroups(todos: TodoCard[], locale: Locale): Array<{ key: stri
     groups.set(key, group);
   }
   return [...groups.values()].sort((first, second) => latestTodoTime(second.todos) - latestTodoTime(first.todos));
+}
+
+function visibleProjectChips<T extends { key: string }>(projects: T[], selectedKey: string): T[] {
+  const visible = projects.slice(0, PROJECT_CHIP_LIMIT);
+  if (selectedKey === "all" || visible.some((project) => project.key === selectedKey)) return visible;
+  const selected = projects.find((project) => project.key === selectedKey);
+  return selected ? [selected, ...visible.slice(0, PROJECT_CHIP_LIMIT - 1)] : visible;
+}
+
+function defaultGroupMode(
+  group: { key: string },
+  groups: Array<{ key: string }>,
+  projectFilter: string,
+  sourceFilter: TodoSourceFilter,
+  query: string
+): GroupMode {
+  if (projectFilter !== "all" || sourceFilter !== "all" || query.trim()) return "preview";
+  return groups.findIndex((item) => item.key === group.key) < DEFAULT_EXPANDED_GROUP_LIMIT ? "preview" : "collapsed";
+}
+
+function ProjectChip({ active, label, count, onClick }: {
+  active: boolean;
+  label: string;
+  count: number;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      className={cn(
+        "inline-flex min-h-10 max-w-52 shrink-0 items-center gap-2 rounded-md border px-3 text-sm font-medium transition active:translate-y-px",
+        active ? "border-[var(--app-accent)] bg-white text-[var(--app-accent)]" : "border-[var(--app-border)] bg-white text-[var(--app-muted)] hover:text-[var(--app-ink)]"
+      )}
+      aria-pressed={active}
+      onClick={onClick}
+      title={label}
+    >
+      <span className="min-w-0 truncate">{label}</span>
+      <Badge className="bg-white">{count}</Badge>
+    </button>
+  );
 }
 
 function todoProjectKey(todo: TodoCard): string {
@@ -383,66 +478,30 @@ function TodoInspector({ todo, evidence, evidenceError, locale, onSources }: {
                   <SourceIcon source={todo.origin?.source} />
                   {todo.origin?.source ? sourceLabel(todo.origin.source, locale) : text.sourceUnavailable}
                 </Badge>
+                {confidence && <Badge className={confidence.tone}>{text.confidenceLabel(confidence.value)}</Badge>}
                 <span className="text-xs text-[var(--app-subtle)]">{formatRelativeTime(todoEventTime(todo), locale)}</span>
               </div>
             </div>
           </div>
         </div>
         <div className="space-y-5 p-5">
-	          <section>
-	            <h3 className="text-sm font-semibold text-[var(--app-ink)]">{text.evidence}</h3>
-	            <div className="mt-3 space-y-3">
-	              {evidenceError && <EvidenceMessage>{evidenceError}</EvidenceMessage>}
-	              {!evidenceError && !evidence && <EvidenceMessage>{text.loadingEvidence}</EvidenceMessage>}
-	              {!evidenceError && evidence?.length === 0 && <EvidenceMessage>{text.noEvidence}</EvidenceMessage>}
-	              {!evidenceError && evidence?.slice(0, 2).map((item) => (
-	                <details key={item.id} className="rounded-lg border border-[var(--app-border)] bg-[var(--app-surface-muted)] p-4 text-sm text-[var(--app-muted)]">
-	                  <summary className="cursor-pointer list-none">
-	                    <div className="flex min-w-0 flex-wrap items-center gap-2">
-	                      <Badge className="bg-white">
-                        <SourceIcon source={item.source ?? todo.origin?.source} />
-                        {item.source ? sourceLabel(item.source, locale) : text.sourceUnavailable}
-                      </Badge>
-                      <Badge className="bg-white">{roleLabel(item.role, locale)}</Badge>
-                      <time className="text-xs text-[var(--app-subtle)]" dateTime={item.createdAt ?? todoEventTime(todo)} title={new Date(item.createdAt ?? todoEventTime(todo)).toLocaleString()}>
-                        {formatRelativeTime(item.createdAt ?? todoEventTime(todo), locale)}
-                      </time>
-                    </div>
-                    <div className="mt-2 min-w-0 break-words text-xs font-medium text-[var(--app-ink)]">
-                      {item.projectTitle || todo.origin?.projectTitle || text.unknownProject}
-                    </div>
-                    <div className="mt-1 min-w-0 break-words text-xs text-[var(--app-subtle)]">
-                      {item.sessionTitle || todo.origin?.sessionTitle || text.temporarySession}
-                    </div>
-                    <p className="mt-1 min-w-0 break-words leading-6">{evidencePreview(item.text)}</p>
-                  </summary>
-                  <blockquote className="mt-3 whitespace-pre-wrap break-words border-l-2 border-[var(--app-border-strong)] pl-3 leading-6">
-                    {item.text}
-                  </blockquote>
-                  <Button className="mt-3 w-full" variant="secondary" size="sm" onClick={() => onSources(todo, item)} aria-label={text.openTodoSources(todo.title)}>
-	                    <Eye className="h-4 w-4" aria-hidden="true" />
-	                    {text.openSources}
-	                  </Button>
-	                </details>
-	              ))}
-	            </div>
-	          </section>
-          <section className="grid gap-3 sm:grid-cols-2">
-            {confidence && (
-              <div className="rounded-lg border border-[var(--app-border)] bg-[var(--app-surface-muted)] p-3">
-                <div className="text-xs text-[var(--app-subtle)]">{text.confidence}</div>
-                <div className="mt-1 text-lg font-semibold text-[var(--app-ink)]">{confidence.value}%</div>
-              </div>
-            )}
-            <div className="rounded-lg border border-[var(--app-border)] bg-[var(--app-surface-muted)] p-3">
-              <div className="text-xs text-[var(--app-subtle)]">{text.source}</div>
-              <div className="mt-1 break-words text-sm font-semibold text-[var(--app-ink)]">{todo.origin?.sessionTitle || text.temporarySession}</div>
+          <section>
+            <h3 className="text-sm font-semibold text-[var(--app-ink)]">{text.contextEvidence}</h3>
+            <div className="mt-3 space-y-3">
+              {evidenceError && <EvidenceMessage>{evidenceError}</EvidenceMessage>}
+              {!evidenceError && !evidence && <EvidenceMessage>{text.loadingEvidence}</EvidenceMessage>}
+              {!evidenceError && evidence?.length === 0 && <EvidenceMessage>{text.noEvidence}</EvidenceMessage>}
+              {!evidenceError && evidence?.slice(0, 2).map((item) => (
+                <EvidenceItem key={item.id} item={item} todo={todo} locale={locale} onSources={onSources} />
+              ))}
             </div>
           </section>
-          <Button className="w-full" onClick={() => onSources(todo)} aria-label={text.openTodoSources(todo.title)}>
-            <Eye className="h-4 w-4" aria-hidden="true" />
-            {text.openSources}
-          </Button>
+          {(!evidence || evidence.length === 0 || evidenceError) && (
+            <Button className="w-full" onClick={() => onSources(todo)} aria-label={text.openTodoSources(todo.title)}>
+              <Eye className="h-4 w-4" aria-hidden="true" />
+              {text.openSources}
+            </Button>
+          )}
         </div>
       </Card>
     </aside>
@@ -451,6 +510,80 @@ function TodoInspector({ todo, evidence, evidenceError, locale, onSources }: {
 
 function EvidenceMessage({ children }: { children: string }) {
   return <div className="rounded-lg border border-[var(--app-border)] bg-[var(--app-surface-muted)] p-4 text-sm text-[var(--app-muted)]">{children}</div>;
+}
+
+function EvidenceItem({ item, todo, locale, onSources }: {
+  item: TodoEvidence;
+  todo: TodoCard;
+  locale: Locale;
+  onSources: (todo: TodoCard, target?: SourceTarget) => void;
+}) {
+  const text = textFor(locale);
+  const rows = evidenceRows(item);
+  return (
+    <details className="group rounded-lg border border-[var(--app-border)] bg-[var(--app-surface-muted)] p-4 text-sm text-[var(--app-muted)]">
+      <summary className="cursor-pointer list-none">
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
+          <Badge className="bg-white">
+            <SourceIcon source={item.source ?? todo.origin?.source} />
+            {item.source ? sourceLabel(item.source, locale) : text.sourceUnavailable}
+          </Badge>
+          <Badge className="bg-white">{roleLabel(item.role, locale)}</Badge>
+          <time className="text-xs text-[var(--app-subtle)]" dateTime={item.createdAt ?? todoEventTime(todo)} title={new Date(item.createdAt ?? todoEventTime(todo)).toLocaleString()}>
+            {formatRelativeTime(item.createdAt ?? todoEventTime(todo), locale)}
+          </time>
+          <ChevronDown className="ml-auto h-4 w-4 text-[var(--app-subtle)] transition group-open:rotate-180" aria-hidden="true" />
+        </div>
+        <div className="mt-2 min-w-0 break-words text-xs font-medium text-[var(--app-ink)]">
+          {item.projectTitle || todo.origin?.projectTitle || text.unknownProject}
+        </div>
+        <div className="mt-1 min-w-0 break-words text-xs text-[var(--app-subtle)]">
+          {item.sessionTitle || todo.origin?.sessionTitle || text.temporarySession}
+        </div>
+        <p className="mt-2 line-clamp-3 min-w-0 break-words leading-6">{evidencePreview(item.text)}</p>
+      </summary>
+      <div className="mt-4 max-h-96 space-y-3 overflow-y-auto pr-1 app-scroll">
+        {rows.map((row) => (
+          <EvidenceContextRow key={row.observationId} row={row} locale={locale} active={row.observationId === item.observationId} />
+        ))}
+      </div>
+      <Button className="mt-3 w-full" variant="secondary" size="sm" onClick={() => onSources(todo, item)} aria-label={text.openTodoSources(todo.title)}>
+        <Eye className="h-4 w-4" aria-hidden="true" />
+        {text.openEvidenceSource}
+      </Button>
+    </details>
+  );
+}
+
+function EvidenceContextRow({ row, locale, active }: {
+  row: TodoEvidenceContext;
+  locale: Locale;
+  active: boolean;
+}) {
+  const createdAt = row.createdAt || new Date(0).toISOString();
+  return (
+    <article className={cn("rounded-md border bg-white p-3", active ? "border-[var(--app-border-strong)]" : "border-[var(--app-border)]")}>
+      <div className="mb-2 flex flex-wrap items-center gap-2">
+        <Badge className="bg-[var(--app-surface-muted)]">{roleLabel(row.role, locale)}</Badge>
+        {row.createdAt && (
+          <time className="text-xs text-[var(--app-subtle)]" dateTime={row.createdAt} title={new Date(row.createdAt).toLocaleString()}>
+            {formatRelativeTime(createdAt, locale)}
+          </time>
+        )}
+      </div>
+      <MarkdownText text={row.text} markdown={row.role === "assistant" || row.role === "user"} />
+    </article>
+  );
+}
+
+function evidenceRows(item: TodoEvidence): TodoEvidenceContext[] {
+  if (item.context?.length) return item.context;
+  return [{
+    observationId: item.observationId,
+    role: item.role,
+    createdAt: item.createdAt,
+    text: item.text
+  }];
 }
 
 function MetricCard({ label, value, tone }: { label: string; value: number; tone: "blue" | "amber" | "green" }) {

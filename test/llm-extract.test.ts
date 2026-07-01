@@ -85,7 +85,8 @@ test("LLM runner sends task chain instructions and parses structured task chains
     const payload = await readJson(request);
     const systemMessage = payload.messages.find((message: any) => message.role === "system");
     assert.match(systemMessage.content, /taskChains/);
-    assert.match(systemMessage.content, /current unresolved node/);
+    assert.match(systemMessage.content, /currentNode\.title is the Todo card title/);
+    assert.match(systemMessage.content, /currentNode\.nodeTitle/);
     assert.match(systemMessage.content, /completedNodes/);
     return jsonResponse({
       choices: [{
@@ -104,8 +105,9 @@ test("LLM runner sends task chain instructions and parses structured task chains
                 observationId: "obs-2"
               }],
               currentNode: {
-                title: "Wire settings save action",
-                description: "Finish wiring the save action after the LLM settings UI is added.",
+                title: "Add LLM settings UI",
+                description: "The user wanted LLM settings to be usable, but saving the settings is still not wired.",
+                nodeTitle: "Wire settings save action",
                 owner: "agent",
                 nextStep: "Agent should wire the save action.",
                 metadata: {
@@ -115,7 +117,7 @@ test("LLM runner sends task chain instructions and parses structured task chains
                 confidence: 0.91,
                 sourceObservationId: "obs-1",
                 quote: "Please add LLM settings UI",
-                dedupeKey: "wire-settings-save-action"
+                dedupeKey: "add-llm-settings-ui"
               }
             }]
           })
@@ -133,6 +135,8 @@ test("LLM runner sends task chain instructions and parses structured task chains
     assert.equal(result.ok, true);
     assert.equal(result.ok && result.taskChains?.[0].title, "Add LLM settings UI");
     assert.equal(result.ok && result.taskChains?.[0].completedNodes?.[0].title, "Add settings controls");
+    assert.equal(result.ok && result.taskChains?.[0].currentNode?.title, "Add LLM settings UI");
+    assert.equal(result.ok && result.taskChains?.[0].currentNode?.nodeTitle, "Wire settings save action");
     assert.equal(result.ok && result.taskChains?.[0].currentNode?.owner, "agent");
     assert.equal(result.ok && result.taskChains?.[0].currentNode?.nextStep, "Agent should wire the save action.");
   } finally {
@@ -144,7 +148,8 @@ test("LLM runner keeps title anchored to user intent and metadata to agent progr
   const server = await startMockProvider(async (request) => {
     const payload = await readJson(request);
     const systemMessage = payload.messages.find((message: any) => message.role === "system");
-    assert.match(systemMessage.content, /currentNode\.title is a concise summary of the current unresolved node/);
+    assert.match(systemMessage.content, /nearby user's core ask/);
+    assert.match(systemMessage.content, /Description is one concise sentence with the user scenario and unresolved gap/);
     assert.match(systemMessage.content, /metadata\.completionSummary/);
     return jsonResponse({
       choices: [{
