@@ -16,6 +16,7 @@ export function TodoBoard(props: {
   onIgnore: (id: string) => void;
   onSources: (todo: TodoCard) => void;
   evidenceByTodo: Record<string, TodoEvidence[]>;
+  evidenceErrorsByTodo: Record<string, string>;
   onSelectTodo: (todo: TodoCard) => void;
   onOrganize: () => void;
   busy: boolean;
@@ -171,7 +172,13 @@ export function TodoBoard(props: {
           )}
         </div>
 
-        <TodoInspector todo={selectedTodo} evidence={selectedTodo ? props.evidenceByTodo[selectedTodo.id] ?? [] : []} locale={props.locale} onSources={props.onSources} />
+        <TodoInspector
+          todo={selectedTodo}
+          evidence={selectedTodo ? props.evidenceByTodo[selectedTodo.id] : undefined}
+          evidenceError={selectedTodo ? props.evidenceErrorsByTodo[selectedTodo.id] : ""}
+          locale={props.locale}
+          onSources={props.onSources}
+        />
       </div>
     </div>
   );
@@ -318,9 +325,10 @@ function sortTodosByEventTime(todos: TodoCard[]): TodoCard[] {
   return [...todos].sort((first, second) => Date.parse(todoEventTime(second)) - Date.parse(todoEventTime(first)));
 }
 
-function TodoInspector({ todo, evidence, locale, onSources }: {
+function TodoInspector({ todo, evidence, evidenceError, locale, onSources }: {
   todo: TodoCard | undefined;
-  evidence: TodoEvidence[];
+  evidence: TodoEvidence[] | undefined;
+  evidenceError?: string;
   locale: Locale;
   onSources: (todo: TodoCard) => void;
 }) {
@@ -358,7 +366,10 @@ function TodoInspector({ todo, evidence, locale, onSources }: {
           <section>
             <h3 className="text-sm font-semibold text-[var(--app-ink)]">{text.evidence}</h3>
             <div className="mt-3 space-y-3">
-              {(evidence.length ? evidence.slice(0, 2) : fallbackEvidence(todo)).map((item) => (
+              {evidenceError && <EvidenceMessage>{evidenceError}</EvidenceMessage>}
+              {!evidenceError && !evidence && <EvidenceMessage>{text.loadingEvidence}</EvidenceMessage>}
+              {!evidenceError && evidence?.length === 0 && <EvidenceMessage>{text.noEvidence}</EvidenceMessage>}
+              {!evidenceError && evidence?.slice(0, 2).map((item) => (
                 <blockquote key={item.id} className="rounded-lg border border-[var(--app-border)] bg-[var(--app-surface-muted)] p-4 text-sm leading-6 text-[var(--app-muted)]">
                   <span className="text-xl leading-none text-[var(--app-subtle)]">“</span>
                   {item.text}
@@ -401,6 +412,10 @@ function TodoInspector({ todo, evidence, locale, onSources }: {
       </Card>
     </aside>
   );
+}
+
+function EvidenceMessage({ children }: { children: string }) {
+  return <div className="rounded-lg border border-[var(--app-border)] bg-[var(--app-surface-muted)] p-4 text-sm text-[var(--app-muted)]">{children}</div>;
 }
 
 function MetricCard({ label, value, tone }: { label: string; value: number; tone: "blue" | "amber" | "green" }) {
@@ -446,16 +461,6 @@ function warningBadge(todo: TodoCard, locale: Locale) {
   const confidence = todoConfidence(todo);
   if (confidence && confidence.value < 55) return <Badge className="border-amber-200 bg-amber-50 text-amber-700">{text.lowConfidence}</Badge>;
   return null;
-}
-
-function fallbackEvidence(todo: TodoCard): TodoEvidence[] {
-  return [
-    {
-      id: "description",
-      observationId: todo.origin?.observationId ?? todo.id,
-      text: todo.metadata.completionSummary || todo.description
-    }
-  ];
 }
 
 function todoEventTime(todo: TodoCard): string {

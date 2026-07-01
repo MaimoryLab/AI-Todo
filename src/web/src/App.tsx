@@ -20,6 +20,7 @@ export function App() {
   const [sessionOffset, setSessionOffset] = useState(0);
   const [observationsBySession, setObservationsBySession] = useState<Record<string, ObservationRecord[]>>({});
   const [evidenceByTodo, setEvidenceByTodo] = useState<Record<string, TodoEvidence[]>>({});
+  const [evidenceErrorsByTodo, setEvidenceErrorsByTodo] = useState<Record<string, string>>({});
   const [settings, setSettings] = useState<PublicAppConfig | null>(null);
   const [startup, setStartup] = useState<StartupScanStatus | null>(null);
   const [selectedSessionId, setSelectedSessionId] = useState<string>("");
@@ -149,8 +150,11 @@ export function App() {
     try {
       const evidence = await api<TodoEvidence[]>(`/todos/${encodeURIComponent(todoId)}/evidence`);
       setEvidenceByTodo((current) => ({ ...current, [todoId]: evidence }));
+      setEvidenceErrorsByTodo((current) => ({ ...current, [todoId]: "" }));
     } catch (error) {
-      setStatus((error as Error).message);
+      const message = (error as Error).message;
+      setEvidenceErrorsByTodo((current) => ({ ...current, [todoId]: message }));
+      setStatus(message);
     }
   }
 
@@ -175,6 +179,7 @@ export function App() {
           onIgnore={(id) => void updateTodo(id, "ignored")}
           onSources={(todo) => void openTodoSources(todo)}
           evidenceByTodo={evidenceByTodo}
+          evidenceErrorsByTodo={evidenceErrorsByTodo}
           onSelectTodo={(todo) => void loadTodoEvidence(todo.id)}
           onOrganize={() => void organize()}
           busy={busy}

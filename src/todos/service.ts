@@ -918,7 +918,14 @@ export function listTodoEvidence(db: Database, todoId: string): TodoEvidence[] |
   const todo = db.prepare("SELECT id FROM todos WHERE id = ?").get(todoId);
   if (!todo) return null;
   return db.prepare(
-    "SELECT id, observation_id as observationId, text FROM evidence WHERE todo_id = ? ORDER BY id"
+    `SELECT
+      evidence.id,
+      evidence.observation_id as observationId,
+      observations.text as text
+    FROM evidence
+    JOIN observations ON observations.id = evidence.observation_id
+    WHERE evidence.todo_id = ?
+    ORDER BY evidence.id`
   ).all(todoId).map((row) => {
     const record = row as Record<string, unknown>;
     return {
