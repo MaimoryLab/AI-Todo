@@ -278,6 +278,31 @@ test("codex scanner removes injected instruction noise before storing observatio
   }
 });
 
+test("codex scanner removes subagent notifications from user observations", () => {
+  const dir = mkdtempSync(join(tmpdir(), "ai-todo-source-subagent-"));
+  try {
+    mkdirSync(join(dir, "codex"));
+    const subagent = [
+      "<subagent_notification>",
+      JSON.stringify({ agent_path: "agent-1", status: { completed: "**Subagent report**\nShould not appear." } }),
+      "</subagent_notification>"
+    ].join("\n");
+    writeFileSync(join(dir, "codex", "session.jsonl"), [
+      JSON.stringify({ type: "event_msg", payload: { type: "user_message", message: subagent, timestamp: "2026-01-01T00:00:01.000Z" } }),
+      JSON.stringify({ type: "event_msg", payload: { type: "user_message", message: `Please keep this request.\n${subagent}\nThanks.`, timestamp: "2026-01-01T00:00:02.000Z" } })
+    ].join("\n"));
+
+    const db = openDatabase(getAppPaths(join(dir, "home")));
+    assert.equal(scanCodexSessions(db, join(dir, "codex")).observations, 1);
+    const row = db.prepare("SELECT text FROM observations").get() as { text: string };
+    db.close();
+    assert.equal(row.text, "Please keep this request.\n\nThanks.");
+    assert.doesNotMatch(row.text, /<subagent_notification>|agent_path|completed|Subagent report/);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test("scanner checkpoints but does not store sessions with no visible observations", () => {
   const dir = mkdtempSync(join(tmpdir(), "ai-todo-source-empty-session-"));
   try {
@@ -334,6 +359,39 @@ test("claude scanner keeps visible user and assistant text after filtering metad
     assert.ok(rows.some((row) => row.role === "user" && row.text === "Please clean Claude visible transcript"));
     assert.ok(rows.some((row) => row.role === "assistant" && row.text === "I will keep only readable transcript text."));
     assert.ok(!rows.some((row) => String(row.text).includes("sidechain")));
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("claude scanner removes subagent notifications from visible text", () => {
+  const dir = mkdtempSync(join(tmpdir(), "ai-todo-source-claude-subagent-"));
+  try {
+    mkdirSync(join(dir, "claude"));
+    writeFileSync(join(dir, "claude", "session.jsonl"), [
+      JSON.stringify({
+        type: "user",
+        message: {
+          role: "user",
+          content: [{
+            type: "text",
+            text: [
+              "Please keep this Claude request.",
+              "<subagent_notification>",
+              "{\"agent_path\":\"agent-2\",\"status\":{\"completed\":\"hidden report\"}}",
+              "</subagent_notification>"
+            ].join("\n")
+          }]
+        }
+      })
+    ].join("\n"));
+
+    const db = openDatabase(getAppPaths(join(dir, "home")));
+    assert.equal(scanClaudeCodeSessions(db, join(dir, "claude")).observations, 1);
+    const row = db.prepare("SELECT text FROM observations").get() as { text: string };
+    db.close();
+    assert.equal(row.text, "Please keep this Claude request.");
+    assert.doesNotMatch(row.text, /<subagent_notification>|agent_path|completed|hidden report/);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

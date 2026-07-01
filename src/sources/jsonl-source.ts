@@ -261,6 +261,7 @@ function cleanVisibleText(source: SourceKind, value: string): string {
     .replace(/# AGENTS\.md instructions[\s\S]*?<\/INSTRUCTIONS>/g, "")
     .replace(/<environment_context>[\s\S]*?<\/environment_context>/g, "")
     .replace(/<system-reminder>[\s\S]*?<\/system-reminder>/g, "")
+    .replace(/<subagent_notification>[\s\S]*?<\/subagent_notification>/g, "")
     .replace(/<permissions instructions>[\s\S]*?<\/permissions instructions>/g, "")
     .replace(/<skills_instructions>[\s\S]*?<\/skills_instructions>/g, "")
     .replace(/<plugins_instructions>[\s\S]*?<\/plugins_instructions>/g, "")
@@ -279,6 +280,7 @@ function cleanVisibleText(source: SourceKind, value: string): string {
     "<plugins_instructions>",
     "<environment_context>",
     "<system-reminder>",
+    "<subagent_notification>",
     "Codebase and user instructions are shown below.",
     "IMPORTANT: These instructions OVERRIDE",
     "Contents of ",
