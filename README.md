@@ -13,11 +13,17 @@ Without LLM configuration, AI-Todo can still open the UI and scan sources, but i
 
 ### Recommended: Web Workspace
 
+From a fresh clone:
+
 ```bash
+git clone https://github.com/MaimoryLab/AI-Todo.git
+cd AI-Todo
 ./scripts/start-local.sh
 ```
 
 Then open [http://127.0.0.1:3111/](http://127.0.0.1:3111/).
+
+The script runs `npm install`, `npm run build`, and `npm start`. If dependencies are already installed and built, use `npm start`.
 
 `start` automatically discovers default Codex and Claude Code paths at startup and writes missing source settings. It does not overwrite paths you already configured. The default port is fixed at `3111`; if it is occupied, choose one explicitly:
 
@@ -71,12 +77,14 @@ The web `Settings` page and CLI read and write the same `.env` config. Common fi
 ```bash
 AI_TODO_CODEX_HOME=~/.codex
 AI_TODO_CLAUDE_HOME=~/.claude/projects
-AI_TODO_LLM_ENDPOINT=https://api.openai.com/v1/chat/completions
-AI_TODO_LLM_MODEL=gpt-5-mini
+AI_TODO_LLM_ENDPOINT=https://api.novita.ai/openai/v1
+AI_TODO_LLM_MODEL=deepseek/deepseek-v4-flash
 AI_TODO_LLM_API_KEY=<your-key>
-AI_TODO_ORGANIZE_SINCE_DAYS=14
-AI_TODO_ORGANIZE_MAX_SESSIONS=40
+AI_TODO_ORGANIZE_SINCE_DAYS=7
+AI_TODO_ORGANIZE_MAX_SESSIONS=16
 ```
+
+Copy `.env.example` only into your local config directory, not the repo root, when you want a starting point for file-based config.
 
 The UI language preference is saved in browser local storage, not in `.env`.
 

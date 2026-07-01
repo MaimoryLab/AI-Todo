@@ -13,11 +13,17 @@ AI-Todo 是一个本地优先的 AI 会话行动收件箱。它扫描 Codex、Cl
 
 ### 推荐用法：前端工作台
 
+从全新 clone 开始：
+
 ```bash
+git clone https://github.com/MaimoryLab/AI-Todo.git
+cd AI-Todo
 ./scripts/start-local.sh
 ```
 
 打开后访问 [http://127.0.0.1:3111/](http://127.0.0.1:3111/)。
+
+这个脚本会运行 `npm install`、`npm run build` 和 `npm start`。如果依赖已经安装并构建完成，可以直接运行 `npm start`。
 
 `start` 会在启动时自动发现 Codex 和 Claude Code 的默认路径，并写入缺失的来源配置；它不会覆盖你已经配置过的路径。默认端口固定为 `3111`，如果端口被占用，请显式指定：
 
@@ -71,12 +77,14 @@ AI_TODO_HOME=.local/ai-todo npm start
 ```bash
 AI_TODO_CODEX_HOME=~/.codex
 AI_TODO_CLAUDE_HOME=~/.claude/projects
-AI_TODO_LLM_ENDPOINT=https://api.openai.com/v1/chat/completions
-AI_TODO_LLM_MODEL=gpt-5-mini
+AI_TODO_LLM_ENDPOINT=https://api.novita.ai/openai/v1
+AI_TODO_LLM_MODEL=deepseek/deepseek-v4-flash
 AI_TODO_LLM_API_KEY=<your-key>
-AI_TODO_ORGANIZE_SINCE_DAYS=14
-AI_TODO_ORGANIZE_MAX_SESSIONS=40
+AI_TODO_ORGANIZE_SINCE_DAYS=7
+AI_TODO_ORGANIZE_MAX_SESSIONS=16
 ```
+
+如果需要文件配置模板，只把 `.env.example` 复制到本地配置目录，不要复制到仓库根目录。
 
 语言偏好只保存在浏览器本地，不写入 `.env`。
 

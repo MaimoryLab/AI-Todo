@@ -7,7 +7,12 @@
     "ai-todo": "dist/cli.js"
   },
   "main": "dist/src/index.js",
-  "types": "dist/index.d.ts",
+  "types": "dist/src/index.d.ts",
+  "files": [
+    "dist",
+    "LICENSE",
+    "README.md"
+  ],
   "scripts": {
     "build": "rm -rf dist && tsc && vite build",
     "test": "npm run build && node --test dist/test/*.test.js",
@@ -32,6 +37,14 @@
     "vite": "^8.1.0"
   },
   "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/MaimoryLab/AI-Todo.git"
+  },
+  "bugs": {
+    "url": "https://github.com/MaimoryLab/AI-Todo/issues"
+  },
+  "homepage": "https://github.com/MaimoryLab/AI-Todo#readme",
   "dependencies": {
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
