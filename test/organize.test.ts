@@ -228,6 +228,47 @@ test("todo origin trims browser project titles derived from slash paths", async 
   }
 });
 
+test("todo origin prefers codex session project path over transcript path", () => {
+  const dir = mkdtempSync(join(tmpdir(), "ai-todo-codex-origin-project-"));
+  try {
+    const db = openDatabase(getAppPaths(dir));
+    db.prepare("INSERT INTO sessions (id, source, path, project_path, updated_at) VALUES (?, 'codex', ?, ?, '2026-01-01T00:00:00.000Z')")
+      .run("codex-session", "/Users/demo/.codex/sessions/2026/01/01/session.jsonl", "/Users/demo/AI-Todo");
+    db.prepare("INSERT INTO observations (id, session_id, source, role, text, created_at) VALUES ('obs-codex', 'codex-session', 'codex', 'user', 'Please keep Codex project names', '2026-01-01T00:00:00.000Z')").run();
+    db.prepare("INSERT INTO todos (id, title, description, status, metadata_json, updated_at) VALUES ('todo-codex', 'Codex project todo', 'Project names should come from session metadata.', 'todo', ?, '2026-01-01T00:00:00.000Z')")
+      .run(JSON.stringify({ sourceObservationId: "obs-codex" }));
+    db.prepare("INSERT INTO evidence (id, todo_id, observation_id, text) VALUES ('evidence-codex', 'todo-codex', 'obs-codex', 'Please keep Codex project names')").run();
+
+    const [todo] = listTodos(db);
+    db.close();
+
+    assert.equal(todo.origin?.projectPath, "/Users/demo/AI-Todo");
+    assert.equal(todo.origin?.projectTitle, "AI-Todo");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("todo origin falls back to session path when project path is missing", () => {
+  const dir = mkdtempSync(join(tmpdir(), "ai-todo-origin-project-fallback-"));
+  try {
+    const db = openDatabase(getAppPaths(dir));
+    db.prepare("INSERT INTO sessions (id, source, path, updated_at) VALUES ('legacy-session', 'browser', 'Browser / Legacy Project', '2026-01-01T00:00:00.000Z')").run();
+    db.prepare("INSERT INTO observations (id, session_id, source, role, text, created_at) VALUES ('obs-legacy', 'legacy-session', 'browser', 'user', 'Please keep fallback project names', '2026-01-01T00:00:00.000Z')").run();
+    db.prepare("INSERT INTO todos (id, title, description, status, metadata_json, updated_at) VALUES ('todo-legacy', 'Legacy project todo', 'Fallback path should still work.', 'todo', ?, '2026-01-01T00:00:00.000Z')")
+      .run(JSON.stringify({ sourceObservationId: "obs-legacy" }));
+    db.prepare("INSERT INTO evidence (id, todo_id, observation_id, text) VALUES ('evidence-legacy', 'todo-legacy', 'obs-legacy', 'Please keep fallback project names')").run();
+
+    const [todo] = listTodos(db);
+    db.close();
+
+    assert.equal(todo.origin?.projectPath, "Browser / Legacy Project");
+    assert.equal(todo.origin?.projectTitle, "Legacy Project");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test("llm organize batches input without rules fallback for failed batches", async () => {
   const dir = mkdtempSync(join(tmpdir(), "ai-todo-organize-llm-batch-"));
   try {

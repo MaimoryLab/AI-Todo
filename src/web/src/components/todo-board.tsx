@@ -1,6 +1,6 @@
 import { Archive, CheckCircle2, ChevronDown, Eye, Sparkles } from "lucide-react";
 import { useState } from "react";
-import { textFor, type Locale } from "../i18n.js";
+import { sourceLabel, textFor, type Locale } from "../i18n.js";
 import { cn } from "../lib/utils.js";
 import type { TodoCard } from "../types.js";
 import { Badge, Button, Card, IconButton, SectionTitle } from "./ui.js";
@@ -45,7 +45,7 @@ export function TodoBoard(props: {
         </div>
         <Badge className="self-start border-blue-200 bg-blue-50 text-blue-700">{text.openCount(props.openTodos.length)}</Badge>
       </div>
-      {todoGroups(props.openTodos, props.locale).map((group) => {
+      {projectTodoGroups(props.openTodos, props.locale).map((group) => {
         const expanded = expandedOpenGroups[group.key] ?? false;
         const sortedTodos = sortTodosByEventTime(group.todos);
         const visibleTodos = expanded ? sortedTodos : sortedTodos.slice(0, OPEN_GROUP_PREVIEW_LIMIT);
@@ -60,7 +60,7 @@ export function TodoBoard(props: {
             >
               <span className="min-w-0">
                 <h3 className="text-sm font-semibold text-[var(--app-ink)]">{group.label}</h3>
-                <span className="block truncate text-xs text-[var(--app-muted)]">{group.description}</span>
+                <span className="block truncate text-xs text-[var(--app-muted)]">{projectSourceSummary(group.todos, props.locale)}</span>
               </span>
               <span className="inline-flex items-center gap-2">
                 <Badge className={group.badgeClass}>{group.todos.length}</Badge>
@@ -104,19 +104,27 @@ export function TodoBoard(props: {
   );
 }
 
-function todoGroups(todos: TodoCard[], locale: Locale): Array<{ key: string; label: string; description: string; badgeClass: string; headerClass: string; todos: TodoCard[] }> {
+function projectTodoGroups(todos: TodoCard[], locale: Locale): Array<{ key: string; label: string; badgeClass: string; headerClass: string; todos: TodoCard[] }> {
   const text = textFor(locale);
-  const groups = [
-    { key: "blocked", label: text.blocked, description: text.blockedDescription, badgeClass: "border-red-200 bg-red-50 text-red-700", headerClass: "bg-red-50/70", todos: [] as TodoCard[] },
-    { key: "in_progress", label: text.inProgress, description: text.inProgressDescription, badgeClass: "border-blue-200 bg-blue-50 text-blue-700", headerClass: "bg-blue-50/70", todos: [] as TodoCard[] },
-    { key: "needs_review", label: text.needsReview, description: text.needsReviewDescription, badgeClass: "border-amber-200 bg-amber-50 text-amber-700", headerClass: "bg-amber-50/70", todos: [] as TodoCard[] }
-  ];
+  const groups = new Map<string, { key: string; label: string; badgeClass: string; headerClass: string; todos: TodoCard[] }>();
   for (const todo of todos) {
-    const state = todo.metadata.completionState?.toLowerCase().replace(/\s+/g, "_");
-    const target = groups.find((group) => group.key === state) ?? groups[2];
-    target.todos.push(todo);
+    const key = `project:${todo.origin?.projectPath || todo.origin?.projectTitle || "unknown"}`;
+    const label = todo.origin?.projectTitle || text.unknownProject;
+    const group = groups.get(key) ?? { key, label, badgeClass: "border-blue-200 bg-blue-50 text-blue-700", headerClass: "bg-slate-50", todos: [] };
+    group.todos.push(todo);
+    groups.set(key, group);
   }
-  return groups.filter((group) => group.todos.length > 0);
+  return [...groups.values()].sort((first, second) => latestTodoTime(second.todos) - latestTodoTime(first.todos));
+}
+
+function projectSourceSummary(todos: TodoCard[], locale: Locale): string {
+  const sources = [...new Set(todos.map((todo) => todo.origin?.source).filter((source): source is NonNullable<TodoCard["origin"]>["source"] => Boolean(source)))];
+  const sourceText = sources.map((source) => sourceLabel(source, locale)).join(" / ") || textFor(locale).sourceUnavailable;
+  return `${sourceText} · ${textFor(locale).openCount(todos.length)}`;
+}
+
+function latestTodoTime(todos: TodoCard[]): number {
+  return Math.max(...todos.map((todo) => Date.parse(todoEventTime(todo))));
 }
 
 function TodoItem({ todo, muted, compactStatus, locale, onComplete, onIgnore, onSources }: {
@@ -135,12 +143,10 @@ function TodoItem({ todo, muted, compactStatus, locale, onComplete, onIgnore, on
     <Card className={cn("relative overflow-hidden rounded-none border-0 p-4 shadow-none", muted && "opacity-70")}>
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-start">
         <div className="min-w-0 space-y-2">
-          {!compactStatus && (
-            <div className="flex flex-wrap items-center gap-2">
-              <Badge className={todo.status === "todo" ? "border-blue-200 bg-blue-50 text-blue-700" : "border-green-200 bg-green-50 text-green-700"}>{todo.status === "todo" ? text.open : todo.status === "done" ? text.done : text.ignored}</Badge>
-              {todo.metadata.completionState && <Badge>{todo.metadata.completionState}</Badge>}
-            </div>
-          )}
+          <div className="flex flex-wrap items-center gap-2">
+            {!compactStatus && <Badge className={todo.status === "todo" ? "border-blue-200 bg-blue-50 text-blue-700" : "border-green-200 bg-green-50 text-green-700"}>{todo.status === "todo" ? text.open : todo.status === "done" ? text.done : text.ignored}</Badge>}
+            {todo.metadata.completionState && <Badge>{todo.metadata.completionState}</Badge>}
+          </div>
           <h3 className="break-words text-base font-semibold leading-6 tracking-normal text-[var(--app-ink)] sm:text-lg">{todo.title}</h3>
           <p className="todo-description break-words text-sm leading-6 text-[var(--app-muted)]">{todo.description}</p>
           <div className="todo-meta-row">

@@ -632,7 +632,7 @@ function todoOrigin(db: Database, observationId: string | undefined): TodoOrigin
       observations.source as source,
       observations.text as observationText,
       observations.created_at as eventCreatedAt,
-      sessions.path as projectPath,
+      COALESCE(sessions.project_path, sessions.path) as projectPath,
       COALESCE((
         SELECT preview.text
         FROM observations preview
