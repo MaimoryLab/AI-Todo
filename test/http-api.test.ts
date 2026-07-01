@@ -59,7 +59,8 @@ test("HTTP API scans sources, lists sessions, observations, runs, and updates to
 
     const observations = await getJson(server.url(`/sessions/${sessionBody[0].id}/observations`));
     assert.equal(observations.status, 200);
-    assert.equal((await observations.json())[0].text, "Please add HTTP API routes");
+    const [firstObservation] = await observations.json();
+    assert.equal(firstObservation.text, "Please add HTTP API routes");
 
     const organize = await postJson(server.url("/todos/organize"), {});
     const organizeBody = await organize.json();
@@ -83,7 +84,8 @@ test("HTTP API scans sources, lists sessions, observations, runs, and updates to
       sessionId: sessionBody[0].id,
       sessionTitle: "Please add HTTP API routes",
       sessionTemporary: true,
-      observationId: sourceObservationId
+      observationId: sourceObservationId,
+      eventCreatedAt: firstObservation.createdAt
     });
     const patch = await patchJson(server.url(`/todos/${todo.id}`), { status: "done" });
     assert.equal(patch.status, 200);
@@ -595,6 +597,51 @@ test("GET /todos shortens encoded local project paths in origin titles", async (
     const todo = (await response.json())[0];
     assert.equal(todo.origin.projectTitle, "ExampleApp");
     assert.equal(todo.origin.projectPath, encodedPath);
+  } finally {
+    await server.close();
+    db.close();
+    rmSync(fixture.root, { recursive: true, force: true });
+  }
+});
+
+test("GET /todos returns source event time separately from card update time", async () => {
+  const fixture = createFixture();
+  const paths = getAppPaths(join(fixture.root, "home"));
+  const db = openDatabase(paths);
+  const server = await startServer(db, paths);
+  const eventCreatedAt = "2026-06-24T09:30:00.000Z";
+  const cardUpdatedAt = "2026-06-30T12:00:00.000Z";
+  db.prepare("INSERT INTO sessions (id, source, path, updated_at) VALUES (?, ?, ?, ?)").run(
+    "event-time-session",
+    "codex",
+    fixture.codexFile,
+    "2026-06-30T00:00:00.000Z"
+  );
+  db.prepare("INSERT INTO observations (id, session_id, source, role, text, created_at) VALUES (?, ?, ?, ?, ?, ?)").run(
+    "event-time-observation",
+    "event-time-session",
+    "codex",
+    "user",
+    "Please show the source event time",
+    eventCreatedAt
+  );
+  db.prepare(
+    "INSERT INTO todos (id, title, description, status, metadata_json, updated_at) VALUES (?, ?, ?, ?, ?, ?)"
+  ).run(
+    "event-time-todo",
+    "Show source event time",
+    "Cards should display when the source event happened.",
+    "todo",
+    JSON.stringify({ sourceObservationId: "event-time-observation" }),
+    cardUpdatedAt
+  );
+
+  try {
+    const response = await getJson(server.url("/todos"));
+    assert.equal(response.status, 200);
+    const todo = (await response.json())[0];
+    assert.equal(todo.updatedAt, cardUpdatedAt);
+    assert.equal(todo.origin.eventCreatedAt, eventCreatedAt);
   } finally {
     await server.close();
     db.close();

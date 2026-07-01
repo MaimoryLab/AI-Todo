@@ -47,7 +47,7 @@ export function TodoBoard(props: {
       </div>
       {todoGroups(props.openTodos, props.locale).map((group) => {
         const expanded = expandedOpenGroups[group.key] ?? false;
-        const sortedTodos = sortTodosByUpdatedAt(group.todos);
+        const sortedTodos = sortTodosByEventTime(group.todos);
         const visibleTodos = expanded ? sortedTodos : sortedTodos.slice(0, OPEN_GROUP_PREVIEW_LIMIT);
         const hiddenCount = group.todos.length - visibleTodos.length;
         return (
@@ -93,7 +93,7 @@ export function TodoBoard(props: {
           </button>
           {showClosed && (
             <div className="mt-3 space-y-3">
-              {sortTodosByUpdatedAt(props.closedTodos).map((todo) => (
+              {sortTodosByEventTime(props.closedTodos).map((todo) => (
                 <TodoItem key={todo.id} todo={todo} locale={props.locale} onComplete={props.onComplete} onIgnore={props.onIgnore} onSources={props.onSources} muted />
               ))}
             </div>
@@ -129,7 +129,8 @@ function TodoItem({ todo, muted, compactStatus, locale, onComplete, onIgnore, on
   onSources: (todo: TodoCard) => void;
 }) {
   const text = textFor(locale);
-  const updatedTitle = new Date(todo.updatedAt).toLocaleString();
+  const eventTime = todoEventTime(todo);
+  const eventTitle = new Date(eventTime).toLocaleString();
   return (
     <Card className={cn("relative overflow-hidden rounded-none border-0 border-b border-neutral-100 p-4 shadow-none last:border-b-0", muted && "opacity-70")}>
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
@@ -147,7 +148,7 @@ function TodoItem({ todo, muted, compactStatus, locale, onComplete, onIgnore, on
               <SourceIcon source={todo.origin?.source} />
               <span className="truncate">{originProjectLabel(todo, locale)}</span>
             </button>
-            <time className="shrink-0 text-xs text-neutral-500" dateTime={todo.updatedAt} title={updatedTitle}>{formatRelativeTime(todo.updatedAt, locale)}</time>
+            <time className="shrink-0 text-xs text-neutral-500" dateTime={eventTime} title={eventTitle}>{formatRelativeTime(todoEventTime(todo), locale)}</time>
           </div>
           {todo.metadata.completionSummary && (
             <details className="text-sm text-neutral-500">
@@ -174,17 +175,21 @@ function TodoItem({ todo, muted, compactStatus, locale, onComplete, onIgnore, on
   );
 }
 
-function sortTodosByUpdatedAt(todos: TodoCard[]): TodoCard[] {
-  return [...todos].sort((first, second) => Date.parse(second.updatedAt) - Date.parse(first.updatedAt));
+function sortTodosByEventTime(todos: TodoCard[]): TodoCard[] {
+  return [...todos].sort((first, second) => Date.parse(todoEventTime(second)) - Date.parse(todoEventTime(first)));
+}
+
+function todoEventTime(todo: TodoCard): string {
+  return todo.origin?.eventCreatedAt ?? todo.updatedAt;
 }
 
 function formatRelativeTime(value: string, locale: Locale): string {
   const text = textFor(locale);
   const elapsedMs = Date.now() - Date.parse(value);
-  if (!Number.isFinite(elapsedMs) || elapsedMs < 60_000) return text.updatedNow;
+  if (!Number.isFinite(elapsedMs) || elapsedMs < 60_000) return text.happenedNow;
   const elapsedMinutes = Math.floor(elapsedMs / 60_000);
-  if (elapsedMinutes < 60) return text.updatedAgo(text.timeMinute(elapsedMinutes));
+  if (elapsedMinutes < 60) return text.happenedAgo(text.timeMinute(elapsedMinutes));
   const elapsedHours = Math.floor(elapsedMinutes / 60);
-  if (elapsedHours < 24) return text.updatedAgo(text.timeHour(elapsedHours));
-  return text.updatedAgo(text.timeDay(Math.floor(elapsedHours / 24)));
+  if (elapsedHours < 24) return text.happenedAgo(text.timeHour(elapsedHours));
+  return text.happenedAgo(text.timeDay(Math.floor(elapsedHours / 24)));
 }
