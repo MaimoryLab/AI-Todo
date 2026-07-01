@@ -78,6 +78,7 @@ export interface TodoOrigin {
   sessionTitle?: string;
   sessionTemporary?: boolean;
   observationId: string;
+  eventCreatedAt?: string;
 }
 
 export interface TodoMetadata {

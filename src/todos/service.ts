@@ -631,6 +631,7 @@ function todoOrigin(db: Database, observationId: string | undefined): TodoOrigin
       observations.session_id as sessionId,
       observations.source as source,
       observations.text as observationText,
+      observations.created_at as eventCreatedAt,
       sessions.path as projectPath,
       COALESCE((
         SELECT preview.text
@@ -654,7 +655,8 @@ function todoOrigin(db: Database, observationId: string | undefined): TodoOrigin
     sessionId: String(row.sessionId),
     sessionTitle: sessionTitle || "Temporary session",
     sessionTemporary: true,
-    observationId: String(row.observationId)
+    observationId: String(row.observationId),
+    eventCreatedAt: String(row.eventCreatedAt)
   };
 }
 

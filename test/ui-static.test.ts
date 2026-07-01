@@ -75,8 +75,9 @@ test("React UI keeps task-first Sources wording and accessible icon controls", (
   assert.match(i18n, /showMore: \(count: number\) => `Show \$\{count\} more`/);
   assert.match(frontend, /aria-expanded=\{expanded\}/);
   assert.match(todoBoard, /originProjectLabel\(todo, locale\)/);
-  assert.match(todoBoard, /formatRelativeTime\(todo\.updatedAt, locale\)/);
-  assert.match(todoBoard, /sortTodosByUpdatedAt\(group\.todos\)/);
+  assert.match(todoBoard, /todoEventTime\(todo\)/);
+  assert.match(todoBoard, /formatRelativeTime\(todoEventTime\(todo\), locale\)/);
+  assert.match(todoBoard, /sortTodosByEventTime\(group\.todos\)/);
   assert.match(todoBoard, /todo\.metadata\.completionSummary &&/);
   assert.match(todoBoard, /<details/);
   assert.doesNotMatch(todoBoard, /originSessionLabel\(todo, locale\)/);
@@ -84,10 +85,10 @@ test("React UI keeps task-first Sources wording and accessible icon controls", (
   assert.match(sourcesWorkspace, /sessionProjectLabel\(session, locale\)/);
   assert.match(sourcesWorkspace, /sourceLabel\(session\.source, locale\)/);
   assert.match(i18n, /completedIgnored: "已完成 \/ 已忽略"/);
-  assert.match(i18n, /updatedNow: "刚刚更新"/);
-  assert.match(i18n, /updatedNow: "Updated just now"/);
-  assert.match(i18n, /updatedAgo: \(value: string\) => `\$\{value\}前更新`/);
-  assert.match(i18n, /updatedAgo: \(value: string\) => `Updated \$\{value\} ago`/);
+  assert.match(i18n, /happenedNow: "刚刚发生"/);
+  assert.match(i18n, /happenedNow: "Happened just now"/);
+  assert.match(i18n, /happenedAgo: \(value: string\) => `\$\{value\}前发生`/);
+  assert.match(i18n, /happenedAgo: \(value: string\) => `Happened \$\{value\} ago`/);
   assert.match(i18n, /agentProgress: "Agent 进展"/);
   assert.match(i18n, /agentProgress: "Agent progress"/);
   assert.match(i18n, /extraction: "抽取"/);
