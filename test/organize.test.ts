@@ -269,6 +269,255 @@ test("todo origin falls back to session path when project path is missing", () =
   }
 });
 
+test("database migration adds task chain tables and keeps legacy todos listable", () => {
+  const dir = mkdtempSync(join(tmpdir(), "ai-todo-task-chain-migration-"));
+  try {
+    const db = openDatabase(getAppPaths(dir));
+    const tables = db.prepare("SELECT name FROM sqlite_master WHERE type = 'table'").all() as Array<{ name: string }>;
+    const todoColumns = db.prepare("PRAGMA table_info(todos)").all() as Array<{ name: string }>;
+
+    db.prepare("INSERT INTO sessions (id, source, path, updated_at) VALUES ('legacy-session', 'browser', 'Browser / Legacy Chain', '2026-01-01T00:00:00.000Z')").run();
+    db.prepare("INSERT INTO observations (id, session_id, source, role, text, created_at) VALUES ('legacy-obs', 'legacy-session', 'browser', 'user', 'Please keep legacy cards visible', '2026-01-01T00:00:00.000Z')").run();
+    db.prepare("INSERT INTO todos (id, title, description, status, metadata_json, updated_at) VALUES ('legacy-todo', 'Keep legacy cards visible', 'Legacy cards should not require chain data.', 'todo', ?, '2026-01-01T00:00:00.000Z')")
+      .run(JSON.stringify({ sourceObservationId: "legacy-obs" }));
+    db.prepare("INSERT INTO evidence (id, todo_id, observation_id, text) VALUES ('legacy-evidence', 'legacy-todo', 'legacy-obs', 'Please keep legacy cards visible')").run();
+
+    const [todo] = listTodos(db);
+    db.close();
+
+    assert.ok(tables.some((table) => table.name === "task_chains"));
+    assert.ok(tables.some((table) => table.name === "task_chain_nodes"));
+    assert.ok(todoColumns.some((column) => column.name === "chain_node_id"));
+    assert.equal(todo.title, "Keep legacy cards visible");
+    assert.equal(todo.chain, undefined);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("llm organize persists task chains and returns current node cards with collapsed completed nodes", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "ai-todo-task-chain-write-"));
+  try {
+    const db = openDatabase(getAppPaths(dir));
+    ingestBrowserSession(db, {
+      id: "browser-chain",
+      path: "Browser / Chain Project",
+      messages: [
+        { role: "user", text: "Please redesign the todo card structure" },
+        { role: "assistant", text: "Completed the data audit. Remaining work is wiring the chain view." }
+      ]
+    });
+    const userObservationId = String((db.prepare("SELECT id FROM observations WHERE role = 'user' LIMIT 1").get() as any).id);
+    const assistantObservationId = String((db.prepare("SELECT id FROM observations WHERE role = 'assistant' LIMIT 1").get() as any).id);
+
+    const result = await organizeTodos(db, {
+      llmExtractor: async () => ({
+        ok: true,
+        taskChains: [{
+          chainId: "browser-chain:todo-card-structure",
+          title: "Redesign todo card structure",
+          summary: "The data audit is complete; the UI still needs chain containers.",
+          status: "in_progress",
+          completedNodes: [{
+            title: "Audit existing card data",
+            summary: "Confirmed legacy cards only have coarse metadata.",
+            owner: "agent",
+            status: "completed",
+            observationId: assistantObservationId
+          }],
+          currentNode: {
+            title: "Wire chain containers into Todo",
+            description: "Render the current unresolved node inside a task chain container.",
+            owner: "agent",
+            nextStep: "Agent should render the chain container and collapsed summary.",
+            metadata: {
+              completionState: "in_progress",
+              completionSummary: "The audit is done; chain container rendering remains."
+            },
+            confidence: 0.92,
+            sourceObservationId: userObservationId,
+            quote: "Please redesign the todo card structure",
+            dedupeKey: "todo-card-structure-chain-view"
+          }
+        }]
+      })
+    });
+    const [todo] = listTodos(db);
+    const chainRows = db.prepare("SELECT id, current_node_id as currentNodeId FROM task_chains").all() as Array<{ id: string; currentNodeId: string }>;
+    const nodeRows = (db.prepare("SELECT status, owner FROM task_chain_nodes ORDER BY position").all() as Array<{ status: string; owner: string }>)
+      .map((row) => ({ status: row.status, owner: row.owner }));
+    db.close();
+
+    assert.equal(result.created, 1);
+    assert.equal(todo.title, "Wire chain containers into Todo");
+    assert.equal(todo.chain?.title, "Redesign todo card structure");
+    assert.equal(todo.chain?.summary, "The data audit is complete; the UI still needs chain containers.");
+    assert.equal(todo.chain?.currentNode.title, "Wire chain containers into Todo");
+    assert.equal(todo.chain?.currentNode.owner, "agent");
+    assert.equal(todo.chain?.currentNode.nextStep, "Agent should render the chain container and collapsed summary.");
+    assert.equal(todo.chain?.completedNodeCount, 1);
+    assert.deepEqual(todo.chain?.completedNodes.map((node) => ({
+      title: node.title,
+      status: node.status,
+      owner: node.owner
+    })), [{
+      title: "Audit existing card data",
+      status: "completed",
+      owner: "agent"
+    }]);
+    assert.equal(chainRows.length, 1);
+    assert.equal(chainRows[0].currentNodeId, todo.chain?.currentNode.id);
+    assert.deepEqual(nodeRows, [
+      { status: "completed", owner: "agent" },
+      { status: "current", owner: "agent" }
+    ]);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("llm organize preserves existing task chain links when a later legacy todo update arrives", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "ai-todo-task-chain-preserve-"));
+  try {
+    const db = openDatabase(getAppPaths(dir));
+    ingestBrowserSession(db, {
+      id: "browser-chain-preserve",
+      messages: [
+        { role: "user", text: "Please preserve the task chain link" },
+        { role: "assistant", text: "The chain exists; update the card text only." }
+      ]
+    });
+    const userObservationId = String((db.prepare("SELECT id FROM observations WHERE role = 'user' LIMIT 1").get() as any).id);
+
+    await organizeTodos(db, {
+      llmExtractor: async () => ({
+        ok: true,
+        taskChains: [{
+          title: "Preserve task chain link",
+          summary: "The card belongs to a structured chain.",
+          status: "in_progress",
+          currentNode: {
+            title: "Preserve chain link",
+            description: "Keep chain data attached to the todo.",
+            owner: "agent",
+            confidence: 0.9,
+            sourceObservationId: userObservationId,
+            quote: "Please preserve the task chain link",
+            dedupeKey: "preserve-chain-link"
+          }
+        }]
+      })
+    });
+
+    await organizeTodos(db, {
+      llmExtractor: async () => ({
+        ok: true,
+        todos: [{
+          title: "Preserve chain link",
+          description: "Update the card without dropping chain data.",
+          confidence: 0.9,
+          sourceObservationId: userObservationId,
+          quote: "Please preserve the task chain link",
+          dedupeKey: "preserve-chain-link"
+        }]
+      })
+    });
+    const [todo] = listTodos(db);
+    db.close();
+
+    assert.equal(todo.description, "Update the card without dropping chain data.");
+    assert.equal(todo.chain?.title, "Preserve task chain link");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("llm organize stores user-owned blocked current nodes from task chains", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "ai-todo-task-chain-user-owner-"));
+  try {
+    const db = openDatabase(getAppPaths(dir));
+    ingestBrowserSession(db, {
+      id: "browser-blocked-chain",
+      messages: [
+        { role: "user", text: "Deploy the integration when credentials are available" },
+        { role: "assistant", text: "Blocked until the user provides the API key." }
+      ]
+    });
+    const userObservationId = String((db.prepare("SELECT id FROM observations WHERE role = 'user' LIMIT 1").get() as any).id);
+
+    await organizeTodos(db, {
+      llmExtractor: async () => ({
+        ok: true,
+        taskChains: [{
+          title: "Deploy the integration",
+          summary: "Deployment is blocked on missing credentials.",
+          status: "blocked",
+          currentNode: {
+            title: "Provide integration API key",
+            description: "The user needs to provide the API key before deployment can continue.",
+            owner: "user",
+            nextStep: "User should provide the API key.",
+            metadata: { completionState: "blocked" },
+            confidence: 0.9,
+            sourceObservationId: userObservationId,
+            quote: "Deploy the integration when credentials are available",
+            dedupeKey: "provide-integration-api-key"
+          }
+        }]
+      })
+    });
+    const [todo] = listTodos(db);
+    db.close();
+
+    assert.equal(todo.chain?.status, "blocked");
+    assert.equal(todo.chain?.currentNode.owner, "user");
+    assert.equal(todo.chain?.currentNode.nextStep, "User should provide the API key.");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("llm organize ignores fully completed task chains without current nodes", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "ai-todo-task-chain-completed-"));
+  try {
+    const db = openDatabase(getAppPaths(dir));
+    ingestBrowserSession(db, {
+      id: "browser-completed-chain",
+      messages: [
+        { role: "user", text: "Please finish the release checklist" },
+        { role: "assistant", text: "The release checklist is complete." }
+      ]
+    });
+    const assistantObservationId = String((db.prepare("SELECT id FROM observations WHERE role = 'assistant' LIMIT 1").get() as any).id);
+
+    const result = await organizeTodos(db, {
+      llmExtractor: async () => ({
+        ok: true,
+        taskChains: [{
+          title: "Finish the release checklist",
+          summary: "The release checklist is complete.",
+          status: "completed",
+          completedNodes: [{
+            title: "Finish release checklist",
+            summary: "Agent completed the checklist.",
+            owner: "agent",
+            status: "completed",
+            observationId: assistantObservationId
+          }]
+        }]
+      })
+    });
+    const todos = listTodos(db);
+    db.close();
+
+    assert.equal(result.created, 0);
+    assert.deepEqual(result.warnings, ["llm_no_valid_candidates"]);
+    assert.equal(todos.length, 0);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test("llm organize batches input without rules fallback for failed batches", async () => {
   const dir = mkdtempSync(join(tmpdir(), "ai-todo-organize-llm-batch-"));
   try {

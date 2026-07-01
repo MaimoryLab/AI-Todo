@@ -104,6 +104,66 @@ test("HTTP API scans sources, lists sessions, observations, runs, and updates to
   }
 });
 
+test("HTTP API returns optional task chain data for structured todos", async () => {
+  const fixture = createFixture();
+  const paths = getAppPaths(join(fixture.root, "home"));
+  const db = openDatabase(paths);
+  const server = await startServer(db, paths, {
+    llmExtractor: async (observations: Array<{ id: string; role: string; text: string }>) => {
+      const observation = observations.find((item) => item.role === "user");
+      assert.ok(observation);
+      return {
+        ok: true,
+        taskChains: [{
+          title: "Add HTTP API routes",
+          summary: "Route list exists; review remains.",
+          status: "in_progress",
+          completedNodes: [{
+            title: "Draft route list",
+            summary: "The API route list was drafted.",
+            owner: "agent",
+            status: "completed",
+            observationId: observation.id
+          }],
+          currentNode: {
+            title: "Review HTTP API errors",
+            description: "Review HTTP API error responses before closing the route work.",
+            owner: "agent",
+            nextStep: "Agent should review error responses.",
+            metadata: {
+              completionState: "in_progress",
+              completionSummary: "Route list exists; error response review remains."
+            },
+            confidence: 0.9,
+            sourceObservationId: observation.id,
+            quote: observation.text,
+            dedupeKey: "review-http-api-errors"
+          }
+        }]
+      };
+    }
+  });
+
+  try {
+    await postJson(server.url("/sources/scan"), { source: "codex", path: fixture.codex });
+    await postJson(server.url("/todos/organize"), {});
+
+    const response = await getJson(server.url("/todos"));
+    assert.equal(response.status, 200);
+    const [todo] = await response.json();
+    assert.equal(todo.title, "Review HTTP API errors");
+    assert.equal(todo.chain.title, "Add HTTP API routes");
+    assert.equal(todo.chain.completedNodeCount, 1);
+    assert.equal(todo.chain.completedNodes[0].title, "Draft route list");
+    assert.equal(todo.chain.currentNode.owner, "agent");
+    assert.equal(todo.chain.currentNode.nextStep, "Agent should review error responses.");
+  } finally {
+    await server.close();
+    db.close();
+    rmSync(fixture.root, { recursive: true, force: true });
+  }
+});
+
 test("HTTP API returns small explicit errors", async () => {
   const fixture = createFixture();
   const paths = getAppPaths(join(fixture.root, "home"));

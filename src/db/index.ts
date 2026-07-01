@@ -53,8 +53,35 @@ export function migrate(db: Database): void {
       title TEXT NOT NULL UNIQUE,
       description TEXT NOT NULL,
       status TEXT NOT NULL,
+      chain_node_id TEXT,
       metadata_json TEXT NOT NULL DEFAULT '{}',
       updated_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS task_chains (
+      id TEXT PRIMARY KEY,
+      session_id TEXT NOT NULL,
+      source TEXT NOT NULL,
+      project_path TEXT,
+      title TEXT NOT NULL,
+      summary TEXT NOT NULL,
+      status TEXT NOT NULL,
+      current_node_id TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS task_chain_nodes (
+      id TEXT PRIMARY KEY,
+      chain_id TEXT NOT NULL,
+      observation_id TEXT,
+      position INTEGER NOT NULL,
+      title TEXT NOT NULL,
+      summary TEXT NOT NULL,
+      owner TEXT NOT NULL,
+      status TEXT NOT NULL,
+      next_step TEXT,
+      created_at TEXT NOT NULL
     );
 
     CREATE TABLE IF NOT EXISTS evidence (
@@ -72,6 +99,7 @@ export function migrate(db: Database): void {
   `);
   migrateSessionProjectPath(db);
   migrateTodoMetadata(db);
+  migrateTodoChainNode(db);
   migrateCleanTranscript(db);
 }
 
@@ -85,6 +113,12 @@ function migrateTodoMetadata(db: Database): void {
   const columns = db.prepare("PRAGMA table_info(todos)").all() as Array<{ name: string }>;
   if (columns.some((column) => column.name === "metadata_json")) return;
   db.exec("ALTER TABLE todos ADD COLUMN metadata_json TEXT NOT NULL DEFAULT '{}'");
+}
+
+function migrateTodoChainNode(db: Database): void {
+  const columns = db.prepare("PRAGMA table_info(todos)").all() as Array<{ name: string }>;
+  if (columns.some((column) => column.name === "chain_node_id")) return;
+  db.exec("ALTER TABLE todos ADD COLUMN chain_node_id TEXT");
 }
 
 function migrateCleanTranscript(db: Database): void {

@@ -1,15 +1,17 @@
 import type { AppConfig, AppSecrets } from "../config.js";
-import type { LlmExtractResult, LlmTodoCandidate, ObservationForOrganize } from "../todos/service.js";
+import type { LlmExtractResult, LlmTaskChain, LlmTaskChainNode, LlmTodoCandidate, ObservationForOrganize } from "../todos/service.js";
 
 const TODO_EXTRACTION_PROMPT = `
 You extract actionable AI-Todo cards from cleaned user/assistant transcripts.
 
 Return only JSON:
-{"todos":[{"title":"...","description":"...","metadata":{"completionState":"...","completionSummary":"...","nextStep":"...","sourceObservationId":"..."},"confidence":0.9,"sourceObservationId":"...","quote":"...","dedupeKey":"..."}]}
+{"taskChains":[{"chainId":"...","title":"...","summary":"...","status":"in_progress","completedNodes":[{"title":"...","summary":"...","owner":"agent","status":"completed","observationId":"..."}],"currentNode":{"title":"...","description":"...","owner":"agent","nextStep":"...","metadata":{"completionState":"...","completionSummary":"...","nextStep":"...","sourceObservationId":"..."},"confidence":0.9,"sourceObservationId":"...","quote":"...","dedupeKey":"..."}}]}
 
 Rules:
-- Use taskChains as the primary unit. Anchor title to the original user intent and description to the latest assistant state, blocker, or next step.
-- title is a concise summary of the user's requested outcome, not the agent's status report.
+- Use taskChains as the primary unit. Each chain is single-session only and represents one user task flow.
+- Output one current unresolved node per unfinished chain, not every user intent.
+- Put resolved prior work in completedNodes. Do not create a currentNode for fully completed chains.
+- currentNode.title is a concise summary of the current unresolved node, not the earliest user intent or the agent's status report.
 - metadata.completionSummary is a concise summary of what the agent already completed, attempted, blocked on, or left pending.
 - metadata.nextStep is only for an obvious remaining user-relevant next action.
 - Create todos only for unresolved, actionable work: next actions, follow-ups, failed validation, blockers, or work still in progress.
@@ -52,13 +54,10 @@ export function createLlmRunner(
     if (blocks.length === 0) return { ok: true, todos: [] };
 
     try {
-      return {
-        ok: true,
-        todos: await requestTodos(config, secrets.llmApiKey, JSON.stringify({
-          blocks,
-          taskChains: buildTaskChains(visibleObservations)
-        }))
-      };
+      return await requestTodos(config, secrets.llmApiKey, JSON.stringify({
+        blocks,
+        taskChains: buildTaskChains(visibleObservations)
+      }));
     } catch (error) {
       const reason = (error as Error).message;
       if (reason === "timeout") return { ok: false, warning: "llm_timeout", reason, retryable: true };
@@ -135,7 +134,7 @@ function buildTaskChains(observations: ObservationForOrganize[]): Array<Record<s
   return chains;
 }
 
-async function requestTodos(config: AppConfig["llm"], apiKey: string, userContent: string): Promise<LlmTodoCandidate[]> {
+async function requestTodos(config: AppConfig["llm"], apiKey: string, userContent: string): Promise<LlmExtractResult> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), config.timeoutMs);
   try {
@@ -173,7 +172,7 @@ function chatCompletionsUrl(endpoint: string): string {
   return `${endpoint.replace(/\/+$/u, "")}/chat/completions`;
 }
 
-function parseChatCompletionResponse(text: string): LlmTodoCandidate[] {
+function parseChatCompletionResponse(text: string): LlmExtractResult {
   const body = parseJsonRecord(text);
   const direct = parseTodoEnvelope(body);
   if (direct) return direct;
@@ -203,31 +202,100 @@ function stripJsonFence(text: string): string {
   return match?.[1] ?? trimmed;
 }
 
-function parseTodoEnvelope(envelope: Record<string, unknown>): LlmTodoCandidate[] | null {
-  if (!Array.isArray(envelope.todos)) return null;
+function parseTodoEnvelope(envelope: Record<string, unknown>): LlmExtractResult | null {
+  if (!Array.isArray(envelope.todos) && !Array.isArray(envelope.taskChains)) return null;
   const todos: LlmTodoCandidate[] = [];
-  for (const item of envelope.todos) {
-    if (!item || typeof item !== "object" || Array.isArray(item)) return null;
-    const record = item as Record<string, unknown>;
-    if (
-      typeof record.title !== "string" ||
-      typeof record.description !== "string" ||
-      typeof record.confidence !== "number" ||
-      typeof record.sourceObservationId !== "string" ||
-      typeof record.quote !== "string" ||
-      typeof record.dedupeKey !== "string"
-    ) return null;
-    todos.push({
-      title: record.title,
-      description: record.description,
-      metadata: parseTodoMetadata(record.metadata),
-      confidence: record.confidence,
-      sourceObservationId: record.sourceObservationId,
-      quote: record.quote,
-      dedupeKey: record.dedupeKey
-    });
+  for (const item of Array.isArray(envelope.todos) ? envelope.todos : []) {
+    const todo = parseTodoCandidate(item);
+    if (!todo) return null;
+    todos.push(todo);
   }
-  return todos;
+  const taskChains: LlmTaskChain[] = [];
+  for (const item of Array.isArray(envelope.taskChains) ? envelope.taskChains : []) {
+    const chain = parseTaskChain(item);
+    if (!chain) return null;
+    taskChains.push(chain);
+  }
+  return { ok: true, todos, taskChains };
+}
+
+function parseTodoCandidate(value: unknown): LlmTodoCandidate | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const record = value as Record<string, unknown>;
+  if (
+    typeof record.title !== "string" ||
+    typeof record.description !== "string" ||
+    typeof record.confidence !== "number" ||
+    typeof record.sourceObservationId !== "string" ||
+    typeof record.quote !== "string" ||
+    typeof record.dedupeKey !== "string"
+  ) return null;
+  return {
+    title: record.title,
+    description: record.description,
+    metadata: parseTodoMetadata(record.metadata),
+    confidence: record.confidence,
+    sourceObservationId: record.sourceObservationId,
+    quote: record.quote,
+    dedupeKey: record.dedupeKey
+  };
+}
+
+function parseTaskChain(value: unknown): LlmTaskChain | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const record = value as Record<string, unknown>;
+  if (typeof record.title !== "string") return null;
+  const currentNode = record.currentNode === undefined ? undefined : parseCurrentNode(record.currentNode);
+  if (record.currentNode !== undefined && !currentNode) return null;
+  const completedNodes: LlmTaskChainNode[] = [];
+  for (const node of Array.isArray(record.completedNodes) ? record.completedNodes : []) {
+    const parsed = parseTaskChainNode(node);
+    if (!parsed) return null;
+    completedNodes.push(parsed);
+  }
+  return {
+    chainId: stringValue(record.chainId),
+    title: record.title,
+    summary: stringValue(record.summary),
+    status: stringValue(record.status),
+    completedNodes,
+    currentNode
+  };
+}
+
+function parseCurrentNode(value: unknown): LlmTaskChain["currentNode"] | undefined {
+  const todo = parseTodoCandidate(value);
+  if (!todo || !value || typeof value !== "object" || Array.isArray(value)) return undefined;
+  const record = value as Record<string, unknown>;
+  return {
+    ...todo,
+    owner: ownerValue(record.owner),
+    nextStep: stringValue(record.nextStep)
+  };
+}
+
+function parseTaskChainNode(value: unknown): LlmTaskChainNode | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const record = value as Record<string, unknown>;
+  if (typeof record.title !== "string") return null;
+  return {
+    title: record.title,
+    summary: stringValue(record.summary),
+    owner: ownerValue(record.owner),
+    status: nodeStatusValue(record.status),
+    nextStep: stringValue(record.nextStep),
+    observationId: stringValue(record.observationId),
+    createdAt: stringValue(record.createdAt)
+  };
+}
+
+function ownerValue(value: unknown): "agent" | "user" {
+  return value === "user" ? "user" : "agent";
+}
+
+function nodeStatusValue(value: unknown): "completed" | "superseded" | "blocked" | "current" {
+  if (value === "superseded" || value === "blocked" || value === "current") return value;
+  return "completed";
 }
 
 function parseTodoMetadata(value: unknown): LlmTodoCandidate["metadata"] {

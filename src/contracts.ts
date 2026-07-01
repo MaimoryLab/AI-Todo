@@ -67,8 +67,34 @@ export interface TodoCard {
   status: TodoStatus;
   metadata: TodoMetadata;
   origin?: TodoOrigin;
+  chain?: TaskChainView;
   evidenceIds: string[];
   updatedAt: string;
+}
+
+export interface TaskChainView {
+  id: string;
+  sessionId: string;
+  projectPath?: string;
+  projectTitle?: string;
+  source: SourceKind;
+  title: string;
+  summary: string;
+  status: string;
+  currentNode: ChainNodeSummary;
+  completedNodeCount: number;
+  completedNodes: ChainNodeSummary[];
+}
+
+export interface ChainNodeSummary {
+  id: string;
+  title: string;
+  summary: string;
+  owner: "agent" | "user";
+  status: "completed" | "superseded" | "blocked" | "current";
+  nextStep?: string;
+  observationId?: string;
+  createdAt?: string;
 }
 
 export interface TodoOrigin {

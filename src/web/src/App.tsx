@@ -5,7 +5,7 @@ import { SettingsWorkspace } from "./components/settings-workspace.js";
 import { SourcesWorkspace } from "./components/sources-workspace.js";
 import { TodoBoard } from "./components/todo-board.js";
 import { readLocale, textFor, writeLocale, type Locale } from "./i18n.js";
-import type { ObservationRecord, OrganizeResult, PublicAppConfig, SessionRecord, SourceSummary, StartupScanStatus, TodoCard } from "./types.js";
+import type { ObservationRecord, OrganizeResult, PublicAppConfig, SessionRecord, SourceSummary, StartupScanStatus, TodoCard, TodoEvidence } from "./types.js";
 import type { SourceFilter, View } from "./view-model.js";
 
 const SESSION_PAGE_SIZE = 50;
@@ -19,6 +19,7 @@ export function App() {
   const [sourceFilter, setSourceFilter] = useState<SourceFilter>("all");
   const [sessionOffset, setSessionOffset] = useState(0);
   const [observationsBySession, setObservationsBySession] = useState<Record<string, ObservationRecord[]>>({});
+  const [evidenceByTodo, setEvidenceByTodo] = useState<Record<string, TodoEvidence[]>>({});
   const [settings, setSettings] = useState<PublicAppConfig | null>(null);
   const [startup, setStartup] = useState<StartupScanStatus | null>(null);
   const [selectedSessionId, setSelectedSessionId] = useState<string>("");
@@ -143,6 +144,16 @@ export function App() {
     setObservationsBySession((current) => ({ ...current, [sessionId]: observations }));
   }
 
+  async function loadTodoEvidence(todoId: string) {
+    if (evidenceByTodo[todoId]) return;
+    try {
+      const evidence = await api<TodoEvidence[]>(`/todos/${encodeURIComponent(todoId)}/evidence`);
+      setEvidenceByTodo((current) => ({ ...current, [todoId]: evidence }));
+    } catch (error) {
+      setStatus((error as Error).message);
+    }
+  }
+
   const openTodos = todos.filter((todo) => todo.status === "todo");
   const closedTodos = todos.filter((todo) => todo.status !== "todo");
 
@@ -151,9 +162,6 @@ export function App() {
       text={text}
       view={view}
       status={status}
-      openCount={openTodos.length}
-      doneCount={todos.filter((todo) => todo.status === "done").length}
-      sourcesCount={sessions.length}
       busy={busy}
       onView={setView}
       onRefresh={() => void refresh()}
@@ -166,6 +174,8 @@ export function App() {
           onComplete={(id) => void updateTodo(id, "done")}
           onIgnore={(id) => void updateTodo(id, "ignored")}
           onSources={(todo) => void openTodoSources(todo)}
+          evidenceByTodo={evidenceByTodo}
+          onSelectTodo={(todo) => void loadTodoEvidence(todo.id)}
           onOrganize={() => void organize()}
           busy={busy}
           locale={locale}

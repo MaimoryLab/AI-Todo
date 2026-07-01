@@ -1,5 +1,5 @@
 import { basename, dirname } from "node:path";
-import type { OrganizeResult, SourceKind, TodoCard, TodoMetadata, TodoOrigin } from "../contracts.js";
+import type { ChainNodeSummary, OrganizeResult, SourceKind, TaskChainView, TodoCard, TodoMetadata, TodoOrigin } from "../contracts.js";
 import type { Database } from "../db/index.js";
 import { stableId } from "../extract/rules.js";
 
@@ -34,8 +34,31 @@ export interface LlmTodoCandidate {
   dedupeKey: string;
 }
 
+export interface LlmTaskChainNode {
+  title: string;
+  summary?: string;
+  description?: string;
+  owner?: "agent" | "user";
+  status?: "completed" | "superseded" | "blocked" | "current";
+  nextStep?: string;
+  observationId?: string;
+  createdAt?: string;
+}
+
+export interface LlmTaskChain {
+  chainId?: string;
+  title: string;
+  summary?: string;
+  status?: string;
+  completedNodes?: LlmTaskChainNode[];
+  currentNode?: LlmTodoCandidate & {
+    owner?: "agent" | "user";
+    nextStep?: string;
+  };
+}
+
 export type LlmExtractResult =
-  | { ok: true; todos: LlmTodoCandidate[] }
+  | { ok: true; todos?: LlmTodoCandidate[]; taskChains?: LlmTaskChain[] }
   | { ok: false; warning: LlmOrganizeWarning; reason?: string; retryable?: boolean };
 
 export interface OrganizeOptions {
@@ -303,8 +326,10 @@ function writeExtractedLlmTodos(
     return noLlmResult(warnings);
   }
   const byId = new Map(observations.map((observation) => [observation.id, observation]));
-  const candidates = dedupeLlmCandidates(
-    extracted.todos.filter((candidate) => validLlmCandidate(candidate, byId)),
+  const chainCandidates = taskChainCandidates(extracted.taskChains ?? [], byId);
+  const candidates = dedupeLlmCandidates<ChainCandidate>(
+    [...(extracted.todos ?? []).map((candidate): ChainCandidate => ({ candidate })), ...chainCandidates]
+      .filter((item) => validLlmCandidate(item.candidate, byId)),
     existingActiveTodos(db)
   );
   if (candidates.length === 0) {
@@ -314,23 +339,31 @@ function writeExtractedLlmTodos(
 
   let created = 0;
   let updated = 0;
-  for (const candidate of candidates) {
+  for (const item of candidates) {
+    const candidate = item.candidate;
     const observation = byId.get(candidate.sourceObservationId);
     if (!observation) continue;
     const todoId = stableId(candidate.dedupeKey);
     const now = new Date().toISOString();
     const metadata = normalizeTodoMetadata(candidate.metadata, candidate.sourceObservationId);
     const metadataJson = JSON.stringify(metadata);
+    const chainNodeId = item.chain ? writeTaskChain(db, item.chain, candidate, observation, now) : undefined;
     const existing = db.prepare("SELECT id FROM todos WHERE id = ?").get(todoId);
     if (existing) {
-      db.prepare(
-        "UPDATE todos SET title = ?, description = ?, metadata_json = ?, updated_at = ? WHERE id = ?"
-      ).run(candidate.title.trim(), candidate.description.trim(), metadataJson, now, todoId);
+      if (chainNodeId) {
+        db.prepare(
+          "UPDATE todos SET title = ?, description = ?, chain_node_id = ?, metadata_json = ?, updated_at = ? WHERE id = ?"
+        ).run(candidate.title.trim(), candidate.description.trim(), chainNodeId, metadataJson, now, todoId);
+      } else {
+        db.prepare(
+          "UPDATE todos SET title = ?, description = ?, metadata_json = ?, updated_at = ? WHERE id = ?"
+        ).run(candidate.title.trim(), candidate.description.trim(), metadataJson, now, todoId);
+      }
       updated++;
     } else {
       db.prepare(
-        "INSERT INTO todos (id, title, description, status, metadata_json, updated_at) VALUES (?, ?, ?, 'todo', ?, ?)"
-      ).run(todoId, candidate.title.trim(), candidate.description.trim(), metadataJson, now);
+        "INSERT INTO todos (id, title, description, status, chain_node_id, metadata_json, updated_at) VALUES (?, ?, ?, 'todo', ?, ?, ?)"
+      ).run(todoId, candidate.title.trim(), candidate.description.trim(), chainNodeId ?? null, metadataJson, now);
       created++;
     }
     db.prepare(
@@ -338,6 +371,84 @@ function writeExtractedLlmTodos(
     ).run(stableId(todoId, observation.id), todoId, observation.id, candidate.quote.trim());
   }
   return { created, updated, engine: "llm" };
+}
+
+interface ChainCandidate {
+  candidate: LlmTodoCandidate;
+  chain?: LlmTaskChain;
+}
+
+function taskChainCandidates(chains: LlmTaskChain[], observations: Map<string, ObservationForOrganize>): ChainCandidate[] {
+  return chains
+    .filter((chain) => chain.currentNode && chain.status !== "completed")
+    .map((chain) => ({ candidate: chain.currentNode!, chain }))
+    .filter((item) => observations.has(item.candidate.sourceObservationId));
+}
+
+function writeTaskChain(
+  db: Database,
+  chain: LlmTaskChain,
+  candidate: LlmTodoCandidate,
+  observation: ObservationForOrganize,
+  now: string
+): string {
+  const session = db.prepare("SELECT project_path as projectPath, path FROM sessions WHERE id = ?").get(observation.sessionId) as { projectPath?: string; path?: string } | undefined;
+  const chainId = stableId(chain.chainId || observation.sessionId, candidate.dedupeKey);
+  const completedNodes = chain.completedNodes ?? [];
+  const currentNodeId = stableId(chainId, "current", candidate.dedupeKey);
+  db.prepare(
+    `INSERT OR REPLACE INTO task_chains
+      (id, session_id, source, project_path, title, summary, status, current_node_id, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, COALESCE((SELECT created_at FROM task_chains WHERE id = ?), ?), ?)`
+  ).run(
+    chainId,
+    observation.sessionId,
+    observation.source,
+    session?.projectPath || session?.path || null,
+    cleanMetadataText(chain.title, 160) || candidate.title.trim(),
+    cleanMetadataText(chain.summary, 500),
+    cleanMetadataText(chain.status, 80) || candidate.metadata?.completionState || "in_progress",
+    currentNodeId,
+    chainId,
+    now,
+    now
+  );
+  db.prepare("DELETE FROM task_chain_nodes WHERE chain_id = ?").run(chainId);
+  completedNodes.forEach((node, index) => {
+    const nodeId = stableId(chainId, "completed", String(index), node.title);
+    db.prepare(
+      `INSERT INTO task_chain_nodes
+        (id, chain_id, observation_id, position, title, summary, owner, status, next_step, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ).run(
+      nodeId,
+      chainId,
+      cleanMetadataText(node.observationId) || null,
+      index,
+      cleanMetadataText(node.title, 160),
+      cleanMetadataText(node.summary, 500),
+      node.owner === "user" ? "user" : "agent",
+      node.status === "blocked" || node.status === "superseded" ? node.status : "completed",
+      cleanMetadataText(node.nextStep, 240) || null,
+      cleanMetadataText(node.createdAt) || now
+    );
+  });
+  db.prepare(
+    `INSERT INTO task_chain_nodes
+      (id, chain_id, observation_id, position, title, summary, owner, status, next_step, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, 'current', ?, ?)`
+  ).run(
+    currentNodeId,
+    chainId,
+    candidate.sourceObservationId,
+    completedNodes.length,
+    candidate.title.trim(),
+    candidate.description.trim(),
+    chain.currentNode?.owner === "user" ? "user" : "agent",
+    cleanMetadataText(chain.currentNode?.nextStep ?? candidate.metadata?.nextStep, 240) || null,
+    now
+  );
+  return currentNodeId;
 }
 
 async function writeBatchedLlmTodos(
@@ -491,16 +602,17 @@ function candidatePassesQualityGate(candidate: LlmTodoCandidate): boolean {
     !hasLongTechnicalIdentifier(title);
 }
 
-function dedupeLlmCandidates(candidates: LlmTodoCandidate[], existingTodos: ExistingTodoForDedupe[]): LlmTodoCandidate[] {
-  const accepted: LlmTodoCandidate[] = [];
+function dedupeLlmCandidates<T extends { candidate: LlmTodoCandidate }>(candidates: T[], existingTodos: ExistingTodoForDedupe[]): T[] {
+  const accepted: T[] = [];
   const keys = new Set(existingTodos.map((todo) => candidateIdentityKey(todo)));
-  for (const candidate of candidates) {
+  for (const item of candidates) {
+    const candidate = item.candidate;
     const todoId = stableId(candidate.dedupeKey);
     const key = candidateIdentityKey(candidate);
     if (existingTodos.some((todo) => todo.id !== todoId && nearDuplicateTodo(todo, candidate))) continue;
-    if (accepted.some((item) => nearDuplicateTodo(item, candidate))) continue;
+    if (accepted.some((acceptedItem) => nearDuplicateTodo(acceptedItem.candidate, candidate))) continue;
     keys.add(key);
-    accepted.push(candidate);
+    accepted.push(item);
   }
   return accepted;
 }
@@ -598,6 +710,7 @@ export function listTodos(db: Database): TodoCard[] {
       todos.title,
       todos.description,
       todos.status,
+      todos.chain_node_id as chainNodeId,
       todos.metadata_json as metadataJson,
       todos.updated_at as updatedAt,
       MIN(evidence.observation_id) as evidenceObservationId,
@@ -617,10 +730,82 @@ export function listTodos(db: Database): TodoCard[] {
       status: record.status as TodoCard["status"],
       metadata,
       origin: todoOrigin(db, sourceObservationId),
+      chain: todoChain(db, String(record.chainNodeId || "")),
       updatedAt: String(record.updatedAt),
       evidenceIds: JSON.parse(String(record.evidenceIds))
     };
   });
+}
+
+function todoChain(db: Database, chainNodeId: string): TaskChainView | undefined {
+  if (!chainNodeId) return undefined;
+  const row = db.prepare(
+    `SELECT
+      task_chains.id,
+      task_chains.session_id as sessionId,
+      task_chains.source,
+      task_chains.project_path as projectPath,
+      task_chains.title,
+      task_chains.summary,
+      task_chains.status,
+      current_node.id as currentNodeId,
+      current_node.observation_id as currentObservationId,
+      current_node.title as currentTitle,
+      current_node.summary as currentSummary,
+      current_node.owner as currentOwner,
+      current_node.status as currentStatus,
+      current_node.next_step as currentNextStep,
+      current_node.created_at as currentCreatedAt
+    FROM task_chain_nodes current_node
+    JOIN task_chains ON task_chains.id = current_node.chain_id
+    WHERE current_node.id = ?`
+  ).get(chainNodeId) as Record<string, unknown> | undefined;
+  if (!row) return undefined;
+  const projectPath = cleanMetadataText(row.projectPath);
+  const completedNodes = db.prepare(
+    `SELECT id, observation_id as observationId, title, summary, owner, status, next_step as nextStep, created_at as createdAt
+     FROM task_chain_nodes
+     WHERE chain_id = ? AND status != 'current'
+     ORDER BY position, created_at, id`
+  ).all(String(row.id)).map((node) => chainNodeSummary(node as Record<string, unknown>));
+  const currentNode = chainNodeSummary({
+    id: row.currentNodeId,
+    observationId: row.currentObservationId,
+    title: row.currentTitle,
+    summary: row.currentSummary,
+    owner: row.currentOwner,
+    status: row.currentStatus,
+    nextStep: row.currentNextStep,
+    createdAt: row.currentCreatedAt
+  });
+  return {
+    id: String(row.id),
+    sessionId: String(row.sessionId),
+    source: row.source as SourceKind,
+    projectPath: projectPath || undefined,
+    projectTitle: projectPath ? projectTitleFromPath(projectPath) : undefined,
+    title: String(row.title),
+    summary: String(row.summary),
+    status: String(row.status),
+    currentNode,
+    completedNodeCount: completedNodes.length,
+    completedNodes
+  };
+}
+
+function chainNodeSummary(row: Record<string, unknown>): ChainNodeSummary {
+  const owner = row.owner === "user" ? "user" : "agent";
+  const status = row.status === "completed" || row.status === "superseded" || row.status === "blocked" ? row.status : "current";
+  return {
+    id: String(row.id),
+    title: String(row.title),
+    summary: String(row.summary),
+    owner,
+    status,
+    nextStep: cleanMetadataText(row.nextStep, 240) || undefined,
+    observationId: cleanMetadataText(row.observationId) || undefined,
+    createdAt: cleanMetadataText(row.createdAt) || undefined
+  };
 }
 
 function todoOrigin(db: Database, observationId: string | undefined): TodoOrigin | undefined {

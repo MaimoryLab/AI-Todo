@@ -72,9 +72,69 @@ test("LLM runner sends OpenAI-compatible request and parses grounded todos", asy
     );
     const result = await runner([observation, assistantObservation]);
     assert.equal(result.ok, true);
-    assert.equal(result.ok && result.todos[0].title, "Add LLM settings UI");
-    assert.equal(result.ok && result.todos[0].metadata?.completionSummary, "The settings UI is added; save action wiring remains.");
-    assert.equal(result.ok && result.todos[0].metadata?.nextStep, "Wire the save action.");
+    assert.equal(result.ok && result.todos?.[0].title, "Add LLM settings UI");
+    assert.equal(result.ok && result.todos?.[0].metadata?.completionSummary, "The settings UI is added; save action wiring remains.");
+    assert.equal(result.ok && result.todos?.[0].metadata?.nextStep, "Wire the save action.");
+  } finally {
+    await server.close();
+  }
+});
+
+test("LLM runner sends task chain instructions and parses structured task chains", async () => {
+  const server = await startMockProvider(async (request) => {
+    const payload = await readJson(request);
+    const systemMessage = payload.messages.find((message: any) => message.role === "system");
+    assert.match(systemMessage.content, /taskChains/);
+    assert.match(systemMessage.content, /current unresolved node/);
+    assert.match(systemMessage.content, /completedNodes/);
+    return jsonResponse({
+      choices: [{
+        message: {
+          content: JSON.stringify({
+            taskChains: [{
+              chainId: "session-1:settings-ui",
+              title: "Add LLM settings UI",
+              summary: "The settings UI is added; save wiring remains.",
+              status: "in_progress",
+              completedNodes: [{
+                title: "Add settings controls",
+                summary: "Agent added the visible settings controls.",
+                owner: "agent",
+                status: "completed",
+                observationId: "obs-2"
+              }],
+              currentNode: {
+                title: "Wire settings save action",
+                description: "Finish wiring the save action after the LLM settings UI is added.",
+                owner: "agent",
+                nextStep: "Agent should wire the save action.",
+                metadata: {
+                  completionState: "in_progress",
+                  completionSummary: "The settings UI is added; save action wiring remains."
+                },
+                confidence: 0.91,
+                sourceObservationId: "obs-1",
+                quote: "Please add LLM settings UI",
+                dedupeKey: "wire-settings-save-action"
+              }
+            }]
+          })
+        }
+      }]
+    });
+  });
+
+  try {
+    const runner = createLlmRunner(
+      { ...defaultConfig().llm, model: "test/model", endpoint: server.url("/v1") },
+      { llmApiKey: "dummy-llm-key-value" }
+    );
+    const result = await runner([observation, assistantObservation]);
+    assert.equal(result.ok, true);
+    assert.equal(result.ok && result.taskChains?.[0].title, "Add LLM settings UI");
+    assert.equal(result.ok && result.taskChains?.[0].completedNodes?.[0].title, "Add settings controls");
+    assert.equal(result.ok && result.taskChains?.[0].currentNode?.owner, "agent");
+    assert.equal(result.ok && result.taskChains?.[0].currentNode?.nextStep, "Agent should wire the save action.");
   } finally {
     await server.close();
   }
@@ -84,7 +144,7 @@ test("LLM runner keeps title anchored to user intent and metadata to agent progr
   const server = await startMockProvider(async (request) => {
     const payload = await readJson(request);
     const systemMessage = payload.messages.find((message: any) => message.role === "system");
-    assert.match(systemMessage.content, /title is a concise summary of the user's requested outcome/);
+    assert.match(systemMessage.content, /currentNode\.title is a concise summary of the current unresolved node/);
     assert.match(systemMessage.content, /metadata\.completionSummary/);
     return jsonResponse({
       choices: [{
@@ -115,9 +175,9 @@ test("LLM runner keeps title anchored to user intent and metadata to agent progr
     );
     const result = await runner([observation, assistantObservation]);
     assert.equal(result.ok, true);
-    assert.equal(result.ok && result.todos[0].title, "Add LLM settings UI");
-    assert.notEqual(result.ok && result.todos[0].title, assistantObservation.text);
-    assert.equal(result.ok && result.todos[0].metadata?.completionSummary, "The settings UI is added; the save action is still remaining.");
+    assert.equal(result.ok && result.todos?.[0].title, "Add LLM settings UI");
+    assert.notEqual(result.ok && result.todos?.[0].title, assistantObservation.text);
+    assert.equal(result.ok && result.todos?.[0].metadata?.completionSummary, "The settings UI is added; the save action is still remaining.");
   } finally {
     await server.close();
   }
@@ -158,7 +218,7 @@ test("LLM runner merges low-information continuation turns into previous task ch
         createdAt: "2026-01-01T00:03:00.000Z"
       }
     ]);
-    assert.deepEqual(result, { ok: true, todos: [] });
+    assert.deepEqual(result, { ok: true, todos: [], taskChains: [] });
   } finally {
     await server.close();
   }
