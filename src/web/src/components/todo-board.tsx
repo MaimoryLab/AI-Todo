@@ -27,14 +27,20 @@ export function TodoBoard(props: {
   const [expandedOpenGroups, setExpandedOpenGroups] = useState<Record<string, boolean>>({});
   const [selectedTodoId, setSelectedTodoId] = useState("");
   const [sourceFilter, setSourceFilter] = useState<TodoSourceFilter>("all");
+  const [projectFilter, setProjectFilter] = useState("all");
   const [query, setQuery] = useState("");
-  const visibleOpenTodos = useMemo(() => props.openTodos.filter((todo) => matchesTodo(todo, sourceFilter, query)), [props.openTodos, sourceFilter, query]);
+  const projectOptions = useMemo(() => projectTodoGroups(props.openTodos, props.locale), [props.openTodos, props.locale]);
+  const visibleOpenTodos = useMemo(() => props.openTodos.filter((todo) => matchesTodo(todo, sourceFilter, projectFilter, query)), [props.openTodos, sourceFilter, projectFilter, query]);
   const visibleOpenGroups = useMemo(
     () => projectTodoGroups(visibleOpenTodos, props.locale).map((group) => ({ ...group, chains: projectTaskChains(group.todos) })),
     [visibleOpenTodos, props.locale]
   );
   const orderedVisibleOpenTodos = useMemo(() => visibleOpenGroups.flatMap((group) => group.chains.map((chain) => chain.todo)), [visibleOpenGroups]);
   const selectedTodo = orderedVisibleOpenTodos.find((todo) => todo.id === selectedTodoId) ?? orderedVisibleOpenTodos[0];
+
+  useEffect(() => {
+    if (projectFilter !== "all" && !projectOptions.some((project) => project.key === projectFilter)) setProjectFilter("all");
+  }, [projectFilter, projectOptions]);
 
   useEffect(() => {
     if (!selectedTodo) return;
@@ -84,22 +90,37 @@ export function TodoBoard(props: {
         <div className="min-w-0 space-y-3">
           <Card className="p-3">
             <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-              <div className="flex min-w-0 gap-2 overflow-x-auto app-scroll" aria-label={text.sourceFilter}>
-                {(["all", "codex", "claude-code", "browser"] as const).map((filter) => (
-                  <button
-                    key={filter}
-                    type="button"
-                    className={cn(
-                      "inline-flex min-h-10 shrink-0 items-center gap-2 rounded-md border px-3 text-sm font-medium transition active:translate-y-px",
-                      sourceFilter === filter ? "border-[var(--app-accent)] bg-white text-[var(--app-accent)]" : "border-[var(--app-border)] bg-white text-[var(--app-muted)] hover:text-[var(--app-ink)]"
-                    )}
-                    aria-pressed={sourceFilter === filter}
-                    onClick={() => setSourceFilter(filter)}
-                  >
-                    {filter !== "all" && <SourceIcon source={filter} />}
-                    {filter === "all" ? text.all : sourceLabel(filter, props.locale)}
-                  </button>
-                ))}
+              <div className="flex min-w-0 flex-col gap-2 lg:flex-row lg:items-center">
+                <div className="flex min-w-0 gap-2 overflow-x-auto app-scroll" aria-label={text.sourceFilter}>
+                  {(["all", "codex", "claude-code", "browser"] as const).map((filter) => (
+                    <button
+                      key={filter}
+                      type="button"
+                      className={cn(
+                        "inline-flex min-h-10 shrink-0 items-center gap-2 rounded-md border px-3 text-sm font-medium transition active:translate-y-px",
+                        sourceFilter === filter ? "border-[var(--app-accent)] bg-white text-[var(--app-accent)]" : "border-[var(--app-border)] bg-white text-[var(--app-muted)] hover:text-[var(--app-ink)]"
+                      )}
+                      aria-pressed={sourceFilter === filter}
+                      onClick={() => setSourceFilter(filter)}
+                    >
+                      {filter !== "all" && <SourceIcon source={filter} />}
+                      {filter === "all" ? text.all : sourceLabel(filter, props.locale)}
+                    </button>
+                  ))}
+                </div>
+                <select
+                  aria-label={text.projectFilter}
+                  value={projectFilter}
+                  onChange={(event) => setProjectFilter(event.target.value)}
+                  className="h-10 min-w-0 rounded-md border border-[var(--app-border-strong)] bg-[var(--app-surface)] px-3 text-sm text-[var(--app-ink)] outline-none transition focus:border-[var(--app-accent)] lg:w-52"
+                >
+                  <option value="all">{text.allProjects}</option>
+                  {projectOptions.map((project) => (
+                    <option key={project.key} value={project.key}>
+                      {project.label}
+                    </option>
+                  ))}
+                </select>
               </div>
               <label className="relative block min-w-0 lg:w-[32rem]">
                 <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--app-subtle)]" aria-hidden="true" />
@@ -188,13 +209,17 @@ function projectTodoGroups(todos: TodoCard[], locale: Locale): Array<{ key: stri
   const text = textFor(locale);
   const groups = new Map<string, { key: string; label: string; todos: TodoCard[] }>();
   for (const todo of todos) {
-    const key = `project:${todo.origin?.projectPath || todo.origin?.projectTitle || "unknown"}`;
+    const key = todoProjectKey(todo);
     const label = todo.origin?.projectTitle || text.unknownProject;
     const group = groups.get(key) ?? { key, label, todos: [] };
     group.todos.push(todo);
     groups.set(key, group);
   }
   return [...groups.values()].sort((first, second) => latestTodoTime(second.todos) - latestTodoTime(first.todos));
+}
+
+function todoProjectKey(todo: TodoCard): string {
+  return `project:${todo.origin?.projectPath || todo.origin?.projectTitle || "unknown"}`;
 }
 
 function projectSourceSummary(todos: TodoCard[], locale: Locale): string {
@@ -428,8 +453,9 @@ function MetricCard({ label, value, tone }: { label: string; value: number; tone
   );
 }
 
-function matchesTodo(todo: TodoCard, sourceFilter: TodoSourceFilter, query: string): boolean {
+function matchesTodo(todo: TodoCard, sourceFilter: TodoSourceFilter, projectFilter: string, query: string): boolean {
   if (sourceFilter !== "all" && todo.origin?.source !== sourceFilter) return false;
+  if (projectFilter !== "all" && todoProjectKey(todo) !== projectFilter) return false;
   const normalized = query.trim().toLowerCase();
   if (!normalized) return true;
   return [todo.title, todo.description, todo.metadata.completionSummary, todo.chain?.title, todo.chain?.summary, todo.origin?.projectTitle]
