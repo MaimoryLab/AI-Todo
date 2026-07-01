@@ -9,6 +9,13 @@ import type { ObservationRecord, OrganizeResult, PublicAppConfig, SessionRecord,
 import type { SourceFilter, View } from "./view-model.js";
 
 const SESSION_PAGE_SIZE = 50;
+const ORGANIZE_HISTORY_LIMIT = 5;
+
+interface OrganizeHistoryItem {
+  id: string;
+  createdAt: string;
+  result: OrganizeResult;
+}
 
 export function App() {
   const [view, setView] = useState<View>("todos");
@@ -26,6 +33,7 @@ export function App() {
   const [selectedSessionId, setSelectedSessionId] = useState<string>("");
   const [highlightedObservationId, setHighlightedObservationId] = useState<string>("");
   const [status, setStatus] = useState<string>(() => textFor(readLocale()).ready);
+  const [organizeHistory, setOrganizeHistory] = useState<OrganizeHistoryItem[]>([]);
   const [busy, setBusy] = useState(false);
   const [startupNoticeShown, setStartupNoticeShown] = useState(false);
   const text = textFor(locale);
@@ -99,12 +107,20 @@ export function App() {
     try {
       const result = await api<OrganizeResult>("/todos/organize", { method: "POST", body: {} });
       await refresh();
-      setStatus(organizeStatus(result, locale));
-    } catch (error) {
-      setStatus((error as Error).message);
+      setStatus(organizeStatusSummary(result, locale));
+      rememberOrganizeResult(result);
+    } catch {
+      const result: OrganizeResult = { created: 0, updated: 0, warnings: ["organize_failed"], durationMs: 0 };
+      setStatus(localizedUserFacingError("organize_failed", locale));
+      rememberOrganizeResult(result);
     } finally {
       setBusy(false);
     }
+  }
+
+  function rememberOrganizeResult(result: OrganizeResult) {
+    const item = { id: `${Date.now()}-${Math.random().toString(36).slice(2)}`, createdAt: new Date().toISOString(), result };
+    setOrganizeHistory((current) => [item, ...current].slice(0, ORGANIZE_HISTORY_LIMIT));
   }
 
   async function updateTodo(id: string, status: "done" | "ignored") {
@@ -173,6 +189,7 @@ export function App() {
       onRefresh={() => void refresh()}
       onOrganize={() => void organize()}
     >
+      <OrganizeHistoryPanel items={organizeHistory} locale={locale} />
       {view === "todos" && (
         <TodoBoard
           openTodos={openTodos}
@@ -225,13 +242,59 @@ export function App() {
   );
 }
 
-function organizeStatus(result: OrganizeResult, locale: Locale): string {
+function OrganizeHistoryPanel({ items, locale }: { items: OrganizeHistoryItem[]; locale: Locale }) {
+  if (items.length === 0) return null;
+  const text = textFor(locale);
+  return (
+    <details className="mb-4 rounded-lg border border-[var(--app-border)] bg-[var(--app-surface)] p-4 text-sm">
+      <summary className="cursor-pointer font-medium text-[var(--app-ink)]">{text.organizeHistory}</summary>
+      <div className="mt-3 grid gap-3">
+        {items.map((item) => {
+          const result = item.result;
+          return (
+            <section key={item.id} className="rounded-md border border-[var(--app-border)] bg-[var(--app-surface-muted)] p-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="font-medium text-[var(--app-ink)]">{organizeStatusSummary(result, locale)}</p>
+                <time className="text-xs text-[var(--app-subtle)]" dateTime={item.createdAt}>{new Date(item.createdAt).toLocaleString(locale)}</time>
+              </div>
+              <p className="mt-1 text-xs text-[var(--app-subtle)]">{text.organizeDetails(result.created, result.updated, Math.round(result.durationMs))}</p>
+              <OrganizeDetailsSummary result={result} locale={locale} />
+              {result.warnings.length > 0 && (
+                <ul className="mt-2 list-disc space-y-1 pl-5 text-[var(--app-muted)]">
+                  {result.warnings.map((warning) => <li key={warning}>{localizedUserFacingError(warning, locale)}</li>)}
+                </ul>
+              )}
+            </section>
+          );
+        })}
+      </div>
+    </details>
+  );
+}
+
+function OrganizeDetailsSummary({ result, locale }: { result: OrganizeResult; locale: Locale }) {
+  const text = textFor(locale);
+  const details: string[] = [];
+  if (result.scanned !== undefined) details.push(text.organizeScanned(result.scanned));
+  if (result.details?.scope) {
+    details.push(text.organizeScopeDetails(
+      result.details.scope.sessionsScanned,
+      result.details.scope.sessionsDropped,
+      result.details.scope.observationsDropped
+    ));
+  }
+  if (result.details?.truncations?.length) details.push(text.organizeTruncationDetails(result.details.truncations.length));
+  if (result.details?.batchFailures?.length) {
+    details.push(text.organizeBatchFailureDetails(result.details.batchFailures.length));
+  }
+  return details.length > 0 ? <p className="mt-2 text-xs text-[var(--app-muted)]">{details.join(" ")}</p> : null;
+}
+
+function organizeStatusSummary(result: OrganizeResult, locale: Locale): string {
+  if (result.warnings.includes("organize_failed")) return localizedUserFacingError("organize_failed", locale);
   const text = textFor(locale);
   const summary = text.organized(result.created, result.updated);
-  if (result.warnings.length === 0) return summary;
-  const warnings = result.warnings.map((warning) => localizedUserFacingError(warning, locale)).join(" ");
-  if (result.created + result.updated > 0) return `${summary} ${text.reviewSessions}${warnings}`;
-  return `${summary} ${warnings}`;
+  return result.warnings.length > 0 ? `${summary} ${text.organizeNeedsReview}` : summary;
 }
 
 function startupStatusMessage(startup: StartupScanStatus | null, locale: Locale): string {

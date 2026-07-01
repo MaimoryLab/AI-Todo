@@ -117,9 +117,28 @@ export interface PublicAppConfig {
 }
 
 export interface OrganizeResult {
+  scanned?: number;
+  sources?: Array<{ source: SourceKind; scanned: number }>;
   created: number;
   updated: number;
   warnings: string[];
+  details?: {
+    scope?: {
+      sessionsScanned: number;
+      sessionsDropped: number;
+      observationsDropped: number;
+    };
+    truncations?: Array<{
+      source: SourceKind;
+      originalChars: number;
+      keptChars: number;
+    }>;
+    batchFailures?: Array<{
+      source: SourceKind;
+      warning: string;
+      retryable: boolean;
+    }>;
+  };
   durationMs: number;
 }
 

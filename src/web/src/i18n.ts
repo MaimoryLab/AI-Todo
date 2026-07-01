@@ -125,12 +125,18 @@ export const appText = {
     startupScan: "启动扫描",
     needsSetup: "需要配置",
     organizing: "正在整理最近会话...",
+    organizeNeedsReview: "需要审查。",
+    organizeHistory: "整理历史",
+    organizeDetails: (created: number, updated: number, durationMs: number) => `新增 ${created}，更新 ${updated}，耗时 ${durationMs} ms。`,
+    organizeScanned: (count: number) => `扫描 ${count} 条观察。`,
+    organizeScopeDetails: (scanned: number, sessionsDropped: number, observationsDropped: number) => `范围：纳入 ${scanned} 个会话，跳过 ${sessionsDropped} 个会话、${observationsDropped} 条观察。`,
+    organizeTruncationDetails: (count: number) => `截短 ${count} 条输入。`,
+    organizeBatchFailureDetails: (count: number) => `${count} 个批次未完成。`,
     noLinkedSource: "这张卡片还没有关联来源。",
     linkedSourceMissing: "关联的来源会话已不可用。",
     sourceScanFailed: "来源扫描失败：",
     sourceScanFinished: "来源扫描完成。",
-    organized: (created: number, updated: number) => `已整理 ${created} 张新卡片，更新 ${updated} 张卡片。`,
-    reviewSessions: "部分会话需要审查："
+    organized: (created: number, updated: number) => `已整理 ${created} 张新卡片，更新 ${updated} 张卡片。`
   },
   "en-US": {
     appName: "AI Todo",
@@ -241,12 +247,18 @@ export const appText = {
     startupScan: "Startup scan",
     needsSetup: "Needs setup",
     organizing: "Organizing recent sessions...",
+    organizeNeedsReview: "Needs review.",
+    organizeHistory: "Organize history",
+    organizeDetails: (created: number, updated: number, durationMs: number) => `${created} created, ${updated} updated, ${durationMs} ms.`,
+    organizeScanned: (count: number) => `${count} observations scanned.`,
+    organizeScopeDetails: (scanned: number, sessionsDropped: number, observationsDropped: number) => `Scope: ${scanned} sessions included, ${sessionsDropped} sessions and ${observationsDropped} observations skipped.`,
+    organizeTruncationDetails: (count: number) => `${count} inputs truncated.`,
+    organizeBatchFailureDetails: (count: number) => `${count} batches did not finish.`,
     noLinkedSource: "No source is linked to this card yet.",
     linkedSourceMissing: "The linked source session is no longer available.",
     sourceScanFailed: "Source scan failed: ",
     sourceScanFinished: "Source scan finished.",
-    organized: (created: number, updated: number) => `Organized ${created} new and ${updated} updated cards.`,
-    reviewSessions: "Some sessions need review: "
+    organized: (created: number, updated: number) => `Organized ${created} new and ${updated} updated cards.`
   }
 } as const;
 
