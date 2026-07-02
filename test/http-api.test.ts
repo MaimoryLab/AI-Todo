@@ -827,8 +827,8 @@ test("GET /todos omits meaningless date and local path fragments from origin pro
   const paths = getAppPaths(join(fixture.root, "home"));
   const db = openDatabase(paths);
   const server = await startServer(db, paths);
-  const codexDatePath = "/Users/ppio/.codex/sessions/2026/06/15/rollout-2026-06-15T00-00-00.jsonl";
-  const claudeLocalPath = "/Users/ppio/.claude/projects/-Users-ppio-Documents-------/6671.jsonl";
+  const codexDatePath = "/Users/example/.codex/sessions/2026/06/15/rollout-2026-06-15T00-00-00.jsonl";
+  const claudeLocalPath = "/Users/example/.claude/projects/-Users-example-Documents-------/6671.jsonl";
   db.prepare("INSERT INTO sessions (id, source, path, updated_at) VALUES (?, ?, ?, ?)").run(
     "codex-date-session",
     "codex",

@@ -9,7 +9,9 @@
   "main": "dist/src/index.js",
   "types": "dist/src/index.d.ts",
   "files": [
-    "dist",
+    "dist/cli.js",
+    "dist/src",
+    "dist/public",
     "LICENSE",
     "README.md"
   ],

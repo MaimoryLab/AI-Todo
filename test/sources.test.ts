@@ -159,7 +159,7 @@ test("codex scanner stores readable file and image references", () => {
   try {
     mkdirSync(join(dir, "codex"));
     const imagePath = "/var/folders/demo/codex-clipboard-a1ec.png";
-    const filePath = "/Users/ppio/Documents/brief.md";
+    const filePath = "/home/example/Documents/brief.md";
     writeFileSync(join(dir, "codex", "session.jsonl"), [
       JSON.stringify({
         type: "event_msg",
@@ -188,11 +188,11 @@ test("codex scanner stores readable file and image references", () => {
     db.close();
 
     assert.match(row.text, /Please inspect the attached screenshot/);
-    assert.match(row.text, /Files mentioned: brief\.md \(\/Users\/ppio\/Documents\/brief\.md\)/);
+    assert.match(row.text, /Files mentioned: brief\.md \(\/home\/example\/Documents\/brief\.md\)/);
     assert.match(row.text, /Image: Image #1 \(\/var\/folders\/demo\/codex-clipboard-a1ec\.png\)/);
     assert.doesNotMatch(row.text, /Files mentioned: codex-clipboard-a1ec\.png/);
     assert.equal((row.text.match(/\/var\/folders\/demo\/codex-clipboard-a1ec\.png/g) ?? []).length, 1);
-    assert.equal((row.text.match(/\/Users\/ppio\/Documents\/brief\.md/g) ?? []).length, 1);
+    assert.equal((row.text.match(/\/home\/example\/Documents\/brief\.md/g) ?? []).length, 1);
     assert.doesNotMatch(row.text, /<image|<\/image>/);
     assert.doesNotMatch(row.text, /# Files mentioned by the user/);
   } finally {

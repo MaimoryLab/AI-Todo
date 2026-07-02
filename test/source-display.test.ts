@@ -9,8 +9,8 @@ test("sourceDisplayText keeps attachment lines available for rendering", () => {
     "Image: Image #1 (/var/folders/demo/codex-clipboard.png)"
   );
   assert.equal(
-    sourceDisplayText("Files mentioned: brief.md (/Users/ppio/Documents/brief.md)"),
-    "Files mentioned: brief.md (/Users/ppio/Documents/brief.md)"
+    sourceDisplayText("Files mentioned: brief.md (/home/example/Documents/brief.md)"),
+    "Files mentioned: brief.md (/home/example/Documents/brief.md)"
   );
   assert.equal(
     sourceDisplayText("File: notes.md (~/Downloads/notes.md)"),
@@ -45,13 +45,13 @@ test("sourceDisplayText summarizes turn-aborted system events", () => {
 test("attachmentViewsFromText parses attachment lines without rewriting ordinary links", () => {
   const text = [
     "Image: Screenshot (/tmp/screenshot.png)",
-    "Files mentioned: brief.md (/Users/ppio/Documents/brief.md)",
+    "Files mentioned: brief.md (/home/example/Documents/brief.md)",
     "Link: https://example.com/image.png"
   ].join("\n");
 
   assert.deepEqual(attachmentViewsFromText(text), [
     { index: 0, kind: "image", label: "Screenshot", path: "/tmp/screenshot.png" },
-    { index: 1, kind: "file", label: "brief.md", path: "/Users/ppio/Documents/brief.md" }
+    { index: 1, kind: "file", label: "brief.md", path: "/home/example/Documents/brief.md" }
   ]);
   assert.equal(attachmentMarkdownText(text), [
     "![Screenshot](/attachments?observationId=obs-1&index=0)",

@@ -1341,6 +1341,61 @@ test("organize retries sessions whose previous LLM batch failed", async () => {
   }
 });
 
+test("organize retries sessions whose previous candidates were rejected", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "ai-todo-organize-checkpoint-invalid-retry-"));
+  try {
+    const db = openDatabase(getAppPaths(dir));
+    ingestBrowserSession(db, {
+      id: "browser-invalid-retry",
+      messages: [{ role: "user", text: "Please add rejected candidate retry" }]
+    });
+    const observationId = String((db.prepare("SELECT id FROM observations WHERE role = 'user' LIMIT 1").get() as any).id);
+    let calls = 0;
+
+    const first = await organizeTodos(db, {
+      llmExtractor: async () => {
+        calls++;
+        return {
+          ok: true,
+          todos: [{
+            title: "Add rejected candidate retry",
+            description: "This invalid candidate should not checkpoint the session.",
+            confidence: 0.9,
+            sourceObservationId: observationId,
+            quote: "not present in the source observation",
+            dedupeKey: "rejected-candidate-retry"
+          }]
+        };
+      }
+    });
+    const second = await organizeTodos(db, {
+      llmExtractor: async () => {
+        calls++;
+        return {
+          ok: true,
+          todos: [{
+            title: "Add rejected candidate retry",
+            description: "Create the card after the rejected candidate retries.",
+            confidence: 0.9,
+            sourceObservationId: observationId,
+            quote: "Please add rejected candidate retry",
+            dedupeKey: "rejected-candidate-retry"
+          }]
+        };
+      }
+    });
+    const todos = listTodos(db);
+    db.close();
+
+    assert.equal(calls, 2);
+    assert.deepEqual(first.warnings, ["llm_no_valid_candidates"]);
+    assert.equal(second.created, 1);
+    assert.equal(todos.length, 1);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test("llm unavailable returns warnings without creating rules cards", async () => {
   const dir = mkdtempSync(join(tmpdir(), "ai-todo-organize-llm-unavailable-"));
   try {

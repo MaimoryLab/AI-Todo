@@ -111,7 +111,7 @@ export interface ObservationForOrganize {
   createdAt: string;
 }
 
-type WriteResult = { created: number; updated: number; engine: "llm" };
+type WriteResult = { created: number; updated: number; engine: "llm"; checkpoint: boolean };
 type OrganizeDetails = NonNullable<OrganizeResult["details"]>;
 type ResolvedCandidate<T extends ChainCandidate> = T & { todoId: string };
 
@@ -459,7 +459,9 @@ function writeExtractedLlmTodos(
     return noLlmResult(warnings);
   }
   const byId = new Map(observations.map((observation) => [observation.id, observation]));
-  const chainCandidates = taskChainCandidates(extracted.taskChains ?? [], byId);
+  const taskChains = extracted.taskChains ?? [];
+  const chainCandidates = taskChainCandidates(taskChains, byId);
+  const rawCandidateCount = (extracted.todos ?? []).length + taskChains.filter((chain) => chain.currentNode && chain.status !== "completed").length;
   const candidates = dedupeLlmCandidates<ChainCandidate>(
     [...(extracted.todos ?? []).map((candidate): ChainCandidate => ({ candidate })), ...chainCandidates]
       .filter((item) => validLlmCandidate(item, byId)),
@@ -467,7 +469,7 @@ function writeExtractedLlmTodos(
   );
   if (candidates.length === 0) {
     warnings.add("llm_no_valid_candidates");
-    return noLlmResult(warnings);
+    return noLlmResult(warnings, undefined, rawCandidateCount === 0);
   }
 
   let created = 0;
@@ -503,7 +505,7 @@ function writeExtractedLlmTodos(
       "INSERT OR REPLACE INTO evidence (id, todo_id, observation_id, text) VALUES (?, ?, ?, ?)"
     ).run(stableId(todoId, observation.id), todoId, observation.id, candidate.quote.trim());
   }
-  return { created, updated, engine: "llm" };
+  return { created, updated, engine: "llm", checkpoint: true };
 }
 
 interface ChainCandidate {
@@ -609,14 +611,14 @@ async function writeBatchedLlmTodos(
       const warningsBefore = new Set(warnings);
       const result = writeExtractedLlmTodos(db, item.batch, item.result, warnings, details);
       if (hasBatchFailureWarning(warnings, warningsBefore)) warnings.add("llm_batch_failed");
-      if (item.result.ok) writeOrganizeCheckpoints(db, item.batch);
+      if (result.checkpoint) writeOrganizeCheckpoints(db, item.batch);
       totalCreated += result.created;
       totalUpdated += result.updated;
     }
   }
 
   if (batches.length === 0) warnings.add("llm_no_valid_candidates");
-  return { created: totalCreated, updated: totalUpdated, engine: "llm" };
+  return { created: totalCreated, updated: totalUpdated, engine: "llm", checkpoint: false };
 }
 
 function existingCardsForBatch(db: Database, observations: ObservationForOrganize[]): ExistingCardForLlm[] {
@@ -681,9 +683,9 @@ function hasBatchFailureWarning(warnings: Set<string>, before: Set<string>): boo
   return false;
 }
 
-function noLlmResult(warnings: Set<string>, warning?: LlmOrganizeWarning): WriteResult {
+function noLlmResult(warnings: Set<string>, warning?: LlmOrganizeWarning, checkpoint = false): WriteResult {
   if (warning) warnings.add(warning);
-  return { created: 0, updated: 0, engine: "llm" };
+  return { created: 0, updated: 0, engine: "llm", checkpoint };
 }
 
 function chunkObservationsBySession(
