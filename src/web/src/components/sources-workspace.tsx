@@ -1,5 +1,5 @@
 import { ChevronDown, FolderOpen, MessageSquareText, Search } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { isAgentContextText, isTurnAbortedText } from "../../../agent-context.js";
 import { sourceLabel, textFor, type Locale } from "../i18n.js";
 import { cn } from "../lib/utils.js";
@@ -9,7 +9,6 @@ import { ObservationText } from "./observation-text.js";
 import { Badge, Button, Card, Input, SectionTitle, SegmentedFilter } from "./ui.js";
 import { sessionProjectLabel, sourceCount, SourceIcon } from "./source-labels.js";
 
-const SESSION_GROUP_PREVIEW_LIMIT = 6;
 const OBSERVATION_PREVIEW_LIMIT = 12;
 
 export function SourcesWorkspace({ sessions, sourceSummaries, sourceFilter, sessionOffset, observationsBySession, selectedSessionId, highlightedObservationId, locale, onFilter, onLoadMore, onSelect }: {
@@ -32,6 +31,7 @@ export function SourcesWorkspace({ sessions, sourceSummaries, sourceFilter, sess
   const [projectQuery, setProjectQuery] = useState("");
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
   const [showAllMessages, setShowAllMessages] = useState(false);
+  const autoExpandedGroupKeyRef = useRef("");
   const selected = sessions.find((session) => session.id === selectedSessionId) ?? (selectedSessionId ? undefined : sessions[0]);
   const observations = selected ? observationsBySession[selected.id] ?? [] : [];
   const visibleObservations = showAllMessages ? observations : observations.slice(0, OBSERVATION_PREVIEW_LIMIT);
@@ -56,9 +56,13 @@ export function SourcesWorkspace({ sessions, sourceSummaries, sourceFilter, sess
 
   useEffect(() => {
     if (!selected) return;
+    const autoExpandKey = `${selected.id}:${highlightedObservationId}`;
+    if (autoExpandedGroupKeyRef.current === autoExpandKey) return;
     const group = groups.find((item) => item.sessions.some((session) => session.id === selected.id));
-    if (group && !expandedGroups[group.key]) setExpandedGroups((current) => ({ ...current, [group.key]: true }));
-  }, [selected?.id, groups, expandedGroups]);
+    if (!group) return;
+    autoExpandedGroupKeyRef.current = autoExpandKey;
+    setExpandedGroups((current) => current[group.key] ? current : { ...current, [group.key]: true });
+  }, [selected?.id, highlightedObservationId, groups]);
 
   useEffect(() => {
     if (projectFilter !== "all" && !projectOptions.some((project) => project.key === projectFilter)) setProjectFilter("all");
@@ -145,8 +149,7 @@ export function SourcesWorkspace({ sessions, sourceSummaries, sourceFilter, sess
           {sessions.length > 0 && groups.length === 0 && <div className="rounded-md bg-[var(--app-surface-muted)] p-4 text-sm text-[var(--app-muted)]">{text.noSessionsMatch}</div>}
           {groups.map((group) => {
             const expanded = expandedGroups[group.key] ?? false;
-            const visibleSessions = expanded ? group.sessions : group.sessions.slice(0, SESSION_GROUP_PREVIEW_LIMIT);
-            const hiddenCount = group.sessions.length - visibleSessions.length;
+            const visibleSessions = expanded ? group.sessions : [];
             return (
               <section key={group.key} className="overflow-hidden rounded-lg border border-[var(--app-border)] bg-[var(--app-surface)]">
                 <button
@@ -190,15 +193,6 @@ export function SourcesWorkspace({ sessions, sourceSummaries, sourceFilter, sess
                       <div className="mt-2 text-xs text-[var(--app-subtle)]">{text.messageCount(session.observationCount)}</div>
                     </button>
                   ))}
-                  {hiddenCount > 0 && (
-                    <button
-                      type="button"
-                      className="w-full px-3 py-2 text-left text-sm font-medium text-[var(--app-accent)] transition hover:bg-[var(--app-surface-selected)]"
-                      onClick={() => setExpandedGroups((current) => ({ ...current, [group.key]: true }))}
-                    >
-                      {text.moreSessions(hiddenCount)}
-                    </button>
-                  )}
                 </div>
               </section>
             );

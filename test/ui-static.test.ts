@@ -55,7 +55,6 @@ test("React UI keeps task-first Sources wording and accessible icon controls", (
   assert.match(i18n, /sourceFilter: "来源筛选"/);
   assert.match(sourcesWorkspace, /text\.searchSources/);
   assert.match(sourcesWorkspace, /sessionGroups\(filteredSessions, locale\)/);
-  assert.match(sourcesWorkspace, /SESSION_GROUP_PREVIEW_LIMIT/);
   assert.match(sourcesWorkspace, /OBSERVATION_PREVIEW_LIMIT/);
   assert.match(i18n, /showAllMessages: "显示全部消息"/);
   assert.match(i18n, /loadMore: "Load more"/);
@@ -139,6 +138,9 @@ test("React UI keeps task-first Sources wording and accessible icon controls", (
   assert.match(sourcesWorkspace, /text\.projectPrefix/);
   assert.match(sourcesWorkspace, /text\.searchProjects/);
   assert.match(sourcesWorkspace, /aria-label=\{expanded \? text\.collapseProject\(group\.label\) : text\.expandProject\(group\.label\)\}/);
+  assert.match(sourcesWorkspace, /autoExpandedGroupKeyRef/);
+  assert.match(sourcesWorkspace, /current\[group\.key\] \? current :/);
+  assert.match(sourcesWorkspace, /const visibleSessions = expanded \? group\.sessions : \[\]/);
   assert.match(sourcesWorkspace, /sourceLabel\(selected\.source, locale\)\} · \{sessionProjectLabel\(selected, locale\)\}/);
   assert.match(sourcesWorkspace, /sourceLabel\(session\.source, locale\)/);
   assert.match(sourcesWorkspace, /<ObservationText observation=\{observation\}/);
